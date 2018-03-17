@@ -637,7 +637,7 @@ int main(int argc, char* argv[]) {
         // Create the optimal join tree
         JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
         optimalJoinTree->root->print(optimalJoinTree->root);
-/*
+
         #ifdef time
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -674,7 +674,6 @@ int main(int argc, char* argv[]) {
 
         // Print the result
         std::cout << result_str << endl;
-*/
     }
 
     #ifdef time

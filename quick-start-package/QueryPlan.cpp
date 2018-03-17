@@ -337,6 +337,7 @@ table_t* JoinTree::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, int *d
 void JoinTree::printJoinTree(JoinTree* joinTreePtr) {}
 
 // Estimates the cost of a given Plan Tree
+/*
 double JoinTreeNode::cost() {
     // cerr << "JoinTreeNode::cost\n";
     double nodeEstimation = 1.0;
@@ -357,13 +358,15 @@ double JoinTreeNode::cost() {
             // cerr << "pre C\n";
         }
         // if left relation may be a subset of the right
-        else if ((this->left->columnInfo.min >= this->right->columnInfo.min) && (this->left->columnInfo.max <= this->right->columnInfo.max)) {
+        else if ((this->left->columnInfo.min >= this->right->columnInfo.min) &&
+        (this->left->columnInfo.max <= this->right->columnInfo.max)) {
             // cerr << "C\n";
             nodeEstimation = (this->left->columnInfo.size * this->right->columnInfo.size) / this->right->columnInfo.distinct;
             // cerr << "pre D\n";
         }
         // if right relation may be a subset of the right
-        else if ((this->left->columnInfo.min <= this->right->columnInfo.min) && (this->left->columnInfo.max >= this->right->columnInfo.max)) {
+        else if ((this->left->columnInfo.min <= this->right->columnInfo.min) &&
+        (this->left->columnInfo.max >= this->right->columnInfo.max)) {
             // cerr << "D\n";
             nodeEstimation = (this->left->columnInfo.size * this->right->columnInfo.size) / this->left->columnInfo.distinct;
             // cerr << "pre E\n";
@@ -383,14 +386,15 @@ double JoinTreeNode::cost() {
         nodeEstimation += this->right->cost();
 
     // cerr << "getting out of JoinTreeNode::cost\n";
+
     return nodeEstimation;
 }
-
+*/
 // Estimates the cost of a given Plan Tree
 double JoinTree::cost(JoinTree* joinTreePtr) {
     // cerr << "JoinTree::cost\n";
-    if (joinTreePtr != NULL && joinTreePtr->root != NULL)
-        return joinTreePtr->root->cost();
+    //if (joinTreePtr != NULL && joinTreePtr->root != NULL)
+    //    return joinTreePtr->root->cost();
 
     return 1.0;
 }
@@ -400,24 +404,42 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
         return;
     }
 
+    int depth = 0;
+
     while (joinTreeNodePtr->nodeId == -1) {
+        fprintf(stderr, "In node with predicate: ");
+        fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.relId,
+            joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.relId,
+            joinTreeNodePtr->predicatePtr->right.colId);
+
+        fprintf(stderr, "Right child is = %d\n", joinTreeNodePtr->right->nodeId);
         if (joinTreeNodePtr->right->filterPtr != NULL) {
+            //for (int i=0; i < depth; i++) fprintf(stderr,"\t");
+            fprintf(stderr, "Right child has filter = ");
             fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->right->filterPtr->filterColumn.relId,
                 joinTreeNodePtr->right->filterPtr->filterColumn.colId,
                 joinTreeNodePtr->right->filterPtr->comparison, joinTreeNodePtr->right->filterPtr->constant);
         }
+        else {
+            fprintf(stderr, "Right child has no filter\n");
+        }
 
+        fprintf(stderr, "Left child is = %d\n", joinTreeNodePtr->left->nodeId);
         if (joinTreeNodePtr->left->filterPtr != NULL) {
+            //for (int i=0; i < depth; i++) fprintf(stderr,"\t");
+            fprintf(stderr, "Left child has filter = ");
             fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->left->filterPtr->filterColumn.relId,
                 joinTreeNodePtr->left->filterPtr->filterColumn.colId,
                 joinTreeNodePtr->left->filterPtr->comparison, joinTreeNodePtr->left->filterPtr->constant);
         }
+        else {
+            fprintf(stderr, "Left child has no filter\n");
+        }
 
-        fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.relId,
-            joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.relId,
-            joinTreeNodePtr->predicatePtr->right.colId);
         joinTreeNodePtr = joinTreeNodePtr->left;
+        depth++;
     }
+    fprintf(stderr, "\n");
 }
 
 // Fills the columnInfo matrix with the data of every column
