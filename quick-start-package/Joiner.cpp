@@ -11,6 +11,7 @@
 #include "Joiner.hpp"
 using namespace std;
 
+//#define time
 
 /* Timing variables */
 double timeSelfJoin     = 0;
@@ -615,7 +616,7 @@ int main(int argc, char* argv[]) {
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
 
     // The test harness will send the first query after 1 second.
@@ -625,7 +626,7 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        std::cerr << q_counter  << ": " << line << '\n';
+        //std::cerr << q_counter  << ": " << line << '\n';
         i.parseQuery(line);
         q_counter++;
 
@@ -635,8 +636,8 @@ int main(int argc, char* argv[]) {
 
         JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
-        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
-        optimalJoinTree->root->print(optimalJoinTree->root);
+        //JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -679,14 +680,10 @@ int main(int argc, char* argv[]) {
     #ifdef time
     std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
     std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
-    std::cerr << "    timePartition: " << (long)(timePartition * 1000) << endl;
-    std::cerr << "    timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    std::cerr << "    timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
+    std::cerr << "timeLowJoin: " << (long)(timeLowJoin * 1000) << endl;
     std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
     std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
-    std::cerr << "timePreparation: " << (long)(timePreparation * 1000) << endl;
     flush(std::cerr);
     #endif
 
