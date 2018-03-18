@@ -83,6 +83,14 @@ int cleanQuery(QueryInfo &info)
     set <PredicateInfo> pred_set;
     for (auto pred: info.predicates) {
 
+
+        if (!(pred.left < pred.right)) {
+            SelectInfo tmp = pred.left;
+            pred.left = pred.right;
+            pred.right = tmp;
+        //    cerr << "swapped" << endl;
+        }
+
         if (pred_set.find(pred) != pred_set.end()) {
             changed = 1;
             continue;
