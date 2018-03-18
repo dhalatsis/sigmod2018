@@ -819,7 +819,7 @@ int main(int argc, char* argv[]) {
 #ifdef TIME_DETAILS
     vector< vector< vector<double> > > metrics;
     // for all desired sizes of subsets
-    for (int i = 1000; i <= 100000; i += 10000) {
+    for (int i = 1000; i <= 100000; i += 5000) {
         // std::cerr << i << '\n';
         // all table-subsets in a vector
         vector<table_t*> tables;
@@ -835,6 +835,9 @@ int main(int argc, char* argv[]) {
                 tables[j] = NULL;
             }
         }
+
+        if (!tables[0] || !tables[1])
+            continue;
 
         // join table subsets between each other and time it
         PredicateInfo predicate;
@@ -859,13 +862,12 @@ int main(int argc, char* argv[]) {
         predicate.right.relId = 13;
         predicate.right.binding = 1;
         predicate.right.colId = 1;
-        struct timeval start, end;
         gettimeofday(&start, NULL);
         // std::cerr << "A" << '\n';
         joiner.join(tables[1], tables[1], predicate);
         // std::cerr << "B" << '\n';
         gettimeofday(&end, NULL);
-        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         cerr << "13,\t13,\t" << i << ",\t" << dt << "sec" << endl;
 
         predicate.left.relId = 7;
@@ -874,45 +876,13 @@ int main(int argc, char* argv[]) {
         predicate.right.relId = 13;
         predicate.right.binding = 1;
         predicate.right.colId = 1;
-        struct timeval start, end;
         gettimeofday(&start, NULL);
         // std::cerr << "A" << '\n';
         joiner.join(tables[0], tables[1], predicate);
         // std::cerr << "B" << '\n';
         gettimeofday(&end, NULL);
-        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         cerr << "7,\t13,\t" << i << ",\t" << dt << "sec" << endl;
-
-        // for (int k = 0; k <= 3; k++) {
-        //     // std::cerr << k << '\n';
-        //     for (int l = 0; l <= 3; l++) {
-        //         if(!tables[k] || !tables[l]) {
-        //             // cerr << "0,\t0,\t,0\t,0"<< endl;
-        //             continue;
-        //         }
-        //         // std::cerr << l << '\n';
-        //         PredicateInfo predicate;
-        //         predicate.left.relId = k+10;
-        //         predicate.left.binding = 0;
-        //         predicate.left.colId = 1;
-        //         predicate.right.relId = l+10;
-        //         predicate.right.binding = 1;
-        //         predicate.right.colId = 1;
-        //
-        //         struct timeval start, end;
-        //         gettimeofday(&start, NULL);
-        //
-        //         // std::cerr << "A" << '\n';
-        //         joiner.join(tables[k], tables[l], predicate);
-        //         // std::cerr << "B" << '\n';
-        //
-        //         gettimeofday(&end, NULL);
-        //         double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        //
-        //         cerr << k << ",\t" << l << ",\t" << i << ",\t" << dt << "sec" << endl;
-        //         flush(std::cerr);
-        //     }
-        // }
     }
 #endif
     #ifdef time
