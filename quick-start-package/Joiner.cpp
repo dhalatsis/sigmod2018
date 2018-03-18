@@ -14,9 +14,10 @@
 #include "Joiner.hpp"
 using namespace std;
 
+//#define time
 
 /* Timing variables */
-double timeSelfJoin     = 0;
+double timeSelfJoin = 0;
 double timeSelectFilter = 0;
 double timeLowJoin = 0;
 double timeCreateTable = 0;
@@ -27,12 +28,12 @@ double timeBuildPhase = 0;
 double timeProbePhase = 0;
 
 
-
-
 int cleanQuery(QueryInfo &info)
 {
 
     /* remove weak filters */
+int cleanQuery(QueryInfo &info) {
+    /* Remove weak filters */
     int changed = 0;
 
     map<SelectInfo, FilterInfo> filter_mapG;
@@ -40,11 +41,12 @@ int cleanQuery(QueryInfo &info)
     set<FilterInfo> filters;
 
     for (auto filter: info.filters) {
-
         if (filter.comparison == '<') {
             if (filter_mapL.find(filter.filterColumn) == filter_mapL.end()
             || filter_mapL[filter.filterColumn].constant > filter.constant) {
 
+            if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
+                    || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
                 filter_mapL[filter.filterColumn] = filter;
             }
 
@@ -56,9 +58,14 @@ int cleanQuery(QueryInfo &info)
                 filter_mapG[filter.filterColumn] = filter;
             }
 
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
+                    || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
+                filter_mapG[filter.filterColumn] = filter;
+            }
         }
-        else
+        else {
             filters.insert(filter);
+        }
     }
 
     info.filters.clear();
@@ -75,15 +82,10 @@ int cleanQuery(QueryInfo &info)
         info.filters.push_back(it->second);
     }
 
-
-    /* 2nd part, remove double predicates*/
-
-
+    /* Remove duplicate predicates */
     changed = 0;
     set <PredicateInfo> pred_set;
     for (auto pred: info.predicates) {
-
-
         if (!(pred.left < pred.right)) {
             SelectInfo tmp = pred.left;
             pred.left = pred.right;
@@ -96,30 +98,24 @@ int cleanQuery(QueryInfo &info)
             continue;
         }
         pred_set.insert(pred);
-
     }
 
-    if (changed == 0)
+    if (changed == 0) {
         return 0;
+    }
+
     info.predicates.clear();
-
     for (auto pred: pred_set) {
-
         info.predicates.push_back(pred);
     }
 
     return 0;
 }
 
-
-//#define time
-
 /* ================================ */
 /* Table_t <=> Relation_t fuctnions */
 /* ================================ */
-
 relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
-
     /* Create a new column_t for table */
     std::vector<unsigned> &relation_mapping = table->relations_bindings;
     matrix & row_ids = *table->relations_row_ids;
@@ -160,7 +156,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         new_relation->tuples = tuples;
     }
     else {
-
         /* Initialize relation */
         uint32_t size = table->relations_row_ids->at(0).size();
         new_relation->num_tuples = size;
@@ -176,10 +171,9 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     }
 
     return new_relation;
- }
+}
 
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s) {
-
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
     const unsigned relnum_s = table_s->relations_bindings.size();
@@ -216,12 +210,11 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     /* Get the touples form the results */
     tuplebuffer_t * tb = cb->buf;
-    uint32_t   numbufs = cb->numbufs;
-    uint32_t     row_i;
+    uint32_t numbufs = cb->numbufs;
+    uint32_t row_i;
 
     /* Create table_t from tuples */
     for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
-
         row_i = tb->tuples[tup_i].key;
         for (uint32_t rel = 0; rel < relnum_r; rel++) {
             rids_res[rel].push_back( rids_r[rel][row_i] );
@@ -238,10 +231,8 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     ---------------------------------------------------------------------------------------- */
     tb = tb->next;
     for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
         /* Create table_t from tuples */
         for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
-
             row_i = tb->tuples[tup_i].key;
             for (uint32_t rel = 0; rel < relnum_r; rel++) {
                 rids_res[rel].push_back( rids_r[rel][row_i] );
@@ -333,7 +324,6 @@ void Joiner::SelectGreater(table_t *table, int filter){
     new_row_ids->at(0).reserve(size/2);
 
     /* Update the row ids of the table */
-
     for (size_t index = 0; index < size; index++) {
         if (values[index] > filter) {
             for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
@@ -402,7 +392,6 @@ void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
         }
     }
 
-
     /* Error msg for debuging */
     if (column.table_index == -1)
         std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors" << '\n';
@@ -452,14 +441,11 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 }
 
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info) {
-
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
     result_t * res  = RJ(r1, r2, 0);
-
     return CreateTableT(res, table_r, table_s);
-
 
     /* Construct the tables in case of intermediate results */
     //(table_r->intermediate_res)? (construct(table_r)) : ((void)0);
@@ -764,13 +750,12 @@ void Joiner::construct(table_t *table) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    //timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 }
 
 //CHECK SUM FUNCTION
 uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     construct(table);
@@ -834,11 +819,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Preparation phase (not timed)
-    //QueryPlan queryPlan;
+    QueryPlan queryPlan;
 
     // Get the needed info of every column
-    //queryPlan.fillColumnInfo(joiner);
-
+    queryPlan.fillColumnInfo(joiner);
 
     // Create a persistent query graph
     //QueryGraph queryGraph(joiner.getRelationsCount());
@@ -895,6 +879,11 @@ int main(int argc, char* argv[]) {
         }
     }
 #endif
+    #ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    #endif
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
@@ -903,20 +892,19 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-      //  std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
-        q_counter++;
+        //q_counter++;
 
-#ifdef time
+        #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
-#endif
+        #endif
 
         JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
         //JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
-        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -924,7 +912,7 @@ int main(int argc, char* argv[]) {
         #endif
 
         int *plan = NULL, plan_size = 0;
-        //table_t *result = optimalJoinTree->execute(optimalJoinTree->root, joiner, plan);
+        //table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
         table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
 
         #ifdef time
@@ -955,8 +943,7 @@ int main(int argc, char* argv[]) {
 
         // Print the result
         std::cout << result_str << endl;
-
-    }
+}
 
 #ifdef time
     std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
