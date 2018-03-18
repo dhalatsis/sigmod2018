@@ -72,20 +72,6 @@ ColumnInfo JoinTreeNode::estimateInfoAfterFilterEqual(const int constant) {
 }
 
 // Returns the new column info
-ColumnInfo JoinTreeNode::estimateInfoAfterSelfJoin() {
-    ColumnInfo newColumnInfo;
-
-    newColumnInfo.min      = this->columnInfo.min;
-    newColumnInfo.max      = this->columnInfo.max;
-    newColumnInfo.distinct = this->columnInfo.distinct;
-    newColumnInfo.size     = this->columnInfo.size * this->columnInfo.size;
-    newColumnInfo.n        = this->columnInfo.n;
-    newColumnInfo.spread   = floor((newColumnInfo.max - newColumnInfo.min + 1) / (newColumnInfo.distinct));
-
-    return newColumnInfo;
-}
-
-// Returns the new column info
 ColumnInfo JoinTreeNode::estimateInfoAfterJoin(ColumnInfo& leftColumnInfo, ColumnInfo& rightColumnInfo, const int tuples) {
     ColumnInfo newColumnInfo;
 
@@ -117,16 +103,8 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         joinTreeNodePtr->left = NULL;
         joinTreeNodePtr->right = NULL;
         joinTreeNodePtr->parent = NULL;
-        joinTreeNodePtr->predicatePtr = NULL;
+        //joinTreeNodePtr->predicatePtr = NULL;
         joinTreeNodePtr->filterPtr = NULL;
-
-        // Initialise column info
-        joinTreeNodePtr->columnInfo.min = 1; //columnInfos[queryInfo.relationIds[i]][col].min;
-        joinTreeNodePtr->columnInfo.max = 1; //columnInfos[queryInfo.relationIds[i]][col].max;
-        joinTreeNodePtr->columnInfo.size = 1; //columnInfos[queryInfo.relationIds[i]][col].size;
-        joinTreeNodePtr->columnInfo.distinct = 1; //columnInfos[queryInfo.relationIds[i]][col].distinct;
-        joinTreeNodePtr->columnInfo.n = 1; //columnInfos[queryInfo.relationIds[i]][col].n;
-        joinTreeNodePtr->columnInfo.spread = 1; //columnInfos[queryInfo.relationIds[i]][col].spread;
 
         // Initialise JoinTree
         joinTreePtr->root = joinTreeNodePtr;
@@ -186,6 +164,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                     bool predicateFound = false;
                     for (auto predicate : queryInfo.predicates) {
                         // If the right relation is found on the left hand side of a predicate
+                        /*
                         if (predicate.left.binding == j) {
                             for (int n = 0; n < relationsCount; n++) {
                                 if ((s[n] == true) && (predicate.right.binding == n)) {
@@ -194,8 +173,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                                 }
                             }
                         }
+                        */
                         // If the right relation is found on the left hand side of a predicate
-                        else if (predicate.right.binding == j) {
+                        if (predicate.right.binding == j) {
                             for (int n = 0; n < relationsCount; n++) {
                                 if ((s[n] == true) && (predicate.left.binding == n)) {
                                     predicateFound = true;
@@ -203,7 +183,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                                 }
                             }
                         }
-
+                        
                         if (predicateFound == true) break;
                     }
 
@@ -229,7 +209,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         }
     }
 
-    // Create a set of the predicate's vector
+    // Create a set of the predicates
     set<PredicateInfo*> predicatesSet;
     for (int i = 0; i < queryInfo.predicates.size(); i++) {
         predicatesSet.insert(&(queryInfo.predicates[i]));
@@ -252,6 +232,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         bool predicateFound = false;
         for (auto predicate : predicatesSet) {
             // If the right relation is found on the left hand side of a predicate
+            /*
             if (predicate->left.binding == joinTreeNodePtr->right->nodeId) {
                 for (auto n : joinedNodes) {
                     if (predicate->right.binding == n) {
@@ -262,9 +243,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                         break;
                     }
                 }
-            }
+            }*/
             // If the right relation is found on the left hand side of a predicate
-            else if (predicate->right.binding == joinTreeNodePtr->right->nodeId) {
+            if (predicate->right.binding == joinTreeNodePtr->right->nodeId) {
                 for (auto n : joinedNodes) {
                     if (predicate->left.binding == n) {
                         joinTreeNodePtr->predicatePtr = predicate;
@@ -288,8 +269,14 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         }
     }
 
-    // Return the best tree
-    return BestTree[rootToVector];
+    // Return the optimal tree
+    if (predicatesSet.size() != 0) {
+        // Merge the self joins with the root
+        return AddFilterJoin(BestTree[rootToVector], *(predicatesSet.begin()));
+    }
+    else {
+        return BestTree[rootToVector];
+    }
 }
 
 // Merges two join trees
@@ -322,47 +309,63 @@ JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree) {
     return joinTreePtr;
 }
 
-// execute the plan described by a Plan Tree
-table_t* JoinTree::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, int *depth) {
-    // /* initialize variables */
-    // JoinTreeNode *left = joinTreeNodePtr->left, *right = joinTreeNodePtr->right;
-    // table_t *table_l, *table_r, *res;
-    //
-    // if (left == NULL && right == NULL) {
-    //     return joiner.CreateTableTFromId(joinTreeNodePtr->nodeId, joinTreeNodePtr->binding_id);
-    // }
-    //
-    // table_l = execute(left, joiner, depth);
-    //
-    // /* Its join for sure */
-    // if (right != NULL) {
-    //     table_r = execute(right, joiner, depth);
-    //
-    //     /* Filter on right ? */
-    //     std::cerr<<"IN TREE PLAN EXEC JOIN\n";
-    //     flush(std::cerr);
-    //     res = joiner.radix_join(table_l, table_r, joinTreeNodePtr->predicatePtr);
-    //     std::cerr<<"WILL EXIT JTREEMAKEPLAN\n";
-    //     flush(std::cerr);
-    //     return res;
-    //
-    // }
-    // /* Fiter or predicate to the same table (simple constrain )*/
-    // else {
-    //     if (joinTreeNodePtr->filterPtr == NULL) {
-    //         res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr);
-    //         return res;
-    //     }
-    //     else {
-    //         FilterInfo &filter = *(joinTreeNodePtr->filterPtr);
-    //         joiner.Select(filter, table_l);
-    //         return table_l;
-    //     }
-    // }
+// Merges the final optimal tree with a filter join predicate
+JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateInfo) {
+    // Allocate memory for the new tree
+    JoinTree* joinTreePtr = (JoinTree*) malloc(sizeof(JoinTree));
+    JoinTreeNode* joinTreeNodePtr = (JoinTreeNode*) malloc(sizeof(JoinTreeNode));
+
+    // Initialise the new JoinTreeNode
+    joinTreeNodePtr->nodeId = -1; // This is an intermediate node
+    joinTreeNodePtr->left = leftTree->root;
+    joinTreeNodePtr->right = NULL;
+    joinTreeNodePtr->parent = NULL;
+    joinTreeNodePtr->predicatePtr = predicateInfo;
+    joinTreeNodePtr->filterPtr = NULL;
+
+    // Initialise the new JoinTree
+    joinTreePtr->root = joinTreeNodePtr;
+
+    // Update the parent pointers of the merged trees
+    leftTree->root->parent = joinTreePtr->root;
+    return joinTreePtr;
 }
 
-// Prints a Plan Tree -- for debugging
-void JoinTree::printJoinTree() {}
+// execute the plan described by a Plan Tree
+table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo) {
+    JoinTreeNode *left  = joinTreeNodePtr->left;
+    JoinTreeNode *right = joinTreeNodePtr->right;
+    table_t *table_l;
+    table_t *table_r;
+    table_t *res;
+
+    // Leaf node containing a single relation
+    if (left == NULL && right == NULL) {
+        res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
+        
+        // Apply the filter
+        if (joinTreeNodePtr->filterPtr != NULL) {
+            joiner.AddColumnToTableT(joinTreeNodePtr->filterPtr->filterColumn, res);
+            joiner.Select(*(joinTreeNodePtr->filterPtr), res);
+        }
+
+        return res;
+    }
+
+    // Go left
+    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo);
+
+    // This is an intermediate node (join)
+    if (right != NULL) {
+        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo);
+        joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->left, table_l);
+        joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->right, table_r);
+        return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr);
+    }
+    else {
+        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr);
+    }
+}
 
 // Estimates the cost of a given Plan Tree
 /*
@@ -435,32 +438,43 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
     int depth = 0;
 
     while (joinTreeNodePtr->nodeId == -1) {
+        for (int i=0; i < depth; i++) fprintf(stderr,"    ");
         fprintf(stderr, "In node with predicate: ");
-        fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.relId,
-            joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.relId,
+        fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.binding,
+            joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.binding,
             joinTreeNodePtr->predicatePtr->right.colId);
 
-        fprintf(stderr, "Right child is = %d\n", joinTreeNodePtr->right->nodeId);
-        if (joinTreeNodePtr->right->filterPtr != NULL) {
-            //for (int i=0; i < depth; i++) fprintf(stderr,"\t");
-            fprintf(stderr, "Right child has filter = ");
-            fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->right->filterPtr->filterColumn.relId,
-                joinTreeNodePtr->right->filterPtr->filterColumn.colId,
-                joinTreeNodePtr->right->filterPtr->comparison, joinTreeNodePtr->right->filterPtr->constant);
+        if (joinTreeNodePtr->right != NULL) {
+            for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+            fprintf(stderr, "Right child has id = %d\n", joinTreeNodePtr->right->nodeId);
+            if (joinTreeNodePtr->right->filterPtr != NULL) {
+                for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+                fprintf(stderr, "Right child has filter = ");
+                fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->right->filterPtr->filterColumn.binding,
+                    joinTreeNodePtr->right->filterPtr->filterColumn.colId,
+                    joinTreeNodePtr->right->filterPtr->comparison, joinTreeNodePtr->right->filterPtr->constant);
+            }
+            else {
+                for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+                fprintf(stderr, "Right child has no filter\n");
+            }
         }
         else {
-            fprintf(stderr, "Right child has no filter\n");
+            for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+            fprintf(stderr, "Node has no right child so this is a filter join\n");
         }
 
-        fprintf(stderr, "Left child is = %d\n", joinTreeNodePtr->left->nodeId);
+        for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+        fprintf(stderr, "Left child has id = %d\n", joinTreeNodePtr->left->nodeId);
         if (joinTreeNodePtr->left->filterPtr != NULL) {
-            //for (int i=0; i < depth; i++) fprintf(stderr,"\t");
+            for (int i=0; i < depth; i++) fprintf(stderr,"    ");
             fprintf(stderr, "Left child has filter = ");
-            fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->left->filterPtr->filterColumn.relId,
+            fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->left->filterPtr->filterColumn.binding,
                 joinTreeNodePtr->left->filterPtr->filterColumn.colId,
                 joinTreeNodePtr->left->filterPtr->comparison, joinTreeNodePtr->left->filterPtr->constant);
         }
         else {
+            for (int i=0; i < depth; i++) fprintf(stderr,"    ");
             fprintf(stderr, "Left child has no filter\n");
         }
 

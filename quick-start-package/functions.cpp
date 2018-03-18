@@ -254,7 +254,7 @@ table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner, int *depth) {
 
         if (jTreePtr->filterPtr == NULL) {
 
-            //std::cerr << "====Self JOIN Predicates: " <<  '\n';
+            std::cerr << "====Self JOIN Predicates: " <<  '\n';
             //std::cerr << "Left: "  << jTreePtr->predPtr->left.relId << "." << jTreePtr->predPtr->left.colId << '\n';
             //std::cerr << "Right: " << jTreePtr->predPtr->right.relId << "." << jTreePtr->predPtr->right.colId << '\n';
             res = joiner.SelfJoin(table_l, jTreePtr->predPtr);

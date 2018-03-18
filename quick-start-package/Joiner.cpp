@@ -304,7 +304,6 @@ void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
         }
     }
 
-
     /* Error msg for debuging */
     if (column.table_index == -1)
         std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors" << '\n';
@@ -761,8 +760,7 @@ int main(int argc, char* argv[]) {
 
         JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
-        //JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
-        //optimalJoinTree->root->print(optimalJoinTree->root);
+        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -770,8 +768,8 @@ int main(int argc, char* argv[]) {
         #endif
 
         int *plan = NULL, plan_size = 0;
-        //table_t *result = optimalJoinTree->execute(optimalJoinTree->root, joiner, plan);
-        table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
 
         #ifdef time
         gettimeofday(&start, NULL);
