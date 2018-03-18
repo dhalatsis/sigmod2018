@@ -28,89 +28,78 @@ double timeBuildPhase = 0;
 double timeProbePhase = 0;
 
 
-int cleanQuery(QueryInfo &info)
-{
 
-    /* remove weak filters */
-int cleanQuery(QueryInfo &info) {
-    /* Remove weak filters */
-    int changed = 0;
+ int cleanQuery(QueryInfo &info) {
+     /* Remove weak filters */
+     int changed = 0;
 
-    map<SelectInfo, FilterInfo> filter_mapG;
-    map<SelectInfo, FilterInfo> filter_mapL;
-    set<FilterInfo> filters;
+     map<SelectInfo, FilterInfo> filter_mapG;
+     map<SelectInfo, FilterInfo> filter_mapL;
+     set<FilterInfo> filters;
 
-    for (auto filter: info.filters) {
-        if (filter.comparison == '<') {
-            if (filter_mapL.find(filter.filterColumn) == filter_mapL.end()
-            || filter_mapL[filter.filterColumn].constant > filter.constant) {
+     for (auto filter: info.filters) {
+         if (filter.comparison == '<') {
+             if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
+                     || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
+                 filter_mapL[filter.filterColumn] = filter;
+             }
 
-            if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
-                    || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
-                filter_mapL[filter.filterColumn] = filter;
-            }
+         }
+         else if (filter.comparison == '>'){
+             if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
+                     || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
+                 filter_mapG[filter.filterColumn] = filter;
+             }
+         }
+         else {
+             filters.insert(filter);
+         }
+     }
 
-        }
-        else if (filter.comparison == '>'){
-            if (filter_mapG.find(filter.filterColumn) == filter_mapG.end()
-            || filter_mapG[filter.filterColumn].constant < filter.constant) {
+     info.filters.clear();
+     vector<FilterInfo> newfilters;
+     for (auto filter: filters) {
+         info.filters.push_back(filter);
+     }
 
-                filter_mapG[filter.filterColumn] = filter;
-            }
+     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
+         info.filters.push_back(it->second);
+     }
 
-            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
-                    || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
-                filter_mapG[filter.filterColumn] = filter;
-            }
-        }
-        else {
-            filters.insert(filter);
-        }
-    }
+     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
+         info.filters.push_back(it->second);
+     }
 
-    info.filters.clear();
-    vector<FilterInfo> newfilters;
-    for (auto filter: filters) {
-        info.filters.push_back(filter);
-    }
-
-    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
-        info.filters.push_back(it->second);
-    }
-
-    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
-        info.filters.push_back(it->second);
-    }
-
-    /* Remove duplicate predicates */
-    changed = 0;
-    set <PredicateInfo> pred_set;
-    for (auto pred: info.predicates) {
+     /* Remove duplicate predicates */
+     changed = 0;
+     set <PredicateInfo> pred_set;
+     for (auto pred: info.predicates) {
         if (!(pred.left < pred.right)) {
-            SelectInfo tmp = pred.left;
-            pred.left = pred.right;
-            pred.right = tmp;
-        //    cerr << "swapped" << endl;
-        }
+             SelectInfo tmp = pred.left;
+             pred.left = pred.right;
+             pred.right = tmp;
+         //    cerr << "swapped" << endl;
+         }
 
-        if (pred_set.find(pred) != pred_set.end()) {
-            changed = 1;
-            continue;
-        }
-        pred_set.insert(pred);
-    }
+         if (pred_set.find(pred) != pred_set.end()) {
+             changed = 1;
+             continue;
+         }
+         pred_set.insert(pred);
+     }
 
-    if (changed == 0) {
-        return 0;
-    }
+     if (changed == 0) {
+         return 0;
+     }
 
-    info.predicates.clear();
-    for (auto pred: pred_set) {
-        info.predicates.push_back(pred);
-    }
+     info.predicates.clear();
+     for (auto pred: pred_set) {
+         info.predicates.push_back(pred);
+     }
 
-    return 0;
-}
+     return 0;
+ }
+
 
 /* ================================ */
 /* Table_t <=> Relation_t fuctnions */
@@ -834,49 +823,96 @@ int main(int argc, char* argv[]) {
         // std::cerr << i << '\n';
         // all table-subsets in a vector
         vector<table_t*> tables;
-        for (int j = 10; j <= 13; j++) {
-            tables.push_back(joiner.CreateTableTFromId(j, j));
-            cerr << tables[j-10]->relations_row_ids[0][0].size() << endl;
-            if (i <= tables[j-10]->relations_row_ids[0][0].size()) {
-                for (int k = 0; k < tables[j-10]->relations_row_ids[0].size(); k++)
-                    tables[j-10]->relations_row_ids[k][0].resize(i);
+        tables.push_back(joiner.CreateTableTFromId(7, 7));
+        tables.push_back(joiner.CreateTableTFromId(13, 13));
+        for (int j = 0; j <= 1; j++) {
+            cerr << tables[j]->relations_row_ids[0][0].size() << endl;
+            if (i <= tables[j]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[j]->relations_row_ids[0].size(); k++)
+                    tables[j]->relations_row_ids[k][0].resize(i);
             } else {
                 // cerr << i << " > " << tables[j-5]->relations_row_ids[0][0].size() << endl;
-                tables[j-10] = NULL;
+                tables[j] = NULL;
             }
         }
 
         // join table subsets between each other and time it
-        for (int k = 0; k <= 3; k++) {
-            // std::cerr << k << '\n';
-            for (int l = 0; l <= 3; l++) {
-                if(!tables[k] || !tables[l]) {
-                    // cerr << "0,\t0,\t,0\t,0"<< endl;
-                    continue;
-                }
-                // std::cerr << l << '\n';
-                PredicateInfo predicate;
-                predicate.left.relId = k+10;
-                predicate.left.binding = 0;
-                predicate.left.colId = 1;
-                predicate.right.relId = l+10;
-                predicate.right.binding = 1;
-                predicate.right.colId = 1;
+        PredicateInfo predicate;
+        predicate.left.relId = 7;
+        predicate.left.binding = 0;
+        predicate.left.colId = 1;
+        predicate.right.relId = 7;
+        predicate.right.binding = 1;
+        predicate.right.colId = 1;
+        struct timeval start, end;
+        gettimeofday(&start, NULL);
+        // std::cerr << "A" << '\n';
+        joiner.join(tables[0], tables[0], predicate);
+        // std::cerr << "B" << '\n';
+        gettimeofday(&end, NULL);
+        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        cerr << "7,\t7,\t" << i << ",\t" << dt << "sec" << endl;
 
-                struct timeval start, end;
-                gettimeofday(&start, NULL);
+        predicate.left.relId = 13;
+        predicate.left.binding = 0;
+        predicate.left.colId = 1;
+        predicate.right.relId = 13;
+        predicate.right.binding = 1;
+        predicate.right.colId = 1;
+        struct timeval start, end;
+        gettimeofday(&start, NULL);
+        // std::cerr << "A" << '\n';
+        joiner.join(tables[1], tables[1], predicate);
+        // std::cerr << "B" << '\n';
+        gettimeofday(&end, NULL);
+        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        cerr << "13,\t13,\t" << i << ",\t" << dt << "sec" << endl;
 
-                // std::cerr << "A" << '\n';
-                joiner.join(tables[k], tables[l], predicate);
-                // std::cerr << "B" << '\n';
+        predicate.left.relId = 7;
+        predicate.left.binding = 0;
+        predicate.left.colId = 1;
+        predicate.right.relId = 13;
+        predicate.right.binding = 1;
+        predicate.right.colId = 1;
+        struct timeval start, end;
+        gettimeofday(&start, NULL);
+        // std::cerr << "A" << '\n';
+        joiner.join(tables[0], tables[1], predicate);
+        // std::cerr << "B" << '\n';
+        gettimeofday(&end, NULL);
+        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        cerr << "7,\t13,\t" << i << ",\t" << dt << "sec" << endl;
 
-                gettimeofday(&end, NULL);
-                double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-
-                cerr << k+10 << ",\t" << l+10 << ",\t" << i << ",\t" << dt << "sec" << endl;
-                flush(std::cerr);
-            }
-        }
+        // for (int k = 0; k <= 3; k++) {
+        //     // std::cerr << k << '\n';
+        //     for (int l = 0; l <= 3; l++) {
+        //         if(!tables[k] || !tables[l]) {
+        //             // cerr << "0,\t0,\t,0\t,0"<< endl;
+        //             continue;
+        //         }
+        //         // std::cerr << l << '\n';
+        //         PredicateInfo predicate;
+        //         predicate.left.relId = k+10;
+        //         predicate.left.binding = 0;
+        //         predicate.left.colId = 1;
+        //         predicate.right.relId = l+10;
+        //         predicate.right.binding = 1;
+        //         predicate.right.colId = 1;
+        //
+        //         struct timeval start, end;
+        //         gettimeofday(&start, NULL);
+        //
+        //         // std::cerr << "A" << '\n';
+        //         joiner.join(tables[k], tables[l], predicate);
+        //         // std::cerr << "B" << '\n';
+        //
+        //         gettimeofday(&end, NULL);
+        //         double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        //
+        //         cerr << k << ",\t" << l << ",\t" << i << ",\t" << dt << "sec" << endl;
+        //         flush(std::cerr);
+        //     }
+        // }
     }
 #endif
     #ifdef time
