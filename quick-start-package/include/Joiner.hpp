@@ -79,4 +79,7 @@ class Joiner {
      *            @joiner is the object that holds the row_ids of the reults after the joins
      */
      void construct(table_t *table);
+
 };
+
+int cleanQuery(QueryInfo &);

@@ -5,6 +5,9 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <map>
+#include <set>
+
 #include "Parser.hpp"
 #include "QueryPlan.hpp"
 #include "header.hpp"
@@ -22,6 +25,83 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
+
+
+
+
+int cleanQuery(QueryInfo &info) 
+{
+
+    /* remove weak filters */
+    int changed = 0;
+
+    map<SelectInfo, FilterInfo> filter_mapG;
+    map<SelectInfo, FilterInfo> filter_mapL;
+    set<FilterInfo> filters;
+    
+    for (auto filter: info.filters) {
+
+        if (filter.comparison == '<') {
+            if (filter_mapL.find(filter.filterColumn) == filter_mapL.end()
+            || filter_mapL[filter.filterColumn].constant > filter.constant) {
+            
+                filter_mapL[filter.filterColumn] = filter;
+            }
+
+        }
+        else if (filter.comparison == '>'){
+            if (filter_mapG.find(filter.filterColumn) == filter_mapG.end() 
+            || filter_mapG[filter.filterColumn].constant < filter.constant) {
+            
+                filter_mapG[filter.filterColumn] = filter;
+            }
+        
+        }
+        else
+            filters.insert(filter);
+    }
+
+    info.filters.clear();
+    vector<FilterInfo> newfilters;
+    for (auto filter: filters) {
+        info.filters.push_back(filter);
+    }
+
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
+        info.filters.push_back(it->second);
+    }   
+
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
+
+
+    /* 2nd part, remove double predicates*/
+
+
+    changed = 0;
+    set <PredicateInfo> pred_set;
+    for (auto pred: info.predicates) {
+
+        if (pred_set.find(pred) != pred_set.end()) {
+            changed = 1;
+            continue;
+        }
+        pred_set.insert(pred);
+
+    }
+
+    if (changed == 0)
+        return 0;
+    info.predicates.clear();
+
+    for (auto pred: pred_set) {
+
+        info.predicates.push_back(pred);
+    }
+
+    return 0;
+}
 
 
 //#define time
@@ -762,8 +842,9 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
+      //  std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
+        cleanQuery(i);
         q_counter++;
 
 #ifdef time

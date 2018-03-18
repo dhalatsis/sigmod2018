@@ -12,6 +12,11 @@ struct SelectInfo {
 
     // The constructor
     SelectInfo(RelationId relId,unsigned b,unsigned colId) : relId(relId), binding(b), colId(colId){};
+    SelectInfo(void){};
+
+    // copy conustroctor
+    SelectInfo(const SelectInfo& si) : relId(si.relId), binding(si.binding), colId(si.colId){};
+    
 
     // Equality operator
     bool operator==(const SelectInfo& o) const;
@@ -24,7 +29,9 @@ struct SelectInfo {
 
     static const char delimiter=' '; // The delimiter used in our text format
     constexpr static const char delimiterSQL[]=", "; // The delimiter used in SQL
+
 };
+
 
 struct FilterInfo {
     enum Comparison : char { Less='<', Greater='>', Equal='=' };
@@ -38,6 +45,9 @@ struct FilterInfo {
 
     // The constructor
     FilterInfo(SelectInfo filterColumn,uint64_t constant,Comparison comparison) : filterColumn(filterColumn), constant(constant), comparison(comparison) {};
+    FilterInfo(void){};
+    // copy constructor
+        FilterInfo (const FilterInfo& fi): filterColumn(fi.filterColumn), constant(fi.constant), comparison(fi.comparison) {};
 
     // Dump text format
     std::string dumpText();
@@ -45,6 +55,8 @@ struct FilterInfo {
     static const char delimiter='&'; // The delimiter used in our text format
     constexpr static const char delimiterSQL[]=" and "; // The delimiter used in SQL
 };
+
+
 
 static const std::vector<FilterInfo::Comparison> comparisonTypes { FilterInfo::Comparison::Less, FilterInfo::Comparison::Greater, FilterInfo::Comparison::Equal};
 
@@ -54,6 +66,9 @@ struct PredicateInfo {
 
     // The constructor
     PredicateInfo(SelectInfo left, SelectInfo right) : left(left), right(right){};
+    PredicateInfo(void){};
+    // copy constructor
+    PredicateInfo(const PredicateInfo& pi) : left(pi.left), right(pi.right){};
 
     // Dump text format
     std::string dumpText();
@@ -64,6 +79,9 @@ struct PredicateInfo {
     static const char delimiter='&'; // The delimiter used in our text format
     constexpr static const char delimiterSQL[]=" and "; // The delimiter used in SQL
 };
+
+
+
 
 class QueryInfo {
     public:
@@ -108,3 +126,7 @@ class QueryInfo {
     // The constructor that parses a query
     QueryInfo(std::string rawQuery);
 };
+
+bool operator<(const PredicateInfo& lhs, const PredicateInfo& rhs);
+bool operator<(const FilterInfo& lhs, const FilterInfo& rhs);
+bool operator<(const SelectInfo& lhs, const SelectInfo& rhs);
