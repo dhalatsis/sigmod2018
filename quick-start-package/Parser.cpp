@@ -236,3 +236,33 @@ QueryInfo::QueryInfo(string rawQuery) { parseQuery(rawQuery); }
 bool SelectInfo::operator==(const SelectInfo& o) const {
    return o.relId == relId && o.binding == binding && o.colId == colId;
 }
+
+
+
+bool operator<(const PredicateInfo& lhs, const PredicateInfo& rhs)
+{
+
+    if  (lhs.left < rhs.left)
+        return true;
+    else
+        return lhs.right < rhs.right;
+}
+
+
+bool operator<(const FilterInfo& lhs, const FilterInfo& rhs)
+{
+    if (lhs.filterColumn < rhs.filterColumn)
+        return true;
+    else if (lhs.comparison < lhs.comparison)
+        return true;
+    else
+        return lhs.constant < rhs.constant;
+}
+
+bool operator<(const SelectInfo& lhs, const SelectInfo& rhs)
+{
+    if (lhs.binding < rhs.binding)
+        return true;
+    else
+        return lhs.colId < rhs.colId;
+}

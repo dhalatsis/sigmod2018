@@ -5,6 +5,9 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <map>
+#include <set>
+
 #include "Parser.hpp"
 #include "QueryPlan.hpp"
 #include "header.hpp"
@@ -14,7 +17,7 @@ using namespace std;
 //#define time
 
 /* Timing variables */
-double timeSelfJoin     = 0;
+double timeSelfJoin = 0;
 double timeSelectFilter = 0;
 double timeLowJoin = 0;
 double timeCreateTable = 0;
@@ -23,6 +26,70 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
+
+int cleanQuery(QueryInfo &info) {
+    /* Remove weak filters */
+    int changed = 0;
+
+    map<SelectInfo, FilterInfo> filter_mapG;
+    map<SelectInfo, FilterInfo> filter_mapL;
+    set<FilterInfo> filters;
+    
+    for (auto filter: info.filters) {
+        if (filter.comparison == '<') {
+            if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
+                    || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
+                filter_mapL[filter.filterColumn] = filter;
+            }
+
+        }
+        else if (filter.comparison == '>'){
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end()) 
+                    || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
+                filter_mapG[filter.filterColumn] = filter;
+            }
+        }
+        else {
+            filters.insert(filter);
+        }
+    }
+
+    info.filters.clear();
+    vector<FilterInfo> newfilters;
+    for (auto filter: filters) {
+        info.filters.push_back(filter);
+    }
+
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
+        info.filters.push_back(it->second);
+    }   
+
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
+
+    /* Remove duplicate predicates */
+    changed = 0;
+    set <PredicateInfo> pred_set;
+    for (auto pred: info.predicates) {
+        if (pred_set.find(pred) != pred_set.end()) {
+            changed = 1;
+            continue;
+        }
+        pred_set.insert(pred);
+    }
+
+    if (changed == 0) {
+        return 0;
+    }
+
+    info.predicates.clear();
+    for (auto pred: pred_set) {
+        info.predicates.push_back(pred);
+    }
+
+    return 0;
+}
 
 /* ================================ */
 /* Table_t <=> Relation_t fuctnions */
@@ -662,7 +729,7 @@ void Joiner::construct(table_t *table) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    //timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 }
 
@@ -749,18 +816,20 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << q_counter  << ": " << line << '\n';
+        std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
+        cleanQuery(i);
+        std::cerr << "Q " << q_counter  << ":" << line << '\n';
         q_counter++;
 
-#ifdef time
+        #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
-#endif
+        #endif
 
         JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
-        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -768,8 +837,8 @@ int main(int argc, char* argv[]) {
         #endif
 
         int *plan = NULL, plan_size = 0;
-        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
-        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+        //table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
 
         #ifdef time
         gettimeofday(&start, NULL);
