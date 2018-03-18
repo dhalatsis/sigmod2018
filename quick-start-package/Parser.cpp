@@ -244,6 +244,8 @@ bool operator<(const PredicateInfo& lhs, const PredicateInfo& rhs)
 
     if  (lhs.left < rhs.left)
         return true;
+    else if (rhs.right < lhs.right)
+        return false;
     else
         return lhs.right < rhs.right;
 }
@@ -253,8 +255,12 @@ bool operator<(const FilterInfo& lhs, const FilterInfo& rhs)
 {
     if (lhs.filterColumn < rhs.filterColumn)
         return true;
-    else if (lhs.comparison < lhs.comparison)
+    else if (rhs.filterColumn < lhs.filterColumn)
+        return false;
+    else if (lhs.comparison < rhs.comparison)
         return true;
+    else if (rhs.comparison < lhs.comparison)
+        return false;
     else
         return lhs.constant < rhs.constant;
 }
@@ -263,6 +269,8 @@ bool operator<(const SelectInfo& lhs, const SelectInfo& rhs)
 {
     if (lhs.binding < rhs.binding)
         return true;
-    else
+    else if (rhs.binding < lhs.binding)
+        return false;
+    else 
         return lhs.colId < rhs.colId;
 }

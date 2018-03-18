@@ -72,6 +72,13 @@ int cleanQuery(QueryInfo &info) {
     changed = 0;
     set <PredicateInfo> pred_set;
     for (auto pred: info.predicates) {
+        if (!(pred.left < pred.right)) {
+            SelectInfo tmp = pred.left;
+            pred.left = pred.right;
+            pred.right = tmp;
+        //    cerr << "swapped" << endl;
+        }
+
         if (pred_set.find(pred) != pred_set.end()) {
             changed = 1;
             continue;
@@ -816,11 +823,10 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
-        std::cerr << "Q " << q_counter  << ":" << line << '\n';
-        q_counter++;
+        //q_counter++;
 
         #ifdef time
         struct timeval start;
