@@ -3,6 +3,9 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
+#include <functional>
+#include <array>
 #include <utility>
 #include <vector>
 #include <map>
@@ -14,10 +17,11 @@
 #include "Joiner.hpp"
 using namespace std;
 
-//#define time
+#define time
 
 /* Timing variables */
 double timeSelfJoin = 0;
+double timeConstruct = 0;
 double timeSelectFilter = 0;
 double timeLowJoin = 0;
 double timeCreateTable = 0;
@@ -26,6 +30,9 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
+double timeRadixJoin = 0;
+double timeCreateRelationT = 0;
+double timeCreateTableT = 0;
 
 int cleanQuery(QueryInfo &info) {
     /* Remove weak filters */
@@ -34,7 +41,7 @@ int cleanQuery(QueryInfo &info) {
     map<SelectInfo, FilterInfo> filter_mapG;
     map<SelectInfo, FilterInfo> filter_mapL;
     set<FilterInfo> filters;
-    
+
     for (auto filter: info.filters) {
         if (filter.comparison == '<') {
             if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
@@ -44,7 +51,7 @@ int cleanQuery(QueryInfo &info) {
 
         }
         else if (filter.comparison == '>'){
-            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end()) 
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
                     || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
                 filter_mapG[filter.filterColumn] = filter;
             }
@@ -62,7 +69,7 @@ int cleanQuery(QueryInfo &info) {
 
     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
         info.filters.push_back(it->second);
-    }   
+    }
 
     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
         info.filters.push_back(it->second);
@@ -102,6 +109,12 @@ int cleanQuery(QueryInfo &info) {
 /* Table_t <=> Relation_t fuctnions */
 /* ================================ */
 relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     /* Create a new column_t for table */
     std::vector<unsigned> &relation_mapping = table->relations_bindings;
     matrix & row_ids = *table->relations_row_ids;
@@ -156,10 +169,30 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         new_relation->tuples = tuples;
     }
 
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
+
     return new_relation;
 }
 
+
+int compare(const void * a, const void * b)
+{
+    return ( ((tuple_t*)a)->key - ((tuple_t*)b)->key );
+}
+
+
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
     const unsigned relnum_s = table_s->relations_bindings.size();
@@ -199,6 +232,10 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t numbufs = cb->numbufs;
     uint32_t row_i;
 
+
+
+    //qsort(tb->tuples, cb->writepos, sizeof(tuple_t), compare);
+
     /* Create table_t from tuples */
     for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
         row_i = tb->tuples[tup_i].key;
@@ -233,6 +270,12 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         /* Go the the next buffer */
         tb = tb->next;
     }
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
     return new_table;
 }
@@ -427,10 +470,21 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 }
 
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info) {
+
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
     result_t * res  = RJ(r1, r2, 0);
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
     return CreateTableT(res, table_r, table_s);
 
     /* Construct the tables in case of intermediate results */
@@ -724,9 +778,13 @@ void Joiner::construct(table_t *table) {
     /* Create a new value's array  */
     uint64_t *const new_values  = new uint64_t[column_size];
 
+    /* construct a new array with the row ids that it's sorted */
+    //vector<int> rids = row_ids[table_index];  //cp construct
+    //std::sort(rids.begin(), rids.end());
+
     /* Pass the values of the old column to the new one, based on the row ids of the joiner */
     for (int i = 0; i < column_size; i++) {
-    	new_values[i] = column_values[row_ids[table_index][i]];
+    	new_values[i] = column_values[row_ids[table_index][i]];//rids[i]];
     }
 
     /* Update the column of the table */
@@ -736,7 +794,7 @@ void Joiner::construct(table_t *table) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    //timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 }
 
@@ -877,11 +935,14 @@ int main(int argc, char* argv[]) {
 }
 
 #ifdef time
+    std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
+    std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
     std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
     std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    std::cerr << "timeLowJoin: " << (long)(timeLowJoin * 1000) << endl;
-    std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
+    std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
+    //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
+    //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
     std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
     std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
