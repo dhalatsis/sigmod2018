@@ -27,8 +27,6 @@ double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
 
-
-
  int cleanQuery(QueryInfo &info) {
      /* Remove weak filters */
      int changed = 0;
@@ -813,24 +811,6 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
-    const vector< vector<int> > sameRelJoin{
-                                {197, 1868, 4636, 9723, 15775},
-                                {29, 1917, 5047, 8893, 14162},
-                                {168, 2002, 5383, 9559, 14307},
-                                {158, 1639, 4462, 85, 14008},
-                                {166, 1584, 4192, 8518, 13624}
-                                };
-
-    const vector< vector<int> > diffRelJoin{
-                                {147, 591, 883, 1071, 1286},
-                                {424, 1882, 2824, 3577, 4607},
-                                {629, 2626, 4745, 6122, 7684},
-                                {906, 3452, 6528, 8681, 10112},
-                                {1356, 6309, 7983, 11016, 14573}
-                                };
-
-    // Create a persistent query graph
-    //QueryGraph queryGraph(joiner.getRelationsCount());
 // #define TIME_DETAILS
 #ifdef TIME_DETAILS
     for (int i = 1000; i <= 45000; i += 10000) {

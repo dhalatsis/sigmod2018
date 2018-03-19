@@ -5,9 +5,28 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <vector>
 #include <math.h>
 #include "Joiner.hpp"
 #include "Parser.hpp"
+
+/* Initial Cost Estimations for Join */
+// steps (horizontally & vertically): 1000 11000 21000 31000 41000
+const std::vector< std::vector<int> > sameRelJoin{
+                            {197, 1868, 4636, 9723, 15775},
+                            {29, 1917, 5047, 8893, 14162},
+                            {168, 2002, 5383, 9559, 14307},
+                            {158, 1639, 4462, 85, 14008},
+                            {166, 1584, 4192, 8518, 13624}
+                            };
+
+const std::vector< std::vector<int> > diffRelJoin{
+                            {147, 591, 883, 1071, 1286},
+                            {424, 1882, 2824, 3577, 4607},
+                            {629, 2626, 4745, 6122, 7684},
+                            {906, 3452, 6528, 8681, 10112},
+                            {1356, 6309, 7983, 11016, 14573}
+                            };
 
 // Keeps the important info/statistics for every column
 // needed to build the plan tree
