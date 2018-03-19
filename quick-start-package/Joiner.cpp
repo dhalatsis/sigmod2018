@@ -813,76 +813,77 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
+    const vector< vector<int> > sameRelJoin{
+                                {197, 1868, 4636, 9723, 15775},
+                                {29, 1917, 5047, 8893, 14162},
+                                {168, 2002, 5383, 9559, 14307},
+                                {158, 1639, 4462, 85, 14008},
+                                {166, 1584, 4192, 8518, 13624}
+                                };
+
+    const vector< vector<int> > diffRelJoin{
+                                {147, 591, 883, 1071, 1286},
+                                {424, 1882, 2824, 3577, 4607},
+                                {629, 2626, 4745, 6122, 7684},
+                                {906, 3452, 6528, 8681, 10112},
+                                {1356, 6309, 7983, 11016, 14573}
+                                };
+
     // Create a persistent query graph
     //QueryGraph queryGraph(joiner.getRelationsCount());
 // #define TIME_DETAILS
 #ifdef TIME_DETAILS
-    vector< vector< vector<double> > > metrics;
-    // for all desired sizes of subsets
-    for (int i = 1000; i <= 100000; i += 5000) {
-        // std::cerr << i << '\n';
-        // all table-subsets in a vector
-        vector<table_t*> tables;
-        tables.push_back(joiner.CreateTableTFromId(7, 7));
-        tables.push_back(joiner.CreateTableTFromId(13, 13));
-        for (int j = 0; j <= 1; j++) {
-            cerr << tables[j]->relations_row_ids[0][0].size() << endl;
-            if (i <= tables[j]->relations_row_ids[0][0].size()) {
-                for (int k = 0; k < tables[j]->relations_row_ids[0].size(); k++)
-                    tables[j]->relations_row_ids[k][0].resize(i);
+    for (int i = 1000; i <= 45000; i += 10000) {
+        for (int j = 1000; j <= 45000; j += 10000) {
+            vector<table_t*> tables;
+            tables.push_back(joiner.CreateTableTFromId(7, 7));
+            tables.push_back(joiner.CreateTableTFromId(13, 13));
+            if (i <= tables[0]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
+                    tables[0]->relations_row_ids[k][0].resize(i);
             } else {
-                // cerr << i << " > " << tables[j-5]->relations_row_ids[0][0].size() << endl;
-                tables[j] = NULL;
+                tables[0] = NULL;
             }
+            if (j <= tables[1]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
+                    tables[1]->relations_row_ids[k][0].resize(j);
+            } else {
+                tables[1] = NULL;
+            }
+
+            if (!tables[0] || !tables[1])
+                continue;
+
+            PredicateInfo predicate;
+            predicate.left.relId = 13;
+            predicate.left.binding = 0;
+            predicate.left.colId = 1;
+            predicate.right.relId = 13;
+            predicate.right.binding = 1;
+            predicate.right.colId = 1;
+            struct timeval start, end;
+            gettimeofday(&start, NULL);
+            // std::cerr << "A" << '\n';
+            joiner.join(tables[1], tables[1], predicate);
+            // std::cerr << "B" << '\n';
+            gettimeofday(&end, NULL);
+            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
+
+            predicate.left.relId = 7;
+            predicate.left.binding = 0;
+            predicate.left.colId = 1;
+            predicate.right.relId = 13;
+            predicate.right.binding = 1;
+            predicate.right.colId = 1;
+            gettimeofday(&start, NULL);
+            // std::cerr << "A" << '\n';
+            joiner.join(tables[0], tables[1], predicate);
+            // std::cerr << "B" << '\n';
+            gettimeofday(&end, NULL);
+            dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
         }
-
-        if (!tables[0] || !tables[1])
-            continue;
-
-        // join table subsets between each other and time it
-        PredicateInfo predicate;
-        predicate.left.relId = 7;
-        predicate.left.binding = 0;
-        predicate.left.colId = 1;
-        predicate.right.relId = 7;
-        predicate.right.binding = 1;
-        predicate.right.colId = 1;
-        struct timeval start, end;
-        gettimeofday(&start, NULL);
-        // std::cerr << "A" << '\n';
-        joiner.join(tables[0], tables[0], predicate);
-        // std::cerr << "B" << '\n';
-        gettimeofday(&end, NULL);
-        double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        cerr << "7,\t7,\t" << i << ",\t" << dt << "sec" << endl;
-
-        predicate.left.relId = 13;
-        predicate.left.binding = 0;
-        predicate.left.colId = 1;
-        predicate.right.relId = 13;
-        predicate.right.binding = 1;
-        predicate.right.colId = 1;
-        gettimeofday(&start, NULL);
-        // std::cerr << "A" << '\n';
-        joiner.join(tables[1], tables[1], predicate);
-        // std::cerr << "B" << '\n';
-        gettimeofday(&end, NULL);
-        dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        cerr << "13,\t13,\t" << i << ",\t" << dt << "sec" << endl;
-
-        predicate.left.relId = 7;
-        predicate.left.binding = 0;
-        predicate.left.colId = 1;
-        predicate.right.relId = 13;
-        predicate.right.binding = 1;
-        predicate.right.colId = 1;
-        gettimeofday(&start, NULL);
-        // std::cerr << "A" << '\n';
-        joiner.join(tables[0], tables[1], predicate);
-        // std::cerr << "B" << '\n';
-        gettimeofday(&end, NULL);
-        dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        cerr << "7,\t13,\t" << i << ",\t" << dt << "sec" << endl;
     }
 #endif
     #ifdef time
