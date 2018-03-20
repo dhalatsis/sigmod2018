@@ -445,13 +445,12 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     cerr << "RJ: " << dt << "sec" << endl;
 #endif
 #ifdef TIME_DETAILS
-    struct timeval start, end;
     gettimeofday(&start, NULL);
 #endif
     table_t *temp = CreateTableT(res, table_r, table_s);
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
-    double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     cerr << "CreateTableT: " << dt << "sec" << endl;
 #endif
     return temp;
@@ -915,20 +914,20 @@ int main(int argc, char* argv[]) {
                 continue;
 
             PredicateInfo predicate;
-            predicate.left.relId = 13;
-            predicate.left.binding = 0;
-            predicate.left.colId = 1;
-            predicate.right.relId = 13;
-            predicate.right.binding = 1;
-            predicate.right.colId = 1;
+            // predicate.left.relId = 13;
+            // predicate.left.binding = 0;
+            // predicate.left.colId = 1;
+            // predicate.right.relId = 13;
+            // predicate.right.binding = 1;
+            // predicate.right.colId = 1;
             struct timeval start, end;
             gettimeofday(&start, NULL);
             // std::cerr << "A" << '\n';
-            joiner.join(tables[1], tables[1], predicate);
+            // joiner.join(tables[1], tables[1], predicate);
             // std::cerr << "B" << '\n';
             gettimeofday(&end, NULL);
             double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
+            // cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
 
             predicate.left.relId = 7;
             predicate.left.binding = 0;

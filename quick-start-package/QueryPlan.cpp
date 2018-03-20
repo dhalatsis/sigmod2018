@@ -377,7 +377,7 @@ double JoinTreeNode::cost() {
     // if it is a join
     else if (this->predicatePtr != NULL && this->left != NULL && this->right != NULL) {
         int i = this->left->columnInfo.size / 10000, j = this->right->columnInfo.size / 10000;
-        nodeCostEstimation = diffRelJoin[i][j];
+        nodeCostEstimation = smallDiffRelJoin[i][j];
         // // if it is a self join
         // if (this->left->nodeId != -1 && this->left->nodeId == this->right->nodeId)
         //     nodeCostEstimation += (this->left->columnInfo.size * this->left->columnInfo.size) / this->left->columnInfo.distinct;

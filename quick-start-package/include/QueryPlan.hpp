@@ -12,21 +12,122 @@
 
 /* Initial Cost Estimations for Join */
 // steps (horizontally & vertically): 1000 11000 21000 31000 41000
-const std::vector< std::vector<int> > sameRelJoin{
-                            {197, 1868, 4636, 9723, 15775},
-                            {29, 1917, 5047, 8893, 14162},
-                            {168, 2002, 5383, 9559, 14307},
-                            {158, 1639, 4462, 85, 14008},
-                            {166, 1584, 4192, 8518, 13624}
+const std::vector< std::vector<int> > smallSameRelJoin{
+                            {271, 2571, 6567, 11396, 18273},
+                            {233, 1708, 6030, 11315, 17764},
+                            {232, 1936, 6028, 11440, 17508},
+                            {230, 2231, 5380, 11370, 17693},
+                            {220, 2372, 5486, 11067, 18003}
                             };
 
-const std::vector< std::vector<int> > diffRelJoin{
-                            {147, 591, 883, 1071, 1286},
-                            {424, 1882, 2824, 3577, 4607},
-                            {629, 2626, 4745, 6122, 7684},
-                            {906, 3452, 6528, 8681, 10112},
-                            {1356, 6309, 7983, 11016, 14573}
+const std::vector< std::vector<int> > smallDiffRelJoin{
+                            {233, 499, 987, 1358, 1787},
+                            {518, 2061, 3943, 5587, 7748},
+                            {867, 3612, 6487, 7767, 10141},
+                            {1038, 5056, 8956, 11406, 14310},
+                            {1969, 6571, 10869, 16290, 20290}
                             };
+
+
+const std::vector< std::vector<int> > smallSameRelJoinRJ{
+                            {197, 1473, 2703, 4853, 7733},
+                            {187, 1082, 2517, 4595, 7530},
+                            {188, 1131, 2491, 4527, 7480},
+                            {194, 1230, 2652, 4606, 7624},
+                            {184, 1347, 2465, 4431, 7577}
+                            };
+
+const std::vector< std::vector<int> > smallSameRelJoinCreateTableT{
+                            {13, 1028, 3657, 6074, 9974},
+                            {15, 555, 3304, 6312, 9873},
+                            {15, 737, 3339, 6495, 9755},
+                            {12, 940, 2601, 6348, 9833},
+                            {13, 952, 2835, 6297, 9914}
+                            };
+
+const std::vector< std::vector<int> > smallDiffRelJoinRJ{
+                            {165, 414, 789, 987, 1200},
+                            {431, 1075, 1755, 2035, 3625},
+                            {713, 1791, 2726, 3092, 4029},
+                            {813, 2258, 3336, 4446, 5806},
+                            {1379, 2960, 4307, 6771, 7801}
+                            };
+
+const std::vector< std::vector<int> > smallDiffRelJoinCreateTableT{
+                            {6, 48, 138, 163, 321},
+                            {49, 883, 2085, 3301, 3933},
+                            {99, 1720, 3546, 4522, 5791},
+                            {150, 2594, 5348, 6555, 8282},
+                            {321, 3391, 6246, 9346, 11947}
+                            };
+
+// // TODO
+// // steps (horizontally & vertically): 20000 40000 60000 80000 100000
+// const std::vector< std::vector<int> > mediumSameRelJoin{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > mediumDiffRelJoin{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > mediumSameRelJoinRJ{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > mediumSameRelJoinCreateTableT{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// // TODO
+// // steps (horizontally & vertically): ??? ??? ??? ??? ???
+// const std::vector< std::vector<int> > publicSameRelJoin{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > publicDiffRelJoin{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > publicSameRelJoinRJ{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
+//
+// const std::vector< std::vector<int> > publicSameRelJoinCreateTableT{
+//                             {},
+//                             {},
+//                             {},
+//                             {},
+//                             {}
+//                             };
 
 // Keeps the important info/statistics for every column
 // needed to build the plan tree
