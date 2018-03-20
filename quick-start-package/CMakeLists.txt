@@ -5,12 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
-# set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
+set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -Wall -Ofast -march=native -fopenmp")
-add_compile_options(-Ofast -march=native -pthread)
+add_compile_options(-Ofast -march=native)
 
 include_directories(include)
-
 
 add_library(database QueryPlan.cpp Relation.cpp functions.cpp treegen.cpp parallel_radix_join.cpp Parser.cpp Utils.cpp )
 target_include_directories(database PUBLIC
@@ -26,7 +25,7 @@ endif()
 set(SOURCE_FILES QueryPlan.cpp functions.cpp treegen.cpp parallel_radix_join.cpp Relation.cpp Parser.cpp Utils.cpp)
 set(SOURCE_FILE_FOR_Query2SQL Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES})
-target_link_libraries(Joiner database)
+target_link_libraries(Joiner database pthread)
 
 # Interactive command line tool to translate our query format to SQL queries
 add_executable(Query2SQL Query2SQL.cpp ${SOURCE_FILE_FOR_Query2SQL})

@@ -7,14 +7,17 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <pthread.h>
 
 #include "Parser.hpp"
 #include "QueryPlan.hpp"
 #include "header.hpp"
 #include "Joiner.hpp"
+
 using namespace std;
 
 //#define time
+// #define TIME_DETAILS
 
 /* Timing variables */
 double timeSelfJoin = 0;
@@ -431,8 +434,27 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
+#ifdef TIME_DETAILS
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+#endif
     result_t * res  = RJ(r1, r2, 0);
-    return CreateTableT(res, table_r, table_s);
+#ifdef TIME_DETAILS
+    gettimeofday(&end, NULL);
+    double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    cerr << "RJ: " << dt << "sec" << endl;
+#endif
+#ifdef TIME_DETAILS
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+#endif
+    table_t *temp = CreateTableT(res, table_r, table_s);
+#ifdef TIME_DETAILS
+    gettimeofday(&end, NULL);
+    double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    cerr << "CreateTableT: " << dt << "sec" << endl;
+#endif
+    return temp;
 
     /* Construct the tables in case of intermediate results */
     //(table_r->intermediate_res)? (construct(table_r)) : ((void)0);
@@ -751,7 +773,7 @@ void *threadSum(void * arg) {
     struct threadSumArg_t * sumArg = (struct threadSumArg_t *) arg;
 
     // Loop the array for the checksum
-    uint64_t * res  = (uint64_t) malloc(sizeof(uint64_t)); *res = 0;
+    uint64_t * res  = (uint64_t*) malloc(sizeof(uint64_t)); *res = 0;
     int size = sumArg->size;
     int idx  = sumArg->start_index;
     uint64_t * array = sumArg->array;
@@ -766,8 +788,43 @@ void *threadSum(void * arg) {
 }
 
 //CHECK SUM FUNCTION
-uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
+// uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
+//
+//     /* to create the final cehcksum column */
+//     AddColumnToTableT(sel_info, table);
+//     construct(table);
+//
+//     uint64_t* col = table->column_j->values;
+//     const uint64_t size = table->column_j->size;
+//     uint64_t sum = 0;
+//
+//     pthread_t threads[4];
+//
+//     // Creating 4 threads
+//     for (int i = 0; i < 4; i++) {
+//         struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
+//         arg->size        = (i == 0) ? size/4 + size%4 : size/4;
+//         arg->start_index = (i == 0) ? 0 : size/4 * i + + size%4;
+//         arg->array       = col;
+//         pthread_create(&threads[i], NULL, threadSum, (void*)arg);
+//     }
+//
+//     //for (uint64_t i = 0 ; i < size; i++)
+//     //    sum += col[i];
+//
+//     // joining 4 threads i.e. waiting for all 4 threads to complete
+//     uint64_t * res;
+//     for (int i = 0; i < 4; i++) {
+//         pthread_join(threads[i], (void**)&res);
+//         sum += *res;
+//         free(res);
+//     }
+//
+//     return sum;
+// }
 
+// OLD check_sum
+uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     construct(table);
@@ -776,27 +833,8 @@ uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     const uint64_t size = table->column_j->size;
     uint64_t sum = 0;
 
-    pthread_t threads[4];
-
-    // Creating 4 threads
-    for (int i = 0; i < 4; i++) {
-        struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
-        arg->size        = (i == 0) ? size/4 + size%4 : size/4;
-        arg->start_index = (i == 0) ? 0 : size/4 * i + + size%4;
-        arg->array       = col;
-        pthread_create(&threads[i], NULL, threadSum, (void*)arg);
-    }
-
-    //for (uint64_t i = 0 ; i < size; i++)
-    //    sum += col[i];
-
-    // joining 4 threads i.e. waiting for all 4 threads to complete
-    uint64_t * res;
-    for (int i = 0; i < 4; i++) {
-        pthread_join(threads[i], &res);
-        sum += res;
-        free(res);
-    }
+    for (uint64_t i = 0 ; i < size; i++)
+        sum += col[i];
 
     return sum;
 }
@@ -854,7 +892,6 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
-// #define TIME_DETAILS
 #ifdef TIME_DETAILS
     for (int i = 1000; i <= 45000; i += 10000) {
         for (int j = 1000; j <= 45000; j += 10000) {
