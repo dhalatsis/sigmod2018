@@ -741,8 +741,33 @@ void Joiner::construct(table_t *table) {
 #endif
 }
 
+struct threadSumArg_t {
+    int size;
+    int start_index;
+    uint64_t * array;
+};
+
+void *threadSum(void * arg) {
+    struct threadSumArg_t * sumArg = (struct threadSumArg_t *) arg;
+
+    // Loop the array for the checksum
+    uint64_t * res  = (uint64_t) malloc(sizeof(uint64_t)); *res = 0;
+    int size = sumArg->size;
+    int idx  = sumArg->start_index;
+    uint64_t * array = sumArg->array;
+    for (; idx < size; idx++) {
+        *res += array[idx];
+    }
+
+    // Free the argument
+    free(sumArg);
+
+    return (void *)res;
+}
+
 //CHECK SUM FUNCTION
 uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
+
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     construct(table);
@@ -751,12 +776,30 @@ uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     const uint64_t size = table->column_j->size;
     uint64_t sum = 0;
 
-    for (uint64_t i = 0 ; i < size; i++)
-        sum += col[i];
+    pthread_t threads[4];
+
+    // Creating 4 threads
+    for (int i = 0; i < 4; i++) {
+        struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
+        arg->size        = (i == 0) ? size/4 + size%4 : size/4;
+        arg->start_index = (i == 0) ? 0 : size/4 * i + + size%4;
+        arg->array       = col;
+        pthread_create(&threads[i], NULL, threadSum, (void*)arg);
+    }
+
+    //for (uint64_t i = 0 ; i < size; i++)
+    //    sum += col[i];
+
+    // joining 4 threads i.e. waiting for all 4 threads to complete
+    uint64_t * res;
+    for (int i = 0; i < 4; i++) {
+        pthread_join(threads[i], &res);
+        sum += res;
+        free(res);
+    }
 
     return sum;
 }
-
 
 // Loads a relation from disk
 void Joiner::addRelation(const char* fileName) {
