@@ -17,7 +17,12 @@
 using namespace std;
 
 //#define time
+
 // #define TIME_DETAILS
+// #include <sstream>
+// string timeDetStr = "";
+
+bool done_testing = false;
 
 /* Timing variables */
 double timeSelfJoin = 0;
@@ -442,7 +447,12 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    cerr << "RJ: " << dt << "sec" << endl;
+    // std::ostringstream strs;
+    if(!done_testing) {
+        cerr << "RJ: " << dt << " sec\t|\t";
+        flush(cerr);
+        // timeDetStr.append(strs.str());
+    }
 #endif
 #ifdef TIME_DETAILS
     gettimeofday(&start, NULL);
@@ -451,7 +461,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    cerr << "CreateTableT: " << dt << "sec" << endl;
+    // if(!done_testing) cerr << "CreateTableT: " << dt << "sec" << endl;
 #endif
     return temp;
 
@@ -461,6 +471,13 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     /* Join the columns */
     //return low_join(table_r, table_s);
 }
+
+// // for_2 join UNOPTIMIZED
+// table_t* Joiner::for_2(table_t* table1Ptr, table_t* table2Ptr, PredicateInfo &pred_info) {
+//     int idx1 = pred_info.left.columnId, idx2 = pred_info.right.columnId;
+//
+//     for (auto e : table2Ptr->relations_row_ids[idx2])
+// }
 
 /* The self Join Function */
 table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr) {
@@ -892,58 +909,67 @@ int main(int argc, char* argv[]) {
     queryPlan.fillColumnInfo(joiner);
 
 #ifdef TIME_DETAILS
-    for (int i = 1000; i <= 45000; i += 10000) {
-        for (int j = 1000; j <= 45000; j += 10000) {
+    done_testing = false;
+    cerr << endl;
+    // bool its_over = false;
+    for (int i = 1000; i <= 79000; i += 10000) {
+        for (int j = 1000; j <= 79000; j += 10000) {
             vector<table_t*> tables;
-            tables.push_back(joiner.CreateTableTFromId(7, 7));
-            tables.push_back(joiner.CreateTableTFromId(13, 13));
+            tables.push_back(joiner.CreateTableTFromId(12, 12));
+            // tables.push_back(joiner.CreateTableTFromId(13, 13));
             if (i <= tables[0]->relations_row_ids[0][0].size()) {
                 for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
                     tables[0]->relations_row_ids[k][0].resize(i);
             } else {
                 tables[0] = NULL;
             }
-            if (j <= tables[1]->relations_row_ids[0][0].size()) {
-                for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
-                    tables[1]->relations_row_ids[k][0].resize(j);
-            } else {
-                tables[1] = NULL;
+            // if (j <= tables[1]->relations_row_ids[0][0].size()) {
+            //     for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
+            //         tables[1]->relations_row_ids[k][0].resize(j);
+            // } else {
+            //     tables[1] = NULL;
+            // }
+
+            if (!tables[0] /*|| !tables[1]*/) {
+                // its_over = true;
+                break;
             }
 
-            if (!tables[0] || !tables[1])
-                continue;
-
             PredicateInfo predicate;
-            // predicate.left.relId = 13;
+            predicate.left.relId = 12;
+            predicate.left.binding = 0;
+            predicate.left.colId = 1;
+            predicate.right.relId = 12;
+            predicate.right.binding = 1;
+            predicate.right.colId = 1;
+            struct timeval start, end;
+            gettimeofday(&start, NULL);
+            joiner.join(tables[0], tables[0], predicate);
+            gettimeofday(&end, NULL);
+            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            // std::ostringstream strs;
+            cerr << "12,\t" << i << ",\t12,\t" << j << ",\t" << dt << " sec\t|||\t";
+            flush(cerr);
+            // timeDetStr.append(strs.str());
+            // cerr << "7,\t" << i << ",\t7,\t" << j << ",\t" << dt << "sec\t|||\t";
+
+            // predicate.left.relId = 7;
             // predicate.left.binding = 0;
             // predicate.left.colId = 1;
             // predicate.right.relId = 13;
             // predicate.right.binding = 1;
             // predicate.right.colId = 1;
-            struct timeval start, end;
-            gettimeofday(&start, NULL);
-            // std::cerr << "A" << '\n';
-            // joiner.join(tables[1], tables[1], predicate);
-            // std::cerr << "B" << '\n';
-            gettimeofday(&end, NULL);
-            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            // cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
-
-            predicate.left.relId = 7;
-            predicate.left.binding = 0;
-            predicate.left.colId = 1;
-            predicate.right.relId = 13;
-            predicate.right.binding = 1;
-            predicate.right.colId = 1;
-            gettimeofday(&start, NULL);
-            // std::cerr << "A" << '\n';
-            joiner.join(tables[0], tables[1], predicate);
-            // std::cerr << "B" << '\n';
-            gettimeofday(&end, NULL);
-            dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
+            // gettimeofday(&start, NULL);
+            // joiner.join(tables[0], tables[1], predicate);
+            // gettimeofday(&end, NULL);
+            // dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            // cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
         }
+        // if (its_over)
+        //     break;
     }
+    cerr << timeDetStr << endl;
+    done_testing = true;
 #endif
     #ifdef time
     struct timeval end;
