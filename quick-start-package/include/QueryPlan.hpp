@@ -4,28 +4,37 @@
 #include <limits>
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <math.h>
 #include "Joiner.hpp"
 #include "Parser.hpp"
 
+using namespace std;
+
 // Keeps the important info/statistics for every column
 // needed to build the plan tree
 struct ColumnInfo {
-    uint64_t min; // Value of the minimum element
-    uint64_t max; // Value of the maximum element
-    uint64_t size; // Total number of elements
+    uint64_t min;      // Value of the minimum element
+    uint64_t max;      // Value of the maximum element
+    uint64_t size;     // Total number of elements
     uint64_t distinct; // Number of distinct elements
-    uint64_t n; // The size of the domain
-    uint64_t spread; // The spread of the values in the domain
+    uint64_t n;        // The size of the domain
+    double spread;     // The spread of the values in the domain
+
+    unsigned counter; // Number of times the column appears in the query
+    bool isSelectionColumn;
 
     // Prints a Column Info structure
     void print();
 };
 
+typedef map<SelectInfo, ColumnInfo> columnInfoMap;
+
 // Join Tree's node
 struct JoinTreeNode {
     unsigned nodeId;
+    double treeCost; // An estimation of the total cost of the join tree
 
     JoinTreeNode* left;
     JoinTreeNode* right;
@@ -35,22 +44,31 @@ struct JoinTreeNode {
     FilterInfo* filterPtr;
     ColumnInfo columnInfo;
 
+    columnInfoMap usedColumnInfos; // Keeps track of all the columns of every relation to be used in the query
+
     // Estimates the new info of a node's column
     // after a filter predicate is applied to that column
     void estimateInfoAfterFilter(FilterInfo& filterInfo);
 
-    // Returns the new column info
-    ColumnInfo estimateInfoAfterFilterLess(const int constant);
-    ColumnInfo estimateInfoAfterFilterGreater(const int constant);
-    ColumnInfo estimateInfoAfterFilterEqual(const int constant);
+    // Updates the column info map
+    void estimateInfoAfterFilterLess(FilterInfo& filterInfo);
+    void estimateInfoAfterFilterGreater(FilterInfo& filterInfo);
+    void estimateInfoAfterFilterEqual(FilterInfo& filterInfo);
 
-    ColumnInfo estimateInfoAfterJoin(ColumnInfo& leftColumnInfo, ColumnInfo& rightColumnInfo, const int tuples);
+    // Estimates the info of a node's column
+    // after a join predicate is applied to its children
+    void estimateInfoAfterJoin(PredicateInfo& predicateInfo);
+    
+    // Updates the column info map
+    ColumnInfo estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo);
+    ColumnInfo estimateInfoAfterRightDependentJoin(PredicateInfo& predicateInfo);
+    ColumnInfo estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo);
 
     // Execute a Join Tree
     table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo);
 
     // Estimates the cost of a given Plan Tree Node
-    double cost();
+    void cost(PredicateInfo& predicateInfo);
 
     void print(JoinTreeNode* joinTreeNodePtr);
 };
@@ -58,19 +76,18 @@ struct JoinTreeNode {
 // Join Tree data structure
 struct JoinTree {
     JoinTreeNode* root;
-    double treeCostEstimation; // An estimation of the total cost of the join tree
 
-    // Constructs a Join tree from a set of relations id's
+    // Constructs a JoinTree from a set of relations
     JoinTree* build(QueryInfo& queryInfoPtr, ColumnInfo** columnInfos);
 
     // Merges two join trees
-    JoinTree* CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree);
+    JoinTree* CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree, PredicateInfo& predicateInfo);
 
     // Merges the final optimal tree with a filter join predicate
     JoinTree* AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateInfo);
 
-    // Estimates the cost of a given Plan Tree
-    double cost(JoinTree* joinTreePtr);
+    // Returns the cost of a given JoinTree
+    double getCost();
 
     // destructor
     void destrJoinTree();

@@ -17,7 +17,6 @@ struct SelectInfo {
     // copy conustroctor
     SelectInfo(const SelectInfo& si) : relId(si.relId), binding(si.binding), colId(si.colId){};
     
-
     // Equality operator
     bool operator==(const SelectInfo& o) const;
 
@@ -31,7 +30,6 @@ struct SelectInfo {
     constexpr static const char delimiterSQL[]=", "; // The delimiter used in SQL
 
 };
-
 
 struct FilterInfo {
     enum Comparison : char { Less='<', Greater='>', Equal='=' };
@@ -56,8 +54,6 @@ struct FilterInfo {
     constexpr static const char delimiterSQL[]=" and "; // The delimiter used in SQL
 };
 
-
-
 static const std::vector<FilterInfo::Comparison> comparisonTypes { FilterInfo::Comparison::Less, FilterInfo::Comparison::Greater, FilterInfo::Comparison::Equal};
 
 struct PredicateInfo {
@@ -79,9 +75,6 @@ struct PredicateInfo {
     static const char delimiter='&'; // The delimiter used in our text format
     constexpr static const char delimiterSQL[]=" and "; // The delimiter used in SQL
 };
-
-
-
 
 class QueryInfo {
     public:

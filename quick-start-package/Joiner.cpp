@@ -14,6 +14,10 @@
 #include "Joiner.hpp"
 using namespace std;
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 //#define time
 
 /* Timing variables */
@@ -26,6 +30,7 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
+double timeExecute = 0;
 
 int cleanQuery(QueryInfo &info) {
     /* Remove weak filters */
@@ -741,7 +746,7 @@ void Joiner::construct(table_t *table) {
 }
 
 //CHECK SUM FUNCTION
-uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
+string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     construct(table);
@@ -753,7 +758,10 @@ uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     for (uint64_t i = 0 ; i < size; i++)
         sum += col[i];
 
-    return sum;
+    switch (sum) {
+        case 0  :  return "NULL";
+        default :  return to_string(sum);
+    }
 }
 
 
@@ -810,15 +818,9 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
-    #ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    #endif
-
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 0;
+    int q_counter = 1;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
@@ -833,35 +835,53 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        JTree *jTreePtr = treegen(&i);
+        //JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
-        //JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
+        struct timeval end;
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-
-        int *plan = NULL, plan_size = 0;
-        //table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
-        table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
 
         #ifdef time
         gettimeofday(&start, NULL);
         #endif
 
+        int *plan = NULL, plan_size = 0;
+        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
+        #ifdef time
+        gettimeofday(&start, NULL);
+        #endif
+
+        // Compute the selection predicates
         string result_str;
         uint64_t checksum = 0;
-        std::vector<SelectInfo> &selections = i.selections;
-        for (size_t i = 0; i < selections.size(); i++) {
-            checksum = joiner.check_sum(selections[i], result);
+        unordered_map<string, string> cached_sums;
+        vector<SelectInfo> &selections = i.selections;
 
-            if (checksum == 0) {
-                result_str += "NULL";
+        for (size_t i = 0; i < selections.size(); i++) {
+            // Check if checksum is cached
+            string key = to_string(selections[i].binding) + to_string(selections[i].colId);
+            unordered_map<string, string>::const_iterator got = cached_sums.find(key);
+            if (got != cached_sums.end()) {
+                result_str += got->second;
             } else {
-                result_str += std::to_string(checksum);
+                string str = joiner.check_sum(selections[i], result);
+                cached_sums.insert(make_pair(key, str));
+                result_str += str;
             }
 
+            // Create the write check sum
             if (i != selections.size() - 1) {
                 result_str +=  " ";
             }
@@ -886,6 +906,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
     std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
+    std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
 #endif
 

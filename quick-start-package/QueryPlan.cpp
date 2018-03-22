@@ -1,17 +1,16 @@
 #include <set>
-#include <unordered_map>
 #include <math.h>
 #include "QueryPlan.hpp"
 
 using namespace std;
 
 void ColumnInfo::print() {
-    cerr << "  min: "      << this->min << endl;
-    cerr << "  max: "      << this->max << endl;
-    cerr << "  size: "     << this->size << endl;
-    cerr << "  distinct: " << this->distinct << endl;
-    cerr << "  n: "        << this->n << endl;
-    cerr << "  spread: "   << this->spread << endl << endl;
+    cerr << "min:      " << this->min << endl;
+    cerr << "max:      " << this->max << endl;
+    cerr << "size:     " << this->size << endl;
+    cerr << "distinct: " << this->distinct << endl;
+    cerr << "n:        " << this->n << endl;
+    cerr << "spread:   " << this->spread << endl << endl;
     flush(cerr);
 }
 
@@ -19,73 +18,483 @@ void ColumnInfo::print() {
 // after a filter predicate is applied to that column
 void JoinTreeNode::estimateInfoAfterFilter(FilterInfo& filterInfo) {
     if (filterInfo.comparison == FilterInfo::Comparison::Less) {
-        this->columnInfo = estimateInfoAfterFilterLess(filterInfo.constant);
+        this->estimateInfoAfterFilterLess(filterInfo);
     }
     else if (filterInfo.comparison == FilterInfo::Comparison::Greater) {
-        this->columnInfo = estimateInfoAfterFilterGreater(filterInfo.constant);
+        this->estimateInfoAfterFilterGreater(filterInfo);
     }
     else if (filterInfo.comparison == FilterInfo::Comparison::Equal) {
-        this->columnInfo = estimateInfoAfterFilterEqual(filterInfo.constant);
+        this->estimateInfoAfterFilterEqual(filterInfo);
     }
 }
 
-// Returns the new column info
-ColumnInfo JoinTreeNode::estimateInfoAfterFilterLess(const int constant) {
+// Updates the column info map
+void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
+    ColumnInfo oldColumnInfo = this->usedColumnInfos[filterInfo.filterColumn];
+
+    // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
 
-    newColumnInfo.min      = this->columnInfo.min;
-    newColumnInfo.max      = constant;
-    newColumnInfo.distinct = (newColumnInfo.max - newColumnInfo.min) / this->columnInfo.spread;
-    newColumnInfo.size     = newColumnInfo.distinct * (this->columnInfo.size / this->columnInfo.distinct);
+    newColumnInfo.min      = oldColumnInfo.min;
+    newColumnInfo.max      = filterInfo.constant;
+    newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
+    newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
-    newColumnInfo.spread   = floor(newColumnInfo.n / newColumnInfo.distinct);
+    newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
+    newColumnInfo.counter  = oldColumnInfo.counter - 1;
 
-    return newColumnInfo;
+    this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
+
+    // Update the info of the other columns
+    for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
+        if (!(it->first == filterInfo.filterColumn)) {
+            double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newColumnInfo.size;
+            it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
+            it->second.spread   = ((double)it->second.n) / ((double) it->second.distinct);
+        }
+    }
+
+    // Check if this column is needed anymore
+    if ((newColumnInfo.counter == 0) && (newColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(filterInfo.filterColumn);
+    }
 }
 
-// Returns the new column info
-ColumnInfo JoinTreeNode::estimateInfoAfterFilterGreater(const int constant) {
+// Updates the column info map
+void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
+    ColumnInfo oldColumnInfo = this->usedColumnInfos[filterInfo.filterColumn];
+
+    //fprintf(stderr, "About to apply filter on column %d.%d\n", filterInfo.filterColumn.binding, filterInfo.filterColumn.colId);
+    //oldColumnInfo.print();
+
+    // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
 
-    newColumnInfo.min      = constant;
-    newColumnInfo.max      = this->columnInfo.max;
-    newColumnInfo.distinct = (newColumnInfo.max - newColumnInfo.min) / this->columnInfo.spread;
-    newColumnInfo.size     = newColumnInfo.distinct * (this->columnInfo.size / this->columnInfo.distinct);
+    newColumnInfo.min      = filterInfo.constant;
+    newColumnInfo.max      = oldColumnInfo.max;
+    newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
+    newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
-    newColumnInfo.spread   = floor(newColumnInfo.n / newColumnInfo.distinct);
+    newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
+    newColumnInfo.counter  = oldColumnInfo.counter - 1;
 
-    return newColumnInfo;
+    //fprintf(stderr, "After the filter\n");
+    //newColumnInfo.print();
+
+    this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
+
+    // Update the info of the other columns
+    for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
+        if (!(it->first == filterInfo.filterColumn)) {
+            double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newColumnInfo.size;
+            it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+        
+            //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
+            //it->second.print();
+        }
+    }
+
+    // Check if this column is needed anymore
+    if ((newColumnInfo.counter == 0) && (newColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(filterInfo.filterColumn);
+    }
 }
 
-// Returns the new column info
-ColumnInfo JoinTreeNode::estimateInfoAfterFilterEqual(const int constant) {
+// Updates the column info map
+void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
+    ColumnInfo oldColumnInfo = this->usedColumnInfos[filterInfo.filterColumn];
+
+    //fprintf(stderr, "About to apply filter on column %d.%d\n", filterInfo.filterColumn.binding, filterInfo.filterColumn.colId);
+    //oldColumnInfo.print();
+
+    // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
 
-    newColumnInfo.min      = constant;
-    newColumnInfo.max      = constant;
+    newColumnInfo.min      = filterInfo.constant;
+    newColumnInfo.max      = filterInfo.constant;
     newColumnInfo.distinct = 1;
-    newColumnInfo.size     = this->columnInfo.size / this->columnInfo.distinct;
+    newColumnInfo.size     = oldColumnInfo.size / oldColumnInfo.distinct;
     newColumnInfo.n        = 1;
     newColumnInfo.spread   = 1;
+    newColumnInfo.counter  = oldColumnInfo.counter - 1;
 
-    return newColumnInfo;
+    //fprintf(stderr, "After the filter\n");
+    //newColumnInfo.print();
+
+    this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
+
+    // Update the info of the other columns
+    for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
+        if (!(it->first == filterInfo.filterColumn)) {
+            double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+        
+            //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
+            //it->second.print();
+        }
+    }
+
+    // Check if this column is needed anymore
+    if ((newColumnInfo.counter == 0) && (newColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(filterInfo.filterColumn);
+    }
 }
 
-// Returns the new column info
-ColumnInfo JoinTreeNode::estimateInfoAfterJoin(ColumnInfo& leftColumnInfo, ColumnInfo& rightColumnInfo, const int tuples) {
-    ColumnInfo newColumnInfo;
+// Estimates the info of a node's column
+// after a join predicate is applied to its children
+void JoinTreeNode::estimateInfoAfterJoin(PredicateInfo& predicateInfo) {
+    // Get the column info of the columns to be joined from the children
+    ColumnInfo* leftColumnInfo = &(this->left->usedColumnInfos[predicateInfo.left]);
+    ColumnInfo* rightColumnInfo = &(this->right->usedColumnInfos[predicateInfo.right]);
 
-    newColumnInfo.min      = min(leftColumnInfo.min, rightColumnInfo.min);
-    newColumnInfo.max      = max(leftColumnInfo.max, rightColumnInfo.max);
-    newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
-    newColumnInfo.distinct = (leftColumnInfo.distinct * rightColumnInfo.distinct) / newColumnInfo.n;
-    newColumnInfo.size     = tuples;
-    newColumnInfo.spread   = floor((newColumnInfo.max - newColumnInfo.min + 1) / (newColumnInfo.distinct));
+    //----------------
+    /*
+    fprintf(stderr, "Before predicate %d.%d=%d.%d\n", predicateInfo.left.binding, predicateInfo.left.colId,
+        predicateInfo.right.binding, predicateInfo.right.colId);
+    fprintf(stderr, "%d.%d\n", predicateInfo.left.binding, predicateInfo.left.colId);
+    leftColumnInfo->print();
+    fprintf(stderr, "%d.%d\n", predicateInfo.right.binding, predicateInfo.right.colId);
+    rightColumnInfo->print();
+    */
+    //----------------
 
-    return newColumnInfo;
+    // Save the current min and max in case they change
+    uint64_t oldLeftMin  = leftColumnInfo->min;
+    uint64_t oldLeftMax  = leftColumnInfo->max;
+    uint64_t oldRightMin = rightColumnInfo->min;
+    uint64_t oldRightMax = rightColumnInfo->max;
+
+    // If the domains are not the same apply a custom filter
+    if ((oldLeftMin != oldRightMin) || (oldLeftMax != rightColumnInfo->max)) {
+        // First apply the right filters to create the same domain on both columns
+        uint64_t oldDistinct     = leftColumnInfo->distinct;
+        leftColumnInfo->min      = max(leftColumnInfo->min, rightColumnInfo->min);
+        leftColumnInfo->max      = min(leftColumnInfo->max, rightColumnInfo->max);
+        leftColumnInfo->distinct = (uint64_t) (((double) (leftColumnInfo->max - leftColumnInfo->min)) / leftColumnInfo->spread);
+        if (leftColumnInfo->distinct == 0) leftColumnInfo->distinct = 1;
+        leftColumnInfo->size     = leftColumnInfo->distinct * (leftColumnInfo->size / oldDistinct);
+        leftColumnInfo->n        = leftColumnInfo->max - leftColumnInfo->min + 1;
+        leftColumnInfo->spread   = ((double) leftColumnInfo->n) / ((double) leftColumnInfo->distinct);
+
+        oldDistinct               = rightColumnInfo->distinct;
+        rightColumnInfo->min      = leftColumnInfo->min;
+        rightColumnInfo->max      = leftColumnInfo->max;
+        rightColumnInfo->distinct = (uint64_t) (((double) (rightColumnInfo->max - rightColumnInfo->min)) / rightColumnInfo->spread);
+        if (rightColumnInfo->distinct == 0) rightColumnInfo->distinct = 1;
+        rightColumnInfo->size     = rightColumnInfo->distinct * (rightColumnInfo->size / oldDistinct);
+        rightColumnInfo->n        = rightColumnInfo->max - rightColumnInfo->min + 1;
+        rightColumnInfo->spread   = ((double) rightColumnInfo->n) / ((double) rightColumnInfo->distinct);
+
+        //---------------
+        /*
+        fprintf(stderr, "AFTER APPLYING A CUSTOM FILTER\n");
+        fprintf(stderr, "%d.%d\n", predicateInfo.left.binding, predicateInfo.left.colId);
+        leftColumnInfo->print();
+        fprintf(stderr, "%d.%d\n", predicateInfo.right.binding, predicateInfo.right.colId);
+        rightColumnInfo->print();
+        */
+        //---------------
+    }
+
+    if ((oldLeftMin >= oldRightMin) && (oldLeftMax <= rightColumnInfo->max)) {
+        this->estimateInfoAfterLeftDependentJoin(predicateInfo);
+    }
+    /*
+    else if ((rightColumnInfo->min >= leftColumnInfo->min) && (rightColumnInfo->max <= leftColumnInfo->max)) {
+        this->estimateInfoAfterRightDependentJoin(predicateInfo);
+    }*/
+    else {
+        this->estimateInfoAfterIndependentJoin(predicateInfo);
+    }
 }
 
-// Construct a plan tree from set of relations IDs
+// Updates the column info map
+ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo) {
+    ColumnInfo newLeftColumnInfo, newRightColumnInfo;
+
+    // Get the info of the columns to be joined
+    ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
+
+    //------------------
+    /*
+    fprintf(stderr, "Inside left join - before join\n");
+    fprintf(stderr, "%d.%d\n", predicateInfo.left.binding, predicateInfo.left.colId);
+    oldLeftColumnInfo.print();
+    fprintf(stderr, "%d.%d\n", predicateInfo.right.binding, predicateInfo.right.colId);
+    oldRightColumnInfo.print();
+    */
+    //------------------
+
+    // Estimate the new info of the columns to be joined
+    newLeftColumnInfo.min      = oldLeftColumnInfo.min;
+    newLeftColumnInfo.max      = oldLeftColumnInfo.max;
+    newLeftColumnInfo.size     = oldLeftColumnInfo.size * (oldRightColumnInfo.size / oldRightColumnInfo.distinct);
+    newLeftColumnInfo.distinct = oldLeftColumnInfo.distinct;
+    newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
+    newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
+    newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+
+    newRightColumnInfo.min      = oldRightColumnInfo.min;
+    newRightColumnInfo.max      = oldRightColumnInfo.max;
+    newRightColumnInfo.size     = oldLeftColumnInfo.size * (oldRightColumnInfo.size / oldRightColumnInfo.distinct);
+    newRightColumnInfo.distinct = oldLeftColumnInfo.distinct;
+    newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
+    newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
+    newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+
+    //------------------
+    /*
+    fprintf(stderr, "Inside left join - after join\n");
+    fprintf(stderr, "%d.%d\n", predicateInfo.left.binding, predicateInfo.left.colId);
+    newLeftColumnInfo.print();
+    fprintf(stderr, "%d.%d\n", predicateInfo.right.binding, predicateInfo.right.colId);
+    newRightColumnInfo.print();
+    */
+    //------------------
+
+    this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
+    this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
+
+    // Update the info of the other columns
+    // in the same relation as the left predicate
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newLeftColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+
+            //fprintf(stderr, "Update after join column %d.%d\n", it->first.binding, it->first.colId);
+            //it->second.print();
+        }
+    }
+
+    // Update the info of the other columns
+    // in the same relation as the right predicate
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newRightColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+
+            //fprintf(stderr, "Update after join column %d.%d\n", it->first.binding, it->first.colId);
+            //it->second.print();
+        }
+    }
+
+    // Copy every other remaining column
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.left.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.right.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Check if the left column is needed anymore
+    if ((newLeftColumnInfo.counter == 0) && (newLeftColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.left);
+    }
+
+    // Check if the right column is needed anymore
+    if ((newRightColumnInfo.counter == 0) && (newRightColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.right);
+    }
+}
+
+// Updates the column info map
+ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& predicateInfo) {
+    ColumnInfo newLeftColumnInfo, newRightColumnInfo;
+
+    // Get the info of the columns to be joined
+    ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
+
+    // Estimate the new info of the columns to be joined
+    newLeftColumnInfo.min      = oldLeftColumnInfo.min;
+    newLeftColumnInfo.max      = oldLeftColumnInfo.max;
+    newLeftColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
+    newLeftColumnInfo.distinct = oldRightColumnInfo.distinct;
+    newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
+    newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
+    newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+
+    newRightColumnInfo.min      = oldRightColumnInfo.min;
+    newRightColumnInfo.max      = oldRightColumnInfo.max;
+    newRightColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
+    newRightColumnInfo.distinct = oldRightColumnInfo.distinct;
+    newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
+    newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
+    newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+
+    this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
+    this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
+
+    // Update the info of the other columns
+    // in the same relation as the left predicate
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newLeftColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Update the info of the other columns
+    // in the same relation as the right predicate
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newRightColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Copy every other remaining column
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.left.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.right.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Check if the left column is needed anymore
+    if ((newLeftColumnInfo.counter == 0) && (newLeftColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.left);
+    }
+
+    // Check if the right column is needed anymore
+    if ((newRightColumnInfo.counter == 0) && (newRightColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.right);
+    }
+}
+
+// Updates the column info map
+ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo) {
+    ColumnInfo newLeftColumnInfo, newRightColumnInfo;
+
+    // Get the info of the columns to be joined
+    ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
+
+    // Estimate the new info of the columns to be joined
+    newLeftColumnInfo.min      = oldLeftColumnInfo.min;
+    newLeftColumnInfo.max      = oldLeftColumnInfo.max;
+    newLeftColumnInfo.size     = (oldLeftColumnInfo.size * oldRightColumnInfo.size);
+    newLeftColumnInfo.distinct = oldRightColumnInfo.distinct;
+    newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
+    newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
+    newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+
+    newRightColumnInfo.min      = oldRightColumnInfo.min;
+    newRightColumnInfo.max      = oldRightColumnInfo.max;
+    newRightColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
+    newRightColumnInfo.distinct = oldRightColumnInfo.distinct;
+    newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
+    newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
+    newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+
+    this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
+    this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
+
+    // Update the info of the other columns
+    // in the same relation as the left predicate
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newLeftColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Update the info of the other columns
+    // in the same relation as the right predicate
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
+            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double tempValue = pow(base, exponent);
+
+            it->second.size     = newRightColumnInfo.size;
+            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Copy every other remaining column
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.left.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if (it->first.binding != predicateInfo.right.binding) {
+            this->usedColumnInfos[it->first] = it->second;
+        }
+    }
+
+    // Check if the left column is needed anymore
+    if ((newLeftColumnInfo.counter == 0) && (newLeftColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.left);
+    }
+
+    // Check if the right column is needed anymore
+    if ((newRightColumnInfo.counter == 0) && (newRightColumnInfo.isSelectionColumn == false)) {
+        this->usedColumnInfos.erase(predicateInfo.right);
+    }
+}
+
+// Construct a JoinTree from a set of relations
 JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     // Maps every possible set of relations to its respective best plan tree
     unordered_map< vector<bool>, JoinTree* > BestTree;
@@ -95,16 +504,70 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     // for every single relation in the input
     for (int i = 0; i < relationsCount; i++) {
         // Allocate memory
-        JoinTree* joinTreePtr = (JoinTree*) malloc(sizeof(JoinTree));
-        JoinTreeNode* joinTreeNodePtr = (JoinTreeNode*) malloc(sizeof(JoinTreeNode));
+        JoinTree* joinTreePtr = new JoinTree();
+        JoinTreeNode* joinTreeNodePtr = new JoinTreeNode();
 
         // Initialise JoinTreeNode
         joinTreeNodePtr->nodeId = i; // The binding of the relation
+        joinTreeNodePtr->treeCost = 0;
         joinTreeNodePtr->left = NULL;
         joinTreeNodePtr->right = NULL;
         joinTreeNodePtr->parent = NULL;
-        //joinTreeNodePtr->predicatePtr = NULL;
+        joinTreeNodePtr->predicatePtr = NULL;
         joinTreeNodePtr->filterPtr = NULL;
+
+        // Save the initial info of all the columns to be used in the query
+        unsigned relationId, columnId;
+
+        for (auto predicate : queryInfo.predicates) {
+            if (predicate.left.binding == i) {
+                // If the column is not already in the map insert it's info
+                if (joinTreeNodePtr->usedColumnInfos.find(predicate.left) == joinTreeNodePtr->usedColumnInfos.end()) {
+                    relationId = predicate.left.relId;
+                    columnId = predicate.left.colId;
+                    joinTreeNodePtr->usedColumnInfos[predicate.left] = columnInfos[relationId][columnId];
+                }
+
+                joinTreeNodePtr->usedColumnInfos[predicate.left].counter++;
+            }
+            else if (predicate.right.binding == i) {
+                // If the column is not already in the map insert it's info
+                if (joinTreeNodePtr->usedColumnInfos.find(predicate.right) == joinTreeNodePtr->usedColumnInfos.end()) {
+                    relationId = predicate.right.relId;
+                    columnId = predicate.right.colId;
+                    joinTreeNodePtr->usedColumnInfos[predicate.right] = columnInfos[relationId][columnId];
+                }
+
+                joinTreeNodePtr->usedColumnInfos[predicate.right].counter++;
+            }
+        }
+
+        for (auto filter : queryInfo.filters) {
+            if (filter.filterColumn.binding == i) {
+                // If the column is not already in the map insert it's info
+                if (joinTreeNodePtr->usedColumnInfos.find(filter.filterColumn) == joinTreeNodePtr->usedColumnInfos.end()) {
+                    relationId = filter.filterColumn.relId;
+                    columnId = filter.filterColumn.colId;
+                    joinTreeNodePtr->usedColumnInfos[filter.filterColumn] = columnInfos[relationId][columnId];
+                }
+
+                joinTreeNodePtr->usedColumnInfos[filter.filterColumn].counter++;
+            }
+        }
+
+        for (auto selection : queryInfo.selections) {
+            if (selection.binding == i) {
+                // If the column is not already in the map insert it's info
+                if (joinTreeNodePtr->usedColumnInfos.find(selection) == joinTreeNodePtr->usedColumnInfos.end()) {
+                    relationId = selection.relId;
+                    columnId = selection.colId;
+                    joinTreeNodePtr->usedColumnInfos[selection] = columnInfos[relationId][columnId];
+                }
+
+                joinTreeNodePtr->usedColumnInfos[selection].counter++;
+                joinTreeNodePtr->usedColumnInfos[selection].isSelectionColumn = true;
+            }
+        }
 
         // Initialise JoinTree
         joinTreePtr->root = joinTreeNodePtr;
@@ -117,7 +580,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
 
     // Maps all sets of a certain size to their size
     // Sets are represented as vector<bool>
-    map< int, set< vector<bool> > > powerSetMap;
+    map<int, set<vector<bool> > > powerSetMap;
 
     // Generate power-set of the given set of relations
     // source: www.geeksforgeeks.org/power-set/
@@ -144,64 +607,45 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         // of the relation whose column will be filtered
         vector<bool> relationToVector(relationsCount, false);
         relationToVector[queryInfo.filters[i].filterColumn.binding] = true;
-
-        const int relationId = queryInfo.filters[i].filterColumn.relId;
-        const int columnId = queryInfo.filters[i].filterColumn.colId;
         BestTree[relationToVector]->root->filterPtr = &(queryInfo.filters[i]);
-        BestTree[relationToVector]->root->columnInfo = columnInfos[relationId][columnId];
 
         // Update the column info
         BestTree[relationToVector]->root->estimateInfoAfterFilter(queryInfo.filters[i]);
     }
 
     // Dynamic programming algorithm
-    for (int i = 1; i <= relationsCount; i++) {
+    for (int i = 1; i < relationsCount; i++) {
         for (auto s : powerSetMap[i]) {
             for (int j = 0; j < relationsCount; j++) {
                 // If j is not in the set
                 if (s[j] == false) {
                     // Check if there is a corresponding predicate
-                    bool predicateFound = false;
                     for (auto predicate : queryInfo.predicates) {
-                        // If the right relation is found on the left hand side of a predicate
-                        /*
-                        if (predicate.left.binding == j) {
-                            for (int n = 0; n < relationsCount; n++) {
-                                if ((s[n] == true) && (predicate.right.binding == n)) {
-                                    predicateFound = true;
-                                    break;
-                                }
-                            }
-                        }
-                        */
-                        // If the right relation is found on the left hand side of a predicate
+                        // If the right relation is found on the right hand side of a predicate
                         if (predicate.right.binding == j) {
                             for (int n = 0; n < relationsCount; n++) {
+                                // If a relation from the set is found on the left hand side of the same predicate
                                 if ((s[n] == true) && (predicate.left.binding == n)) {
-                                    predicateFound = true;
-                                    break;
+                                    // Create the bit vector representation of the relation j
+                                    vector<bool> relationToVector(relationsCount, false);
+                                    relationToVector[j] = true;
+
+                                    // If no predicate exists for the relations in the set
+                                    // a tree has not been created
+                                    if (BestTree[s] == NULL) continue;
+
+                                    // Merge the two trees
+                                    JoinTree* currTree = CreateJoinTree(BestTree[s], BestTree[relationToVector], predicate);
+
+                                    // Save the new merged tree
+                                    vector<bool> s1 = s;
+                                    s1[j] = true;
+
+                                    if ((BestTree[s1] == NULL) || (BestTree[s1]->getCost() > currTree->getCost())) {
+                                        BestTree[s1] = currTree;
+                                    }
                                 }
                             }
-                        }
-                        
-                        if (predicateFound == true) break;
-                    }
-
-                    if (predicateFound == true) {
-                        // Create the bit vector representation of the relation j
-                        vector<bool> relationToVector(relationsCount, false);
-                        relationToVector[j] = true;
-
-                        // Merge the two trees
-                        JoinTree* currTree = CreateJoinTree(BestTree[s], BestTree[relationToVector]);
-
-                        // Save the new merged tree
-                        vector<bool> s1 = s;
-                        s1[j] = true;
-
-                        // cerr << "comparing costs\n";
-                        if (BestTree[s1] == NULL || cost(BestTree[s1]) > cost(currTree)) {
-                            BestTree[s1] = currTree;
                         }
                     }
                 }
@@ -222,7 +666,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
 
     // Go to the leftmost join
     while (joinTreeNodePtr->left->nodeId == -1) {
+        JoinTreeNode* temp = joinTreeNodePtr;
         joinTreeNodePtr = joinTreeNodePtr->left;
+        joinTreeNodePtr->parent = temp;
     }
 
     // Go bottom-up and save the corresponding predicates
@@ -231,21 +677,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     while (1) {
         bool predicateFound = false;
         for (auto predicate : predicatesSet) {
-            // If the right relation is found on the left hand side of a predicate
-            /*
-            if (predicate->left.binding == joinTreeNodePtr->right->nodeId) {
-                for (auto n : joinedNodes) {
-                    if (predicate->right.binding == n) {
-                        joinTreeNodePtr->predicatePtr = predicate;
-                        predicatesSet.erase(predicate);
-                        joinedNodes.insert(joinTreeNodePtr->right->nodeId);
-                        predicateFound = true;
-                        break;
-                    }
-                }
-            }*/
-            // If the right relation is found on the left hand side of a predicate
+            // If the right relation is found on the right hand side of a predicate
             if (predicate->right.binding == joinTreeNodePtr->right->nodeId) {
+
                 for (auto n : joinedNodes) {
                     if (predicate->left.binding == n) {
                         joinTreeNodePtr->predicatePtr = predicate;
@@ -280,31 +714,32 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
 }
 
 // Merges two join trees
-JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree) {
-    if ((leftTree == NULL) || (rightTree == NULL)) {
-        return NULL;
-    }
-
+JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree, PredicateInfo& predicateInfo) {
     // Allocate memory for the new tree
-    JoinTree* joinTreePtr = (JoinTree*) malloc(sizeof(JoinTree));
-    JoinTreeNode* joinTreeNodePtr = (JoinTreeNode*) malloc(sizeof(JoinTreeNode));
+    JoinTree* joinTreePtr = new JoinTree();
+    JoinTreeNode* joinTreeNodePtr = new JoinTreeNode();
 
     // Initialise the new JoinTreeNode
     joinTreeNodePtr->nodeId = -1; // This is an intermediate node
+    joinTreeNodePtr->treeCost = 0;
     joinTreeNodePtr->left = leftTree->root;
     joinTreeNodePtr->right = rightTree->root;
     joinTreeNodePtr->parent = NULL;
     joinTreeNodePtr->predicatePtr = NULL;
     joinTreeNodePtr->filterPtr = NULL;
 
+    // Assign a cost to this node
+    joinTreeNodePtr->cost(predicateInfo);
+
+    // Estimate the new info of the merged columns
+    joinTreeNodePtr->estimateInfoAfterJoin(predicateInfo);
+
     // Initialise the new JoinTree
     joinTreePtr->root = joinTreeNodePtr;
 
     // Update the parent pointers of the merged trees
-    leftTree->root->parent = joinTreePtr->root;
-    rightTree->root->parent = joinTreePtr->root;
-
-    // Estimate the new info of the merged columns
+    //leftTree->root->parent = joinTreePtr->root;
+    //rightTree->root->parent = joinTreePtr->root;
 
     return joinTreePtr;
 }
@@ -312,16 +747,34 @@ JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree) {
 // Merges the final optimal tree with a filter join predicate
 JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateInfo) {
     // Allocate memory for the new tree
-    JoinTree* joinTreePtr = (JoinTree*) malloc(sizeof(JoinTree));
-    JoinTreeNode* joinTreeNodePtr = (JoinTreeNode*) malloc(sizeof(JoinTreeNode));
+    JoinTree* joinTreePtr = new JoinTree();
+    JoinTreeNode* joinTreeNodePtr = new JoinTreeNode();
 
     // Initialise the new JoinTreeNode
     joinTreeNodePtr->nodeId = -1; // This is an intermediate node
+    joinTreeNodePtr->treeCost = 0;
     joinTreeNodePtr->left = leftTree->root;
     joinTreeNodePtr->right = NULL;
     joinTreeNodePtr->parent = NULL;
     joinTreeNodePtr->predicatePtr = predicateInfo;
     joinTreeNodePtr->filterPtr = NULL;
+    joinTreeNodePtr->usedColumnInfos = joinTreeNodePtr->left->usedColumnInfos;
+
+    ColumnInfo *leftColumnInfo, *rightColumnInfo;
+    leftColumnInfo = &(joinTreeNodePtr->usedColumnInfos[predicateInfo->left]);
+    rightColumnInfo = &(joinTreeNodePtr->usedColumnInfos[predicateInfo->right]);
+
+    // Check if the left column is needed anymore
+    leftColumnInfo->counter--;
+    if ((leftColumnInfo->counter == 0) && (leftColumnInfo->isSelectionColumn == false)) {
+        joinTreeNodePtr->usedColumnInfos.erase(predicateInfo->left);
+    }
+
+    // Check if the right column is needed anymore
+    rightColumnInfo->counter--;
+    if ((rightColumnInfo->counter == 0) && (rightColumnInfo->isSelectionColumn == false)) {
+        joinTreeNodePtr->usedColumnInfos.erase(predicateInfo->right);
+    }
 
     // Initialise the new JoinTree
     joinTreePtr->root = joinTreeNodePtr;
@@ -367,67 +820,14 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 }
 
-// Estimates the cost of a given Plan Tree
-/*
-double JoinTreeNode::cost() {
-    // cerr << "JoinTreeNode::cost\n";
-    double nodeEstimation = 1.0;
-
-    // if it is a leaf or a filter
-    // cerr << "pre A\n";
-    if ((this->filterPtr == NULL && this->predicatePtr == NULL) || this->filterPtr != NULL) {
-        // cerr << "A\n";
-        nodeEstimation = 0;
-    }
-    // if it is a join
-    else if (this->predicatePtr != NULL && this->left != NULL && this->right != NULL) {
-        // if it is a self join
-        // cerr << "pre B\n";
-        if (this->left->nodeId != -1 && this->left->nodeId == this->right->nodeId) {
-            // cerr << "B\n";
-            nodeEstimation = (this->left->columnInfo.size * this->left->columnInfo.size) / this->left->columnInfo.distinct;
-            // cerr << "pre C\n";
-        }
-        // if left relation may be a subset of the right
-        else if ((this->left->columnInfo.min >= this->right->columnInfo.min) &&
-        (this->left->columnInfo.max <= this->right->columnInfo.max)) {
-            // cerr << "C\n";
-            nodeEstimation = (this->left->columnInfo.size * this->right->columnInfo.size) / this->right->columnInfo.distinct;
-            // cerr << "pre D\n";
-        }
-        // if right relation may be a subset of the right
-        else if ((this->left->columnInfo.min <= this->right->columnInfo.min) &&
-        (this->left->columnInfo.max >= this->right->columnInfo.max)) {
-            // cerr << "D\n";
-            nodeEstimation = (this->left->columnInfo.size * this->right->columnInfo.size) / this->left->columnInfo.distinct;
-            // cerr << "pre E\n";
-        }
-        // if the columns may be independent
-        else {
-            // cerr << "E\n";
-            nodeEstimation = (this->left->columnInfo.size * this->right->columnInfo.size) / this->left->columnInfo.n;
-        }
-    }
-
-    if (this->left != NULL && this->right != NULL)
-        nodeEstimation += this->left->cost() + this->right->cost();
-    else if (this->left != NULL)
-        nodeEstimation += this->left->cost();
-    else if (this->right != NULL)
-        nodeEstimation += this->right->cost();
-
-    // cerr << "getting out of JoinTreeNode::cost\n";
-
-    return nodeEstimation;
+// Esteimate the cost of a JoinTreeNode
+void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
+    this->treeCost = this->left->treeCost + this->right->usedColumnInfos[predicateInfo.right].size;
 }
-*/
-// Estimates the cost of a given Plan Tree
-double JoinTree::cost(JoinTree* joinTreePtr) {
-    // cerr << "JoinTree::cost\n";
-    //if (joinTreePtr != NULL && joinTreePtr->root != NULL)
-    //    return joinTreePtr->root->cost();
 
-    return 1.0;
+// Returns the cost of a given JoinTree
+double JoinTree::getCost() {
+    return this->root->treeCost;
 }
 
 void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
@@ -517,12 +917,15 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             }
 
             // Save the infos
-            columnInfos[rel][col].min = minimum;
-            columnInfos[rel][col].max = maximum;
-            columnInfos[rel][col].size = tuples;
+            columnInfos[rel][col].min      = minimum;
+            columnInfos[rel][col].max      = maximum;
+            columnInfos[rel][col].size     = tuples;
             columnInfos[rel][col].distinct = (uint64_t) distinctElements.size();
-            columnInfos[rel][col].n = maximum - minimum + 1;
-            columnInfos[rel][col].spread = floor((maximum - minimum + 1) / (columnInfos[rel][col].distinct));
+            columnInfos[rel][col].n        = maximum - minimum + 1;
+            columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
+            
+            columnInfos[rel][col].counter = 0;
+            columnInfos[rel][col].isSelectionColumn = false;
         }
     }
 }

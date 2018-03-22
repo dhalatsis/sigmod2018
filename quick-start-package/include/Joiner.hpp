@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <sys/time.h>
+#include <string.h>
 #include "Relation.hpp"
 #include "Parser.hpp"
 #include "table_t.hpp"
@@ -24,12 +25,11 @@ void PrintColumn(column_t *column);
 
 
 class Joiner {
-
-    std::vector<Relation> relations;  // The relations that might be joined
+    std::vector<Relation> relations; // The relations that might be joined
 
     public:
     /* do the checksum */
-    uint64_t check_sum(SelectInfo &sel_info, table_t *table);
+    std::string check_sum(SelectInfo &sel_info, table_t *table);
 
     /* Initialize the row_id Array */
     void RowIdArrayInit(QueryInfo &query_info);
