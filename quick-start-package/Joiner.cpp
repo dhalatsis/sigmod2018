@@ -12,8 +12,6 @@
 #include <set>
 #include <pthread.h>
 
-
-
 #include "Parser.hpp"
 #include "QueryPlan.hpp"
 #include "header.hpp"
@@ -484,7 +482,7 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info) {
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections) {
 
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
@@ -601,7 +599,7 @@ uint64_t Joiner::for_2(table_t* table_r, table_t* table_s) {
 }
 
 /* The self Join Function */
-table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr) {
+table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo>* selections) {
 
 #ifdef time
     struct timeval start;

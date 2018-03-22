@@ -813,10 +813,21 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         table_r = joinTreeNodePtr->execute(right, joiner, queryInfo);
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->left, table_l);
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->right, table_r);
-        return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr);
+
+        if (joinTreeNodePtr->parent == NULL) {
+            return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, &(queryInfo.selections));
+        }
+        else {
+            return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, NULL);
+        }
     }
     else {
-        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr);
+        if (joinTreeNodePtr->parent == NULL) {
+        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, &(queryInfo.selections));
+        }
+        else {
+            return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, NULL);
+        }
     }
 }
 

@@ -69,8 +69,8 @@ class Joiner {
 
     // Joins a given set of relations
     void join(QueryInfo& i);
-    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info);
-    table_t* SelfJoin(table_t *table, PredicateInfo *pred_info);
+    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections);
+    table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, std::vector<SelectInfo>* selections);
 
     uint64_t for_2(table_t* table_r, table_t* table_s);
     uint64_t for_3(table_t* table_r, table_t* table_s, table_t* table_p);
