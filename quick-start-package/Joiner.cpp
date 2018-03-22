@@ -7,18 +7,26 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <pthread.h>
 
 #include "Parser.hpp"
 #include "QueryPlan.hpp"
 #include "header.hpp"
 #include "Joiner.hpp"
+
 using namespace std;
 
 #ifdef _OPENMP
 #include <omp.h>
 #endif
 
-//#define time
+#define time
+
+// #define TIME_DETAILS
+// #include <sstream>
+// string timeDetStr = "";
+
+bool done_testing = false;
 
 /* Timing variables */
 double timeSelfJoin = 0;
@@ -39,7 +47,7 @@ int cleanQuery(QueryInfo &info) {
     map<SelectInfo, FilterInfo> filter_mapG;
     map<SelectInfo, FilterInfo> filter_mapL;
     set<FilterInfo> filters;
-    
+
     for (auto filter: info.filters) {
         if (filter.comparison == '<') {
             if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
@@ -49,7 +57,7 @@ int cleanQuery(QueryInfo &info) {
 
         }
         else if (filter.comparison == '>'){
-            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end()) 
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
                     || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
                 filter_mapG[filter.filterColumn] = filter;
             }
@@ -67,7 +75,7 @@ int cleanQuery(QueryInfo &info) {
 
     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
         info.filters.push_back(it->second);
-    }   
+    }
 
     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
         info.filters.push_back(it->second);
@@ -435,14 +443,112 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
+#ifdef TIME_DETAILS
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+#endif
     result_t * res  = RJ(r1, r2, 0);
-    return CreateTableT(res, table_r, table_s);
+#ifdef TIME_DETAILS
+    gettimeofday(&end, NULL);
+    double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    // std::ostringstream strs;
+    if(!done_testing) {
+        cerr << "RJ: " << dt << " sec" << endl;
+        flush(cerr);
+        // timeDetStr.append(strs.str());
+    }
+#endif
+#ifdef TIME_DETAILS
+    gettimeofday(&start, NULL);
+#endif
+    table_t *temp = CreateTableT(res, table_r, table_s);
+#ifdef TIME_DETAILS
+    gettimeofday(&end, NULL);
+    dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    if(!done_testing) {
+        cerr << "CreateTableT: " << dt << "sec for " << res->totalresults << " results" << endl;
+        flush(cerr);
+    }
+#endif
+    return temp;
 
     /* Construct the tables in case of intermediate results */
     //(table_r->intermediate_res)? (construct(table_r)) : ((void)0);
     //(table_s->intermediate_res)? (construct(table_s)) : ((void)0);
     /* Join the columns */
     //return low_join(table_r, table_s);
+}
+
+// for_2 join UNOPTIMIZED
+uint64_t Joiner::for_2(table_t* table_r, table_t* table_s) {
+    uint64_t check_sum = 0;
+    /* create hash_table for the hash_join phase */
+    std::unordered_multimap<uint64_t, hash_entry> hash_c;
+    /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
+    uint64_t hash_size, iter_size;
+    column_t *hash_col, *iter_col;
+
+    /* check on wich table will create the hash_table */
+    if (table_r->column_j->size <= table_s->column_j->size) {
+        hash_size = table_r->column_j->size;
+        hash_col = table_r->column_j;
+        matrix &h_rows = *table_r->relations_row_ids;
+
+        iter_size = table_s->column_j->size;
+        iter_col = table_s->column_j;
+        matrix &i_rows = *table_s->relations_row_ids;
+
+        /* now put the values of the column_r in the hash_table(construction phase) */
+        for (uint64_t i = 0; i < hash_size; i++) {
+            /* store hash[value of the column] = {rowid, index} */
+            hash_entry hs;
+            hs.row_id = h_rows[hash_col->table_index][i];
+            hs.index = i;
+            hash_c.insert({hash_col->values[i], hs});
+        }
+        /* now the phase of hashing */
+        for (uint64_t i = 0; i < iter_size; i++) {
+            /* remember we may have multi vals in 1 key,if it isnt a primary key */
+            /* vals->first = key ,vals->second = value */
+            auto range_vals = hash_c.equal_range(iter_col->values[i]);
+            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+                check_sum += iter_col->values[i];
+            }
+        }
+    }
+    /* table_r->column_j->size > table_s->column_j->size */
+    else {
+        hash_size = table_s->column_j->size;
+        hash_col = table_s->column_j;
+        matrix &h_rows = *table_s->relations_row_ids;
+
+        iter_size = table_r->column_j->size;
+        iter_col = table_r->column_j;
+        matrix &i_rows = *table_r->relations_row_ids;
+
+        /* now put the values of the column_r in the hash_table(construction phase) */
+        for (uint64_t i = 0; i < hash_size; i++) {
+            /* store hash[value of the column] = {rowid, index} */
+            hash_entry hs;
+            hs.row_id = h_rows[hash_col->table_index][i];
+            hs.index = i;
+            hash_c.insert({hash_col->values[i], hs});
+        }
+        /* now the phase of hashing */
+        for (uint64_t i = 0; i < iter_size; i++) {
+            /* remember we may have multi vals in 1 key,if it isnt a primary key */
+            /* vals->first = key ,vals->second = value */
+            auto range_vals = hash_c.equal_range(iter_col->values[i]);
+            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+                check_sum += iter_col->values[i];
+            }
+        }
+    }
+    /* do the cleaning */
+    delete table_r->relations_row_ids;
+    delete table_s->relations_row_ids;
+
+    return check_sum;
 }
 
 /* The self Join Function */
@@ -745,9 +851,69 @@ void Joiner::construct(table_t *table) {
 #endif
 }
 
+struct threadSumArg_t {
+    int size;
+    int start_index;
+    uint64_t * array;
+};
+
+void *threadSum(void * arg) {
+    struct threadSumArg_t * sumArg = (struct threadSumArg_t *) arg;
+
+    // Loop the array for the checksum
+    uint64_t * res  = (uint64_t*) malloc(sizeof(uint64_t)); *res = 0;
+    int size = sumArg->size;
+    int idx  = sumArg->start_index;
+    uint64_t * array = sumArg->array;
+    for (; idx < size; idx++) {
+        *res += array[idx];
+    }
+
+    // Free the argument
+    free(sumArg);
+
+    return (void *)res;
+}
+
 //CHECK SUM FUNCTION
+/*
 string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-    /* to create the final cehcksum column */
+    // to create the final checksum column
+    AddColumnToTableT(sel_info, table);
+    construct(table);
+
+    uint64_t* col = table->column_j->values;
+    const uint64_t size = table->column_j->size;
+    uint64_t sum = 0;
+
+    pthread_t threads[4];
+
+    // Creating 4 threads
+    for (int i = 0; i < 4; i++) {
+        struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
+        arg->size        = (i == 0) ? size/4 + size%4 : size/4;
+        arg->start_index = (i == 0) ? 0 : size/4 * i + + size%4;
+        arg->array       = col;
+        pthread_create(&threads[i], NULL, threadSum, (void*)arg);
+    }
+
+    //for (uint64_t i = 0 ; i < size; i++)
+    //    sum += col[i];
+
+    // joining 4 threads i.e. waiting for all 4 threads to complete
+    uint64_t * res;
+    for (int i = 0; i < 4; i++) {
+        pthread_join(threads[i], (void**)&res);
+        sum += *res;
+        free(res);
+    }
+
+    return sum;
+}
+*/
+// OLD check_sum
+string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
+    // to create the final cehcksum column
     AddColumnToTableT(sel_info, table);
     construct(table);
 
@@ -763,7 +929,6 @@ string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
         default :  return to_string(sum);
     }
 }
-
 
 // Loads a relation from disk
 void Joiner::addRelation(const char* fileName) {
@@ -817,6 +982,75 @@ int main(int argc, char* argv[]) {
 
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
+
+#ifdef TIME_DETAILS
+    done_testing = false;
+    cerr << endl;
+    // bool its_over = false;
+    for (int i = 1000; i <= 41000; i += 10000) {
+        for (int j = 1000; j <= 41000; j += 10000) {
+            vector<table_t*> tables;
+            tables.push_back(joiner.CreateTableTFromId(7, 7));
+            tables.push_back(joiner.CreateTableTFromId(13, 13));
+            if (i <= tables[0]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
+                    tables[0]->relations_row_ids[k][0].resize(i);
+            } else {
+                tables[0] = NULL;
+            }
+            if (j <= tables[1]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
+                    tables[1]->relations_row_ids[k][0].resize(j);
+            } else {
+                tables[1] = NULL;
+            }
+
+            if (!tables[0] || !tables[1]) {
+                // its_over = true;
+                break;
+            }
+
+            PredicateInfo predicate;
+            // predicate.left.relId = 13;
+            // predicate.left.binding = 0;
+            // predicate.left.colId = 1;
+            // predicate.right.relId = 13;
+            // predicate.right.binding = 1;
+            // predicate.right.colId = 1;
+            struct timeval start, end;
+            gettimeofday(&start, NULL);
+            // joiner.join(tables[0], tables[0], predicate);
+            gettimeofday(&end, NULL);
+            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            // std::ostringstream strs;
+            // cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << " sec" << endl;
+            // flush(cerr);
+            // timeDetStr.append(strs.str());
+
+            predicate.left.relId = 7;
+            predicate.left.binding = 0;
+            predicate.left.colId = 1;
+            predicate.right.relId = 13;
+            predicate.right.binding = 1;
+            predicate.right.colId = 1;
+            gettimeofday(&start, NULL);
+            joiner.join(tables[0], tables[1], predicate);
+            gettimeofday(&end, NULL);
+            dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
+        }
+        // if (its_over)
+        //     break;
+    }
+    cerr << timeDetStr << endl;
+    done_testing = true;
+#endif
+
+    #ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    #endif
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
