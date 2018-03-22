@@ -2,8 +2,8 @@
 
 #include <vector>
 
-typedef std::vector<std::vector<uint64_t>> matrix;
-typedef std::vector<uint64_t> j_vector;
+typedef std::vector<std::vector<int>> matrix;
+typedef std::vector<int> j_vector;
 typedef struct table_t table_t;
 typedef struct column_t column_t;
 typedef struct hash_entry hash_entry;

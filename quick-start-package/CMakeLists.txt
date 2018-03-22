@@ -5,15 +5,24 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
+#set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -Wall -Ofast -march=native -fopenmp")
+set(CMAKE_CXX_FLAGS_DEBUG "-Ofast -march=native -fopenmp")
 add_compile_options(-Ofast -march=native)
 
 include_directories(include)
 
-add_library(database QueryPlan.cpp Relation.cpp functions.cpp treegen.cpp parallel_radix_join.cpp Parser.cpp Utils.cpp )
+add_library(database QueryPlan.cpp Relation.cpp treegen.cpp parallel_radix_join.cpp Parser.cpp Utils.cpp )
 target_include_directories(database PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+    PRIVATE src)
+
+include_directories(lib/threadPool/ext/include)
+include_directories(lib/threadPool/include)
+add_library(threadPool lib/threadPool/src/worker.cpp lib/threadPool/src/pool.cpp)
+target_include_directories(database PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/threadPool>
     $<INSTALL_INTERFACE:include>
     PRIVATE src)
 
@@ -22,10 +31,10 @@ if (CMAKE_BUILD_TYPE MATCHES "[Dd][Ee][Bb][Uu][Gg]" OR FORCE_TESTS)
     add_subdirectory(test)
 endif()
 
-set(SOURCE_FILES QueryPlan.cpp functions.cpp treegen.cpp parallel_radix_join.cpp Relation.cpp Parser.cpp Utils.cpp)
+set(SOURCE_FILES QueryPlan.cpp treegen.cpp parallel_radix_join.cpp Relation.cpp Parser.cpp Utils.cpp)
 set(SOURCE_FILE_FOR_Query2SQL Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES})
-target_link_libraries(Joiner database pthread)
+target_link_libraries(Joiner database pthread threadPool)
 
 # Interactive command line tool to translate our query format to SQL queries
 add_executable(Query2SQL Query2SQL.cpp ${SOURCE_FILE_FOR_Query2SQL})

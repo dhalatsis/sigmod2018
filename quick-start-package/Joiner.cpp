@@ -2,6 +2,9 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
+#include <functional>
+#include <array>
 #include <utility>
 #include <vector>
 #include <map>
@@ -15,16 +18,21 @@
 
 using namespace std;
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 //#define time
 
-// #define TIME_DETAILS
-// #include <sstream>
-// string timeDetStr = "";
+//#define TIME_DETAILS
+//#include <sstream>
+//string timeDetStr = "";
 
 bool done_testing = false;
 
 /* Timing variables */
 double timeSelfJoin = 0;
+double timeConstruct = 0;
 double timeSelectFilter = 0;
 double timeLowJoin = 0;
 double timeCreateTable = 0;
@@ -33,83 +41,92 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeBuildPhase = 0;
 double timeProbePhase = 0;
+double timeRadixJoin = 0;
+double timeCreateRelationT = 0;
+double timeCreateTableT = 0;
+double timeExecute = 0;
 
- int cleanQuery(QueryInfo &info) {
-     /* Remove weak filters */
-     int changed = 0;
+int cleanQuery(QueryInfo &info) {
+    /* Remove weak filters */
+    int changed = 0;
 
-     map<SelectInfo, FilterInfo> filter_mapG;
-     map<SelectInfo, FilterInfo> filter_mapL;
-     set<FilterInfo> filters;
+    map<SelectInfo, FilterInfo> filter_mapG;
+    map<SelectInfo, FilterInfo> filter_mapL;
+    set<FilterInfo> filters;
 
-     for (auto filter: info.filters) {
-         if (filter.comparison == '<') {
-             if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
-                     || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
-                 filter_mapL[filter.filterColumn] = filter;
-             }
+    for (auto filter: info.filters) {
+        if (filter.comparison == '<') {
+            if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
+                    || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
+                filter_mapL[filter.filterColumn] = filter;
+            }
 
-         }
-         else if (filter.comparison == '>'){
-             if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
-                     || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
-                 filter_mapG[filter.filterColumn] = filter;
-             }
-         }
-         else {
-             filters.insert(filter);
-         }
-     }
+        }
+        else if (filter.comparison == '>'){
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
+                    || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
+                filter_mapG[filter.filterColumn] = filter;
+            }
+        }
+        else {
+            filters.insert(filter);
+        }
+    }
 
-     info.filters.clear();
-     vector<FilterInfo> newfilters;
-     for (auto filter: filters) {
-         info.filters.push_back(filter);
-     }
+    info.filters.clear();
+    vector<FilterInfo> newfilters;
+    for (auto filter: filters) {
+        info.filters.push_back(filter);
+    }
 
-     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
-         info.filters.push_back(it->second);
-     }
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
 
-     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
-         info.filters.push_back(it->second);
-     }
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
 
-     /* Remove duplicate predicates */
-     changed = 0;
-     set <PredicateInfo> pred_set;
-     for (auto pred: info.predicates) {
+    /* Remove duplicate predicates */
+    changed = 0;
+    set <PredicateInfo> pred_set;
+    for (auto pred: info.predicates) {
         if (!(pred.left < pred.right)) {
-             SelectInfo tmp = pred.left;
-             pred.left = pred.right;
-             pred.right = tmp;
-         //    cerr << "swapped" << endl;
-         }
+            SelectInfo tmp = pred.left;
+            pred.left = pred.right;
+            pred.right = tmp;
+        //    cerr << "swapped" << endl;
+        }
 
-         if (pred_set.find(pred) != pred_set.end()) {
-             changed = 1;
-             continue;
-         }
-         pred_set.insert(pred);
-     }
+        if (pred_set.find(pred) != pred_set.end()) {
+            changed = 1;
+            continue;
+        }
+        pred_set.insert(pred);
+    }
 
-     if (changed == 0) {
-         return 0;
-     }
+    if (changed == 0) {
+        return 0;
+    }
 
-     info.predicates.clear();
-     for (auto pred: pred_set) {
-         info.predicates.push_back(pred);
-     }
+    info.predicates.clear();
+    for (auto pred: pred_set) {
+        info.predicates.push_back(pred);
+    }
 
-     return 0;
- }
-
+    return 0;
+}
 
 /* ================================ */
 /* Table_t <=> Relation_t fuctnions */
 /* ================================ */
 relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     /* Create a new column_t for table */
     std::vector<unsigned> &relation_mapping = table->relations_bindings;
     matrix & row_ids = *table->relations_row_ids;
@@ -164,10 +181,30 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         new_relation->tuples = tuples;
     }
 
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
+
     return new_relation;
 }
 
+
+int compare(const void * a, const void * b)
+{
+    return ( ((tuple_t*)a)->key - ((tuple_t*)b)->key );
+}
+
+
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
     const unsigned relnum_s = table_s->relations_bindings.size();
@@ -207,6 +244,10 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t numbufs = cb->numbufs;
     uint32_t row_i;
 
+
+
+    //qsort(tb->tuples, cb->writepos, sizeof(tuple_t), compare);
+
     /* Create table_t from tuples */
     for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
         row_i = tb->tuples[tup_i].key;
@@ -241,6 +282,12 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         /* Go the the next buffer */
         tb = tb->next;
     }
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
     return new_table;
 }
@@ -434,7 +481,8 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info) {
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections) {
+
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
@@ -442,7 +490,9 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     struct timeval start, end;
     gettimeofday(&start, NULL);
 #endif
+
     result_t * res  = RJ(r1, r2, 0);
+
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -453,6 +503,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         // timeDetStr.append(strs.str());
     }
 #endif
+
 #ifdef TIME_DETAILS
     gettimeofday(&start, NULL);
 #endif
@@ -603,7 +654,7 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
 // }
 
 /* The self Join Function */
-table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr) {
+table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo>* selections) {
 
 #ifdef time
     struct timeval start;
@@ -886,9 +937,13 @@ void Joiner::construct(table_t *table) {
     /* Create a new value's array  */
     uint64_t *const new_values  = new uint64_t[column_size];
 
+    /* construct a new array with the row ids that it's sorted */
+    //vector<int> rids = row_ids[table_index];  //cp construct
+    //std::sort(rids.begin(), rids.end());
+
     /* Pass the values of the old column to the new one, based on the row ids of the joiner */
     for (int i = 0; i < column_size; i++) {
-    	new_values[i] = column_values[row_ids[table_index][i]];
+    	new_values[i] = column_values[row_ids[table_index][i]];//rids[i]];
     }
 
     /* Update the column of the table */
@@ -898,14 +953,14 @@ void Joiner::construct(table_t *table) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    //timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 }
 
 struct threadSumArg_t {
-    int size;
-    int start_index;
-    uint64_t * array;
+    uint32_t low;
+    uint32_t high;
+    const uint64_t * array;
 };
 
 void *threadSum(void * arg) {
@@ -913,10 +968,10 @@ void *threadSum(void * arg) {
 
     // Loop the array for the checksum
     uint64_t * res  = (uint64_t*) malloc(sizeof(uint64_t)); *res = 0;
-    int size = sumArg->size;
-    int idx  = sumArg->start_index;
-    uint64_t * array = sumArg->array;
-    for (; idx < size; idx++) {
+    uint32_t low  = sumArg->low;
+    uint32_t high = sumArg->high;
+    const uint64_t * array = sumArg->array;
+    for (uint32_t idx = low; idx <= high; idx++) {
         *res += array[idx];
     }
 
@@ -927,55 +982,50 @@ void *threadSum(void * arg) {
 }
 
 //CHECK SUM FUNCTION
-// uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-//
-//     /* to create the final cehcksum column */
-//     AddColumnToTableT(sel_info, table);
-//     construct(table);
-//
-//     uint64_t* col = table->column_j->values;
-//     const uint64_t size = table->column_j->size;
-//     uint64_t sum = 0;
-//
-//     pthread_t threads[4];
-//
-//     // Creating 4 threads
-//     for (int i = 0; i < 4; i++) {
-//         struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
-//         arg->size        = (i == 0) ? size/4 + size%4 : size/4;
-//         arg->start_index = (i == 0) ? 0 : size/4 * i + + size%4;
-//         arg->array       = col;
-//         pthread_create(&threads[i], NULL, threadSum, (void*)arg);
-//     }
-//
-//     //for (uint64_t i = 0 ; i < size; i++)
-//     //    sum += col[i];
-//
-//     // joining 4 threads i.e. waiting for all 4 threads to complete
-//     uint64_t * res;
-//     for (int i = 0; i < 4; i++) {
-//         pthread_join(threads[i], (void**)&res);
-//         sum += *res;
-//         free(res);
-//     }
-//
-//     return sum;
-// }
+std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
 
-// OLD check_sum
-uint64_t Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     construct(table);
 
-    const uint64_t* col = table->column_j->values;
+    uint64_t* col = table->column_j->values;
     const uint64_t size = table->column_j->size;
     uint64_t sum = 0;
 
-    for (uint64_t i = 0 ; i < size; i++)
-        sum += col[i];
-
-    return sum;
+    if (size == 0) {
+        return "NULL";
+    }
+    else { //if (size < 1000) {
+        for (uint64_t i = 0 ; i < size; i++)
+            sum += col[i];
+        return to_string(sum);
+    }
+    // else {
+    //     // 4 thread array
+    //     pthread_t threads[THREAD_NUM];
+    //
+    //     // Creating THREAD_NUM threads
+    //     for (int i = 0; i < THREAD_NUM; i++) {
+    //         struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
+    //         arg->low   = (i == 0) ? 0 : size/THREAD_NUM*i + size%THREAD_NUM;
+    //         arg->high  = (i == 0) ? size/THREAD_NUM + size%THREAD_NUM - 1 : arg->low + size/THREAD_NUM - 1;
+    //         arg->array = col;
+    //         pthread_create(&threads[i], NULL, threadSum, (void*)arg);
+    //     }
+    //
+    //     // joining THREAD_NUM threads i.e. waiting for all THREAD_NUM threads to complete
+    //     uint64_t * res;
+    //     int threads_joined = 0;
+    //     //while (threads_joined != THREAD_NUM){
+    //     for (size_t i = 0; i < THREAD_NUM; i++) {
+    //         pthread_join(threads[i], (void**)&res);
+    //         sum += *res;
+    //         free(res);
+    //     }
+    //     //}
+    //
+    //     return to_string(sum);
+    // }
 }
 
 // Loads a relation from disk
@@ -1093,15 +1143,22 @@ int main(int argc, char* argv[]) {
     cerr << timeDetStr << endl;
     done_testing = true;
 #endif
+
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
     //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
 
+
+    // Thread pool Initialize
+    //threadpool11::Pool pool;  // Create a threadPool
+    //std::array<std::future<uint64_t>, THREAD_NUM> futures;
+    //pool.setWorkerCount(std::thread::hardware_concurrency());
+
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 0;
+    int q_counter = 1;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
@@ -1116,35 +1173,54 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        // JTree *jTreePtr = treegen(&i);
+        //JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
         JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
+        struct timeval end;
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-
-        // int *plan = NULL, plan_size = 0;
-        // table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
-        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
 
         #ifdef time
         gettimeofday(&start, NULL);
         #endif
 
+        int *plan = NULL, plan_size = 0;
+        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
+        #ifdef time
+        gettimeofday(&start, NULL);
+        #endif
+
+        // Compute the selection predicates
         string result_str;
         uint64_t checksum = 0;
-        std::vector<SelectInfo> &selections = i.selections;
+        unordered_map<string, string> cached_sums;
+        vector<SelectInfo> &selections = i.selections;
         for (size_t i = 0; i < selections.size(); i++) {
-            checksum = joiner.check_sum(selections[i], result);
 
-            if (checksum == 0) {
-                result_str += "NULL";
+            // Check if checksum is cached
+            string key = to_string(selections[i].binding) + to_string(selections[i].colId);
+            unordered_map<string, string>::const_iterator got = cached_sums.find(key);
+            if (got != cached_sums.end()) {
+                result_str += got->second;
             } else {
-                result_str += std::to_string(checksum);
+                //string str = joiner.check_sum(selections[i], result, pool, futures);
+                string str = joiner.check_sum(selections[i], result);
+                cached_sums.insert(make_pair(key, str));
+                result_str += str;
             }
 
+            // Create the write check sum
             if (i != selections.size() - 1) {
                 result_str +=  " ";
             }
@@ -1160,15 +1236,19 @@ int main(int argc, char* argv[]) {
 }
 
 #ifdef time
+    std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
+    std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
     std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
     std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    std::cerr << "timeLowJoin: " << (long)(timeLowJoin * 1000) << endl;
-    std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
+    std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
+    //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
+    //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
     std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
     std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
+    std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
 #endif
 
