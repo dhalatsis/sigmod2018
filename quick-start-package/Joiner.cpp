@@ -20,7 +20,7 @@ using namespace std;
 #include <omp.h>
 #endif
 
-#define time
+//#define time
 
 // #define TIME_DETAILS
 // #include <sstream>
