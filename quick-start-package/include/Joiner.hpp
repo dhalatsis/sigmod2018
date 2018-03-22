@@ -1,12 +1,24 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include <string>
 #include <sys/time.h>
 #include <string.h>
 #include "Relation.hpp"
 #include "Parser.hpp"
 #include "table_t.hpp"
 #include "parallel_radix_join.h"
+
+/* THread pool Includes */
+#include "threadpool11/threadpool11.hpp"
+#include <algorithm>
+#include <array>
+#include <cstdio>
+#include <iostream>
+#include <mutex>
+#include <thread>
+#define THREAD_NUM 4
+/*----------------*/
 
 /* Timing variables */
 extern double timeSelfJoin;
@@ -29,6 +41,7 @@ class Joiner {
 
     public:
     /* do the checksum */
+    //std::string check_sum(SelectInfo &sel_info, table_t *table, threadpool11::Pool & p, std::array<std::future<uint64_t>, THREAD_NUM> & f);
     std::string check_sum(SelectInfo &sel_info, table_t *table);
 
     /* Initialize the row_id Array */
