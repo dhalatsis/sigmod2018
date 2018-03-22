@@ -376,7 +376,13 @@ double JoinTreeNode::cost() {
         nodeCostEstimation = 0;
     // if it is a join
     else if (this->predicatePtr != NULL && this->left != NULL && this->right != NULL) {
-        int i = this->left->columnInfo.size / 10000, j = this->right->columnInfo.size / 10000;
+        // int i = this->left->columnInfo.size / 10000, j = this->right->columnInfo.size / 10000;
+        int i = -1, j = -1, offset = 1;
+        while (!(i >= 0 && i < 5 && j >= 0 && j < 5)) {
+            i = this->left->columnInfo.size / (10000 * offset);
+            j = this->right->columnInfo.size / (10000 * offset);
+            offset *= 10;
+        }
         nodeCostEstimation = smallDiffRelJoin[i][j];
         // // if it is a self join
         // if (this->left->nodeId != -1 && this->left->nodeId == this->right->nodeId)

@@ -60,6 +60,7 @@ class Joiner {
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info);
 
     uint64_t for_2(table_t* table_r, table_t* table_s);
+    uint64_t for_3(table_t* table_r, table_t* table_s, table_t* table_p);
 
     /* The join function
      *
