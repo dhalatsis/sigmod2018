@@ -1,4 +1,3 @@
-#include "Joiner.hpp"
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -411,9 +410,28 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     //return low_join(table_r, table_s);
 }
 
-// for_2 join UNOPTIMIZED
-uint64_t Joiner::for_2(table_t* table_r, table_t* table_s) {
-    uint64_t check_sum = 0;
+// for_2 join UNOPTIMIZED -- returns check_sum based on the join-columns, we need better
+// columns maps the SELECTed columns of each table to the respective table
+// we assume that table_a->column_j->size <= table_b->column_j->size
+void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, vector<uint64_t> > columns) {
+    // we will need the values for the check_sum
+    // colMap maps the values of the SELECTed columns of each table to the respective table
+    unordered_map< uint64_t, vector<relation_t*> > colMap;
+    for (uint64_t i = 0; i <= 1; i++) {
+        for(auto c : columns[i]) {
+            SelectInfo temp;
+            temp.relId = i;
+            temp.binding = i;
+            temp.colId = c;
+            if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
+            else colMap[i].push_back(CreateRelationT(table_b, temp));
+        }
+    }
+    // check_sum_map maps the check_sum of each SELECTed column of each table to the respective table
+    unordered_map< uint64_t, vector<uint64_t> > check_sum_map;
+    for (uint64_t i = 0; i <= 1; i++)
+        for (uint64_t j = 0; j <= columns[i].size(); j++)
+            check_sum_map[i].push_back(0);
     /* create hash_table for the hash_join phase */
     std::unordered_multimap<uint64_t, hash_entry> hash_c;
     /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
@@ -421,66 +439,43 @@ uint64_t Joiner::for_2(table_t* table_r, table_t* table_s) {
     column_t *hash_col, *iter_col;
 
     /* check on wich table will create the hash_table */
-    if (table_r->column_j->size <= table_s->column_j->size) {
-        hash_size = table_r->column_j->size;
-        hash_col = table_r->column_j;
-        matrix &h_rows = *table_r->relations_row_ids;
+    hash_size = table_a->column_j->size;
+    hash_col = table_a->column_j;
+    matrix &h_rows = *table_a->relations_row_ids;
 
-        iter_size = table_s->column_j->size;
-        iter_col = table_s->column_j;
-        matrix &i_rows = *table_s->relations_row_ids;
+    iter_size = table_b->column_j->size;
+    iter_col = table_b->column_j;
+    matrix &i_rows = *table_b->relations_row_ids;
 
-        /* now put the values of the column_r in the hash_table(construction phase) */
-        for (uint64_t i = 0; i < hash_size; i++) {
-            /* store hash[value of the column] = {rowid, index} */
-            hash_entry hs;
-            hs.row_id = h_rows[hash_col->table_index][i];
-            hs.index = i;
-            hash_c.insert({hash_col->values[i], hs});
-        }
-        /* now the phase of hashing */
-        for (uint64_t i = 0; i < iter_size; i++) {
-            /* remember we may have multi vals in 1 key,if it isnt a primary key */
-            /* vals->first = key ,vals->second = value */
-            auto range_vals = hash_c.equal_range(iter_col->values[i]);
-            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-                check_sum += iter_col->values[i];
-            }
-        }
+    /* now put the values of the column_r in the hash_table(construction phase) */
+    for (uint64_t i = 0; i < hash_size; i++) {
+        /* store hash[value of the column] = {rowid, index} */
+        hash_entry hs;
+        hs.row_id = h_rows[hash_col->table_index][i];
+        hs.index = i;
+        hash_c.insert({hash_col->values[i], hs});
     }
-    /* table_r->column_j->size > table_s->column_j->size */
-    else {
-        hash_size = table_s->column_j->size;
-        hash_col = table_s->column_j;
-        matrix &h_rows = *table_s->relations_row_ids;
-
-        iter_size = table_r->column_j->size;
-        iter_col = table_r->column_j;
-        matrix &i_rows = *table_r->relations_row_ids;
-
-        /* now put the values of the column_r in the hash_table(construction phase) */
-        for (uint64_t i = 0; i < hash_size; i++) {
-            /* store hash[value of the column] = {rowid, index} */
-            hash_entry hs;
-            hs.row_id = h_rows[hash_col->table_index][i];
-            hs.index = i;
-            hash_c.insert({hash_col->values[i], hs});
-        }
-        /* now the phase of hashing */
-        for (uint64_t i = 0; i < iter_size; i++) {
-            /* remember we may have multi vals in 1 key,if it isnt a primary key */
-            /* vals->first = key ,vals->second = value */
-            auto range_vals = hash_c.equal_range(iter_col->values[i]);
-            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-                check_sum += iter_col->values[i];
+    /* now the phase of hashing */
+    for (uint64_t i = 0; i < iter_size; i++) {
+        /* remember we may have multi vals in 1 key,if it isnt a primary key */
+        /* vals->first = key ,vals->second = value */
+        auto range_vals = hash_c.equal_range(iter_col->values[i]);
+        for (auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+            for (uint64_t j = 0; j <= 1; j++) {
+                for(uint64_t k = 0; k < columns[i].size(); k++) {
+                    check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
+                }
             }
         }
     }
     /* do the cleaning */
-    delete table_r->relations_row_ids;
-    delete table_s->relations_row_ids;
+    delete table_a->relations_row_ids;
+    delete table_b->relations_row_ids;
 
-    return check_sum;
+    // print checksums
+    for (uint64_t i = 0; i < check_sum_map.size(); i++)
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
+            cerr << check_sum_map[i][j] << endl;
 }
 
 void Joiner::construct(table_t *table) {

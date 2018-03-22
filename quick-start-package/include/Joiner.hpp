@@ -65,8 +65,10 @@ class Joiner {
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
 
-    uint64_t for_2(table_t* table_r, table_t* table_s);
-    uint64_t for_3(table_t* table_r, table_t* table_s, table_t* table_p);
+    // nested loops joins
+    void for_2(table_t* table_a, table_t* table_b, std::unordered_map< uint64_t, std::vector<uint64_t> > columns);
+    // uint64_t for_3(table_t* table_a, table_t* table_b, table_t* table_c);
+    // uint64_t for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d);
 
     /* The join function
      *
