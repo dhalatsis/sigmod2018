@@ -18,9 +18,9 @@ using namespace std;
 
 //#define time
 
-// #define TIME_DETAILS
-// #include <sstream>
-// string timeDetStr = "";
+#define TIME_DETAILS
+#include <sstream>
+string timeDetStr = "";
 
 bool done_testing = false;
 
@@ -449,7 +449,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     // std::ostringstream strs;
     if(!done_testing) {
-        cerr << "RJ: " << dt << " sec\t|\t";
+        cerr << "RJ: " << dt << " sec" << endl;
         flush(cerr);
         // timeDetStr.append(strs.str());
     }
@@ -472,12 +472,77 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     //return low_join(table_r, table_s);
 }
 
-// // for_2 join UNOPTIMIZED
-// table_t* Joiner::for_2(table_t* table1Ptr, table_t* table2Ptr, PredicateInfo &pred_info) {
-//     int idx1 = pred_info.left.columnId, idx2 = pred_info.right.columnId;
-//
-//     for (auto e : table2Ptr->relations_row_ids[idx2])
-// }
+// for_2 join UNOPTIMIZED
+uint64_t Joiner::for_2(table_t* table_r, table_t* table_s) {
+    uint64_t check_sum = 0;
+    /* create hash_table for the hash_join phase */
+    std::unordered_multimap<uint64_t, hash_entry> hash_c;
+    /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
+    uint64_t hash_size, iter_size;
+    column_t *hash_col, *iter_col;
+
+    /* check on wich table will create the hash_table */
+    if (table_r->column_j->size <= table_s->column_j->size) {
+        hash_size = table_r->column_j->size;
+        hash_col = table_r->column_j;
+        matrix &h_rows = *table_r->relations_row_ids;
+
+        iter_size = table_s->column_j->size;
+        iter_col = table_s->column_j;
+        matrix &i_rows = *table_s->relations_row_ids;
+
+        /* now put the values of the column_r in the hash_table(construction phase) */
+        for (uint64_t i = 0; i < hash_size; i++) {
+            /* store hash[value of the column] = {rowid, index} */
+            hash_entry hs;
+            hs.row_id = h_rows[hash_col->table_index][i];
+            hs.index = i;
+            hash_c.insert({hash_col->values[i], hs});
+        }
+        /* now the phase of hashing */
+        for (uint64_t i = 0; i < iter_size; i++) {
+            /* remember we may have multi vals in 1 key,if it isnt a primary key */
+            /* vals->first = key ,vals->second = value */
+            auto range_vals = hash_c.equal_range(iter_col->values[i]);
+            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+                check_sum += iter_col->values[i];
+            }
+        }
+    }
+    /* table_r->column_j->size > table_s->column_j->size */
+    else {
+        hash_size = table_s->column_j->size;
+        hash_col = table_s->column_j;
+        matrix &h_rows = *table_s->relations_row_ids;
+
+        iter_size = table_r->column_j->size;
+        iter_col = table_r->column_j;
+        matrix &i_rows = *table_r->relations_row_ids;
+
+        /* now put the values of the column_r in the hash_table(construction phase) */
+        for (uint64_t i = 0; i < hash_size; i++) {
+            /* store hash[value of the column] = {rowid, index} */
+            hash_entry hs;
+            hs.row_id = h_rows[hash_col->table_index][i];
+            hs.index = i;
+            hash_c.insert({hash_col->values[i], hs});
+        }
+        /* now the phase of hashing */
+        for (uint64_t i = 0; i < iter_size; i++) {
+            /* remember we may have multi vals in 1 key,if it isnt a primary key */
+            /* vals->first = key ,vals->second = value */
+            auto range_vals = hash_c.equal_range(iter_col->values[i]);
+            for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+                check_sum += iter_col->values[i];
+            }
+        }
+    }
+    /* do the cleaning */
+    delete table_r->relations_row_ids;
+    delete table_s->relations_row_ids;
+
+    return check_sum;
+}
 
 /* The self Join Function */
 table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr) {
@@ -912,10 +977,10 @@ int main(int argc, char* argv[]) {
     done_testing = false;
     cerr << endl;
     // bool its_over = false;
-    for (int i = 1000; i <= 79000; i += 10000) {
-        for (int j = 1000; j <= 79000; j += 10000) {
+    for (int i = 1000; i <= 41000; i += 10000) {
+        for (int j = 1000; j <= 41000; j += 10000) {
             vector<table_t*> tables;
-            tables.push_back(joiner.CreateTableTFromId(12, 12));
+            tables.push_back(joiner.CreateTableTFromId(13, 13));
             // tables.push_back(joiner.CreateTableTFromId(13, 13));
             if (i <= tables[0]->relations_row_ids[0][0].size()) {
                 for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
@@ -936,10 +1001,10 @@ int main(int argc, char* argv[]) {
             }
 
             PredicateInfo predicate;
-            predicate.left.relId = 12;
+            predicate.left.relId = 13;
             predicate.left.binding = 0;
             predicate.left.colId = 1;
-            predicate.right.relId = 12;
+            predicate.right.relId = 13;
             predicate.right.binding = 1;
             predicate.right.colId = 1;
             struct timeval start, end;
@@ -948,7 +1013,7 @@ int main(int argc, char* argv[]) {
             gettimeofday(&end, NULL);
             double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
             // std::ostringstream strs;
-            cerr << "12,\t" << i << ",\t12,\t" << j << ",\t" << dt << " sec\t|||\t";
+            cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << " sec" << endl;
             flush(cerr);
             // timeDetStr.append(strs.str());
             // cerr << "7,\t" << i << ",\t7,\t" << j << ",\t" << dt << "sec\t|||\t";
