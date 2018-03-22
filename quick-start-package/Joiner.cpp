@@ -18,9 +18,9 @@ using namespace std;
 
 //#define time
 
-#define TIME_DETAILS
-#include <sstream>
-string timeDetStr = "";
+// #define TIME_DETAILS
+// #include <sstream>
+// string timeDetStr = "";
 
 bool done_testing = false;
 
