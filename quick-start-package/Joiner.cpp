@@ -23,9 +23,9 @@ using namespace std;
 
 #define time
 
-// #define TIME_DETAILS
-// #include <sstream>
-// string timeDetStr = "";
+//#define TIME_DETAILS
+//#include <sstream>
+//string timeDetStr = "";
 
 bool done_testing = false;
 
@@ -43,78 +43,78 @@ double timeProbePhase = 0;
 double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
 double timeCreateTableT = 0;
+double timeExecute = 0;
 
- int cleanQuery(QueryInfo &info) {
-     /* Remove weak filters */
-     int changed = 0;
+int cleanQuery(QueryInfo &info) {
+    /* Remove weak filters */
+    int changed = 0;
 
-     map<SelectInfo, FilterInfo> filter_mapG;
-     map<SelectInfo, FilterInfo> filter_mapL;
-     set<FilterInfo> filters;
+    map<SelectInfo, FilterInfo> filter_mapG;
+    map<SelectInfo, FilterInfo> filter_mapL;
+    set<FilterInfo> filters;
 
-     for (auto filter: info.filters) {
-         if (filter.comparison == '<') {
-             if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
-                     || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
-                 filter_mapL[filter.filterColumn] = filter;
-             }
+    for (auto filter: info.filters) {
+        if (filter.comparison == '<') {
+            if ((filter_mapL.find(filter.filterColumn) == filter_mapL.end())
+                    || (filter_mapL[filter.filterColumn].constant > filter.constant)) {
+                filter_mapL[filter.filterColumn] = filter;
+            }
 
-         }
-         else if (filter.comparison == '>'){
-             if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
-                     || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
-                 filter_mapG[filter.filterColumn] = filter;
-             }
-         }
-         else {
-             filters.insert(filter);
-         }
-     }
+        }
+        else if (filter.comparison == '>'){
+            if ((filter_mapG.find(filter.filterColumn) == filter_mapG.end())
+                    || (filter_mapG[filter.filterColumn].constant < filter.constant)) {
+                filter_mapG[filter.filterColumn] = filter;
+            }
+        }
+        else {
+            filters.insert(filter);
+        }
+    }
 
-     info.filters.clear();
-     vector<FilterInfo> newfilters;
-     for (auto filter: filters) {
-         info.filters.push_back(filter);
-     }
+    info.filters.clear();
+    vector<FilterInfo> newfilters;
+    for (auto filter: filters) {
+        info.filters.push_back(filter);
+    }
 
-     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
-         info.filters.push_back(it->second);
-     }
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapG.begin(); it!=filter_mapG.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
 
-     for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
-         info.filters.push_back(it->second);
-     }
+    for (std::map<SelectInfo,FilterInfo>::iterator it=filter_mapL.begin(); it!=filter_mapL.end(); ++it) {
+        info.filters.push_back(it->second);
+    }
 
-     /* Remove duplicate predicates */
-     changed = 0;
-     set <PredicateInfo> pred_set;
-     for (auto pred: info.predicates) {
+    /* Remove duplicate predicates */
+    changed = 0;
+    set <PredicateInfo> pred_set;
+    for (auto pred: info.predicates) {
         if (!(pred.left < pred.right)) {
-             SelectInfo tmp = pred.left;
-             pred.left = pred.right;
-             pred.right = tmp;
-         //    cerr << "swapped" << endl;
-         }
+            SelectInfo tmp = pred.left;
+            pred.left = pred.right;
+            pred.right = tmp;
+        //    cerr << "swapped" << endl;
+        }
 
-         if (pred_set.find(pred) != pred_set.end()) {
-             changed = 1;
-             continue;
-         }
-         pred_set.insert(pred);
-     }
+        if (pred_set.find(pred) != pred_set.end()) {
+            changed = 1;
+            continue;
+        }
+        pred_set.insert(pred);
+    }
 
-     if (changed == 0) {
-         return 0;
-     }
+    if (changed == 0) {
+        return 0;
+    }
 
-     info.predicates.clear();
-     for (auto pred: pred_set) {
-         info.predicates.push_back(pred);
-     }
+    info.predicates.clear();
+    for (auto pred: pred_set) {
+        info.predicates.push_back(pred);
+    }
 
-     return 0;
- }
-
+    return 0;
+}
 
 /* ================================ */
 /* Table_t <=> Relation_t fuctnions */
@@ -489,7 +489,9 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     struct timeval start, end;
     gettimeofday(&start, NULL);
 #endif
+
     result_t * res  = RJ(r1, r2, 0);
+
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -500,6 +502,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         // timeDetStr.append(strs.str());
     }
 #endif
+
 #ifdef TIME_DETAILS
     gettimeofday(&start, NULL);
 #endif
@@ -903,17 +906,6 @@ struct threadSumArg_t {
     const uint64_t * array;
 };
 
-// uint64_t threadSum(const uint64_t *array, uint32_t low, uint32_t high) {
-//
-//     uint64_t res;
-//     for (uint32_t idx = low; idx < high; idx++) {
-//         res += array[idx];
-//     }
-//
-//     return res;
-// }
-
-
 void *threadSum(void * arg) {
     struct threadSumArg_t * sumArg = (struct threadSumArg_t *) arg;
 
@@ -946,72 +938,38 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     if (size == 0) {
         return "NULL";
     }
-    else if (size < 1000) {
+    else { //if (size < 1000) {
         for (uint64_t i = 0 ; i < size; i++)
             sum += col[i];
         return to_string(sum);
     }
-    else {
-        // 4 thread array
-        pthread_t threads[THREAD_NUM];
-
-        // Creating THREAD_NUM threads
-        for (int i = 0; i < THREAD_NUM; i++) {
-            struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
-            arg->low   = (i == 0) ? 0 : size/THREAD_NUM*i + size%THREAD_NUM;
-            arg->high  = (i == 0) ? size/THREAD_NUM + size%THREAD_NUM - 1 : arg->low + size/THREAD_NUM - 1;
-            arg->array = col;
-            pthread_create(&threads[i], NULL, threadSum, (void*)arg);
-        }
-
-        // joining THREAD_NUM threads i.e. waiting for all THREAD_NUM threads to complete
-        uint64_t * res;
-        int threads_joined = 0;
-        while (threads_joined != THREAD_NUM){
-            for (size_t i = 0; i < THREAD_NUM; i++) {
-                if (pthread_tryjoin_np(threads[i], (void**)&res) > 0) {
-                    sum += *res;
-                    free(res);
-                    threads_joined++;
-                }
-            }
-        }
-
-        return to_string(sum);
-    }
-
+    // else {
+    //     // 4 thread array
+    //     pthread_t threads[THREAD_NUM];
+    //
+    //     // Creating THREAD_NUM threads
+    //     for (int i = 0; i < THREAD_NUM; i++) {
+    //         struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
+    //         arg->low   = (i == 0) ? 0 : size/THREAD_NUM*i + size%THREAD_NUM;
+    //         arg->high  = (i == 0) ? size/THREAD_NUM + size%THREAD_NUM - 1 : arg->low + size/THREAD_NUM - 1;
+    //         arg->array = col;
+    //         pthread_create(&threads[i], NULL, threadSum, (void*)arg);
+    //     }
+    //
+    //     // joining THREAD_NUM threads i.e. waiting for all THREAD_NUM threads to complete
+    //     uint64_t * res;
+    //     int threads_joined = 0;
+    //     //while (threads_joined != THREAD_NUM){
+    //     for (size_t i = 0; i < THREAD_NUM; i++) {
+    //         pthread_join(threads[i], (void**)&res);
+    //         sum += *res;
+    //         free(res);
+    //     }
+    //     //}
+    //
+    //     return to_string(sum);
+    // }
 }
-
-// OLD check_sum
-// string Joiner::check_sum(SelectInfo &sel_info, table_t *table,
-//                          threadpool11::Pool & pool, std::array<std::future<uint64_t>, THREAD_NUM> & futures) {
-//
-//     /* to create the final cehcksum column */
-//     AddColumnToTableT(sel_info, table);
-//     construct(table);
-//
-//     const uint64_t* col = table->column_j->values;
-//     const uint64_t size = table->column_j->size;
-//     uint64_t sum = 0;
-//
-//     for (int i = 0; i < THREAD_NUM; ++i) {
-//         uint32_t low  = (i == 0) ? size/4*i + size%4 : size/4*i + 1;
-//         uint32_t high = low + size/4;
-//         futures[i] = pool.postWork<uint64_t>([=]() { return threadSum(col, low, high); });
-//     }
-//
-//     for (auto& it : futures) {
-//         sum += it.get();
-//     }
-//
-//     for (uint64_t i = 0 ; i < size; i++)
-//         sum += col[i];
-//
-//         switch (sum) {
-//             case 0  :  return "NULL";
-//             default :  return to_string(sum);
-//     }
-// }
 
 // Loads a relation from disk
 void Joiner::addRelation(const char* fileName) {
@@ -1128,6 +1086,7 @@ int main(int argc, char* argv[]) {
     cerr << timeDetStr << endl;
     done_testing = true;
 #endif
+
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
@@ -1142,7 +1101,7 @@ int main(int argc, char* argv[]) {
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 0;
+    int q_counter = 1;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
@@ -1157,30 +1116,42 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        // JTree *jTreePtr = treegen(&i);
+        //JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
         JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
+        struct timeval end;
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-
-        // int *plan = NULL, plan_size = 0;
-        // table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
-        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
 
         #ifdef time
         gettimeofday(&start, NULL);
         #endif
 
+        int *plan = NULL, plan_size = 0;
+        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
+        #ifdef time
+        gettimeofday(&start, NULL);
+        #endif
+
+        // Compute the selection predicates
         string result_str;
         uint64_t checksum = 0;
         unordered_map<string, string> cached_sums;
         vector<SelectInfo> &selections = i.selections;
         for (size_t i = 0; i < selections.size(); i++) {
 
-            /* Check if checksum is cached */
+            // Check if checksum is cached
             string key = to_string(selections[i].binding) + to_string(selections[i].colId);
             unordered_map<string, string>::const_iterator got = cached_sums.find(key);
             if (got != cached_sums.end()) {
@@ -1192,7 +1163,7 @@ int main(int argc, char* argv[]) {
                 result_str += str;
             }
 
-            /* Create the write check sum */
+            // Create the write check sum
             if (i != selections.size() - 1) {
                 result_str +=  " ";
             }
@@ -1220,6 +1191,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
     std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
+    std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
 #endif
 

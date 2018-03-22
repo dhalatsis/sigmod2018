@@ -2,7 +2,6 @@
 
 #include <vector>
 
-
 typedef std::vector<std::vector<int>> matrix;
 typedef std::vector<int> j_vector;
 typedef struct table_t table_t;

@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
 #set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -Wall -Ofast -march=native -fopenmp")
+set(CMAKE_CXX_FLAGS_DEBUG "-Ofast -march=native -fopenmp")
 add_compile_options(-Ofast -march=native)
 
 include_directories(include)

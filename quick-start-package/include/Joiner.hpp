@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <sys/time.h>
+#include <string.h>
 #include "Relation.hpp"
 #include "Parser.hpp"
 #include "table_t.hpp"
@@ -36,8 +37,7 @@ void PrintColumn(column_t *column);
 
 
 class Joiner {
-
-    std::vector<Relation> relations;  // The relations that might be joined
+    std::vector<Relation> relations; // The relations that might be joined
 
     public:
     /* do the checksum */
