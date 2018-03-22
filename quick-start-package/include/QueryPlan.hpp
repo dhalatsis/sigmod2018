@@ -28,7 +28,6 @@ const std::vector< std::vector<int> > smallDiffRelJoin{
                             {1969, 6571, 10869, 16290, 20290}
                             };
 
-
 const std::vector< std::vector<int> > smallSameRelJoinRJ{
                             {197, 1473, 2703, 4853, 7733},
                             {187, 1082, 2517, 4595, 7530},
@@ -59,6 +58,16 @@ const std::vector< std::vector<int> > smallDiffRelJoinCreateTableT{
                             {99, 1720, 3546, 4522, 5791},
                             {150, 2594, 5348, 6555, 8282},
                             {321, 3391, 6246, 9346, 11947}
+                            };
+
+// for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
+const std::vector<int> smallSameRelJoinCreateTableTResults{
+                            15, 955, 5000, 10000
+                            };
+
+// for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
+const std::vector<int> smallDiffRelJoinCreateTableTResults{
+                            400, 800, 5000, 10150
                             };
 
 // Keeps the important info/statistics for every column

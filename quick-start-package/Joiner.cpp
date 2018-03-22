@@ -461,7 +461,10 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    // if(!done_testing) cerr << "CreateTableT: " << dt << "sec" << endl;
+    if(!done_testing) {
+        cerr << "CreateTableT: " << dt << "sec for " << res->totalresults << " results" << endl;
+        flush(cerr);
+    }
 #endif
     return temp;
 
@@ -980,55 +983,54 @@ int main(int argc, char* argv[]) {
     for (int i = 1000; i <= 41000; i += 10000) {
         for (int j = 1000; j <= 41000; j += 10000) {
             vector<table_t*> tables;
+            tables.push_back(joiner.CreateTableTFromId(7, 7));
             tables.push_back(joiner.CreateTableTFromId(13, 13));
-            // tables.push_back(joiner.CreateTableTFromId(13, 13));
             if (i <= tables[0]->relations_row_ids[0][0].size()) {
                 for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
                     tables[0]->relations_row_ids[k][0].resize(i);
             } else {
                 tables[0] = NULL;
             }
-            // if (j <= tables[1]->relations_row_ids[0][0].size()) {
-            //     for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
-            //         tables[1]->relations_row_ids[k][0].resize(j);
-            // } else {
-            //     tables[1] = NULL;
-            // }
+            if (j <= tables[1]->relations_row_ids[0][0].size()) {
+                for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
+                    tables[1]->relations_row_ids[k][0].resize(j);
+            } else {
+                tables[1] = NULL;
+            }
 
-            if (!tables[0] /*|| !tables[1]*/) {
+            if (!tables[0] || !tables[1]) {
                 // its_over = true;
                 break;
             }
 
             PredicateInfo predicate;
-            predicate.left.relId = 13;
-            predicate.left.binding = 0;
-            predicate.left.colId = 1;
-            predicate.right.relId = 13;
-            predicate.right.binding = 1;
-            predicate.right.colId = 1;
-            struct timeval start, end;
-            gettimeofday(&start, NULL);
-            joiner.join(tables[0], tables[0], predicate);
-            gettimeofday(&end, NULL);
-            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            // std::ostringstream strs;
-            cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << " sec" << endl;
-            flush(cerr);
-            // timeDetStr.append(strs.str());
-            // cerr << "7,\t" << i << ",\t7,\t" << j << ",\t" << dt << "sec\t|||\t";
-
-            // predicate.left.relId = 7;
+            // predicate.left.relId = 13;
             // predicate.left.binding = 0;
             // predicate.left.colId = 1;
             // predicate.right.relId = 13;
             // predicate.right.binding = 1;
             // predicate.right.colId = 1;
-            // gettimeofday(&start, NULL);
-            // joiner.join(tables[0], tables[1], predicate);
-            // gettimeofday(&end, NULL);
-            // dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            // cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
+            struct timeval start, end;
+            gettimeofday(&start, NULL);
+            // joiner.join(tables[0], tables[0], predicate);
+            gettimeofday(&end, NULL);
+            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            // std::ostringstream strs;
+            // cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << " sec" << endl;
+            // flush(cerr);
+            // timeDetStr.append(strs.str());
+
+            predicate.left.relId = 7;
+            predicate.left.binding = 0;
+            predicate.left.colId = 1;
+            predicate.right.relId = 13;
+            predicate.right.binding = 1;
+            predicate.right.colId = 1;
+            gettimeofday(&start, NULL);
+            joiner.join(tables[0], tables[1], predicate);
+            gettimeofday(&end, NULL);
+            dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
         }
         // if (its_over)
         //     break;
@@ -1059,18 +1061,18 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        JTree *jTreePtr = treegen(&i);
+        // JTree *jTreePtr = treegen(&i);
         // Create the optimal join tree
-        // JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
 
         #ifdef time
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
-        int *plan = NULL, plan_size = 0;
-        // table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
-        table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+        // int *plan = NULL, plan_size = 0;
+        // table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
 
         #ifdef time
         gettimeofday(&start, NULL);

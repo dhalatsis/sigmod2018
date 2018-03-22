@@ -383,10 +383,12 @@ double JoinTreeNode::cost() {
             j = this->right->columnInfo.size / (10000 * offset);
             offset *= 10;
         }
-        nodeCostEstimation = smallDiffRelJoin[i][j];
-        // // if it is a self join
-        // if (this->left->nodeId != -1 && this->left->nodeId == this->right->nodeId)
-        //     nodeCostEstimation += (this->left->columnInfo.size * this->left->columnInfo.size) / this->left->columnInfo.distinct;
+        nodeCostEstimation = smallDiffRelJoin[i][j] * offset;
+        // if it is a self join
+        if (this->left->nodeId != -1 && this->left->nodeId == this->right->nodeId){
+            nodeCostEstimation = smallSameRelJoin[i][j] * offset;
+            // nodeCostEstimation += (this->left->columnInfo.size * this->left->columnInfo.size) / this->left->columnInfo.distinct;
+        }
         // // if left relation may be a subset of the right
         // else if ((this->left->columnInfo.min >= this->right->columnInfo.min) &&
         // (this->left->columnInfo.max <= this->right->columnInfo.max))
