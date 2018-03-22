@@ -6,6 +6,19 @@
 #include <cstdio>
 
 
+
+int shiftpred(std::vector<PredicateInfo> predicates, int i) 
+{
+
+	PredicateInfo tmp = predicates[i];
+	for (int j=i; j < predicates.size()-1; j++)
+		predicates[j] = predicates[j+1];
+
+	predicates[predicates.size()-1] = tmp;
+
+	return 0;
+}
+
 JTree *tree_update(JTree *tree, QueryInfo *info)
 {
 
@@ -78,6 +91,20 @@ JTree *treegen(QueryInfo *info)
 	/*apply the constraints */
 	for (unsigned int i=0; i < info->predicates.size(); i++) {
 
+
+		int k = info->predicates.size()-i;
+		while ((worklist[info->predicates[i].left.binding]->predPtr == NULL &&
+		worklist[info->predicates[i].right.binding]->predPtr == NULL )
+		|| worklist[info->predicates[i].left.binding] == worklist[info->predicates[i].right.binding])
+		{
+			if (i == 0)
+				break;
+			shiftpred(info->predicates, i);
+			if (k == 0)
+				break;
+			k--;
+		}
+
 		node = new JTree;
 		node->node_id = -1;
 		node->visited = 0;
@@ -111,6 +138,24 @@ JTree *treegen(QueryInfo *info)
 
 			node->right->parent = node;
 		}
+
+
+		if (node->left->predPtr == NULL) {
+
+			JTree *tmp = node->left;
+
+			node->left = node->right;
+			node->right = tmp;
+
+
+			SelectInfo tmp1;
+			tmp1 = node->predPtr->left;
+			node->predPtr->left = node->predPtr->right;
+			node->predPtr->right = tmp1;
+
+
+		}
+
 	}
 
 	/*join the remainiing tables , those for which parent = null*/
@@ -178,3 +223,5 @@ void print_rec(JTree *ptr, int depth)
             fprintf(stderr,"-- %d\n", ptr->node_id);
         }
 }
+
+

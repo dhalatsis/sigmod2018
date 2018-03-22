@@ -5,9 +5,70 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <vector>
 #include <math.h>
 #include "Joiner.hpp"
 #include "Parser.hpp"
+
+/* Initial Cost Estimations for Join */
+// steps (horizontally & vertically): 1000 11000 21000 31000 41000
+const std::vector< std::vector<int> > smallSameRelJoin{
+                            {271, 2571, 6567, 11396, 18273},
+                            {233, 1708, 6030, 11315, 17764},
+                            {232, 1936, 6028, 11440, 17508},
+                            {230, 2231, 5380, 11370, 17693},
+                            {220, 2372, 5486, 11067, 18003}
+                            };
+
+const std::vector< std::vector<int> > smallDiffRelJoin{
+                            {233, 499, 987, 1358, 1787},
+                            {518, 2061, 3943, 5587, 7748},
+                            {867, 3612, 6487, 7767, 10141},
+                            {1038, 5056, 8956, 11406, 14310},
+                            {1969, 6571, 10869, 16290, 20290}
+                            };
+
+const std::vector< std::vector<int> > smallSameRelJoinRJ{
+                            {197, 1473, 2703, 4853, 7733},
+                            {187, 1082, 2517, 4595, 7530},
+                            {188, 1131, 2491, 4527, 7480},
+                            {194, 1230, 2652, 4606, 7624},
+                            {184, 1347, 2465, 4431, 7577}
+                            };
+
+const std::vector< std::vector<int> > smallSameRelJoinCreateTableT{
+                            {13, 1028, 3657, 6074, 9974},
+                            {15, 555, 3304, 6312, 9873},
+                            {15, 737, 3339, 6495, 9755},
+                            {12, 940, 2601, 6348, 9833},
+                            {13, 952, 2835, 6297, 9914}
+                            };
+
+const std::vector< std::vector<int> > smallDiffRelJoinRJ{
+                            {165, 414, 789, 987, 1200},
+                            {431, 1075, 1755, 2035, 3625},
+                            {713, 1791, 2726, 3092, 4029},
+                            {813, 2258, 3336, 4446, 5806},
+                            {1379, 2960, 4307, 6771, 7801}
+                            };
+
+const std::vector< std::vector<int> > smallDiffRelJoinCreateTableT{
+                            {6, 48, 138, 163, 321},
+                            {49, 883, 2085, 3301, 3933},
+                            {99, 1720, 3546, 4522, 5791},
+                            {150, 2594, 5348, 6555, 8282},
+                            {321, 3391, 6246, 9346, 11947}
+                            };
+
+// for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
+const std::vector<int> smallSameRelJoinCreateTableTResults{
+                            15, 955, 5000, 10000
+                            };
+
+// for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
+const std::vector<int> smallDiffRelJoinCreateTableTResults{
+                            400, 800, 5000, 10150
+                            };
 
 // Keeps the important info/statistics for every column
 // needed to build the plan tree
