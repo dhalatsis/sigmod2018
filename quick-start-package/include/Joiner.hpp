@@ -20,15 +20,6 @@
 #define THREAD_NUM 4
 /*----------------*/
 
-/* Timing variables */
-extern double timeSelfJoin;
-extern double timeSelectFilter;
-extern double timeLowJoin;
-extern double timeCreateTable;
-extern double timeAddColumn;
-extern double timeTreegen;
-extern double timeCheckSum;
-
 /*
  * Prints a column
  * Arguments : A @column of column_t type
@@ -71,6 +62,8 @@ class Joiner {
     void join(QueryInfo& i);
     table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections);
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, std::vector<SelectInfo>* selections);
+
+    void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
 
     uint64_t for_2(table_t* table_r, table_t* table_s);
     uint64_t for_3(table_t* table_r, table_t* table_s, table_t* table_p);

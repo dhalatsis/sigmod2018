@@ -26,9 +26,6 @@ struct table_t {
     /* Row Ids and relation Ids */
     matrix  *relations_row_ids;
 
-    /* use it for the filtrering TODO hash map ?*/
-    std::vector<unsigned>          relation_ids;
-
     /* use the binfing to map the relations */
     std::vector<unsigned>          relations_bindings;
 
