@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <sys/time.h>
 #include <string.h>
 #include "Relation.hpp"
@@ -19,6 +20,8 @@
 #include <thread>
 #define THREAD_NUM 4
 /*----------------*/
+
+#define time
 
 /*
  * Prints a column

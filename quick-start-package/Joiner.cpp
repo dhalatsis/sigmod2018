@@ -18,7 +18,6 @@
 
 using namespace std;
 
-//#define time
 
 //#define TIME_DETAILS
 //#include <sstream>
