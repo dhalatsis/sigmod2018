@@ -97,7 +97,7 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
             it->second.size     = newColumnInfo.size;
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-        
+
             //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
             //it->second.print();
         }
@@ -142,7 +142,7 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
             it->second.size     = newColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-        
+
             //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
             //it->second.print();
         }
@@ -814,20 +814,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->left, table_l);
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->right, table_r);
 
-        if (joinTreeNodePtr->parent == NULL) {
-            return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, &(queryInfo.selections));
-        }
-        else {
-            return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, NULL);
-        }
+        return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+
     }
     else {
-        if (joinTreeNodePtr->parent == NULL) {
-        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, &(queryInfo.selections));
-        }
-        else {
-            return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, NULL);
-        }
+        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
     }
 }
 
@@ -986,7 +977,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             columnInfos[rel][col].distinct = (uint64_t) distinctElements.size();
             columnInfos[rel][col].n        = maximum - minimum + 1;
             columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
-            
+
             columnInfos[rel][col].counter = 0;
             columnInfos[rel][col].isSelectionColumn = false;
         }

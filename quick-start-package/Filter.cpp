@@ -8,7 +8,7 @@ double timeSelectFilter = 0;
 
 
 /* The self Join Function */
-table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo>* selections) {
+table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap) {
 
 #ifdef time
     struct timeval start;
