@@ -411,7 +411,18 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&start, NULL);
 #endif
 
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     result_t * res  = RJ(r1, r2, 0);
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);

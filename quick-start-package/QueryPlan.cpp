@@ -1,6 +1,7 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
+//#include "tbb/concurrent_unordered_set.h"
 
 using namespace std;
 
@@ -975,19 +976,22 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
 
         // Get the info of every column
         for (int col = 0; col < columnsCount; col++) {
-            uint64_t minimum = numeric_limits<uint64_t>::max(); // Value of minimum element
-            uint64_t maximum = 0; // Value of maximum element
+            uint64_t minimum = numeric_limits<uint64_t>::max();
+            uint64_t maximum = 0;
             uint64_t tuples  = relation->size;
             uint64_t element;
-            unordered_set<uint64_t> distinctElements; // Keep the distinct elements of the column
+            //unordered_set<uint64_t> distinctElements;
+            //unordered_set<uint64_t> distinctElements2;
 
-            // For the first 5 percent of the tuples get the dinstinct elements
             for (int i = 0; i < tuples; i++) {
                 element = relation->columns[col][i];
                 if (element > maximum) maximum = element;
                 if (element < minimum) minimum = element;
-                distinctElements.insert(element);
+                //distinctElements2.insert(element);
             }
+
+            unordered_set<uint64_t> distinctElements(relation->columns[col], relation->columns[col] + tuples);
+            //fprintf(stderr, "%2d.%d %5lu %5lu %5lu\n", rel, col, tuples, distinctElements2.size(), distinctElements.size() * 5);
 
             // Save the infos
             columnInfos[rel][col].min      = minimum;
