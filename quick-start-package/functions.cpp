@@ -213,7 +213,7 @@ void jTreePrintTree(JTree* jTreePtr) {
     }
 }
 
-table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner, int *depth) {
+table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner) {
     JTree *left  = jTreePtr->left;
     JTree *right = jTreePtr->right;
     table_t *table_l, *table_r, *res;
