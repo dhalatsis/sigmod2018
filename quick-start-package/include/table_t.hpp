@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 
 typedef std::vector<std::vector<int>> matrix;
 typedef std::vector<int> j_vector;
@@ -24,10 +25,12 @@ struct column_t {
 struct table_t {
 
     /* Row Ids and relation Ids */
-    matrix  *relations_row_ids;
+    unsigned * row_ids;
+    unsigned    tups_num;
+    unsigned    rels_num;
 
     /* use the binfing to map the relations */
-    std::vector<unsigned>          relations_bindings;
+    std::unordered_map<unsigned, unsigned> relations_bindings;
 
     /* Intermediate result falg */
     bool intermediate_res;

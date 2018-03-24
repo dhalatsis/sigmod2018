@@ -123,47 +123,48 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
 #endif
 
     /* Create a new column_t for table */
-    std::vector<unsigned> &relation_mapping = table->relations_bindings;
-    matrix & row_ids = *table->relations_row_ids;
+    unsigned * row_ids = table->row_ids;
 
     /* Get the relation from joiner */
     Relation &rel = getRelation(sel_info.relId);
     uint64_t * values = rel.columns.at(sel_info.colId);
 
-    /* Create the relatin_t */
+    /* Create the relation_t */
     relation_t * new_relation = (relation_t *) malloc(sizeof(relation_t));
 
     if (table->intermediate_res) {
+
         unsigned table_index = -1;
         unsigned relation_binding = sel_info.binding;
 
         /* Get the right index from the relation id table */
-        for (size_t index = 0; index < relation_mapping.size(); index++) {
-            if (relation_mapping[index] == relation_binding){
-                table_index = index;
-            }
-        }
-
-        /* Error msg for debuging */
-        if (table_index == -1)
-            std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors" << '\n';
+        unordered_map<unsigned, unsigned>::iterator itr = table->relations_bindings.find(relation_binding);
+        if (itr != table->relations_bindings.end())
+            table_index = itr->second;
+        else
+            std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors for " << relation_binding <<'\n';
 
         /* Initialize relation */
-        uint32_t size = table->relations_row_ids->at(0).size();
+        uint32_t size    = table->tups_num;
+        uint32_t rel_num = table->rels_num;
         new_relation->num_tuples = size;
         tuple_t * tuples = (tuple_t *) malloc(sizeof(tuple_t) * size);
 
+
         /* Initialize the tuple array */
         for (uint32_t i = 0; i < size; i++) {
-            tuples[i].key     = values[row_ids[table_index][i]];
+            tuples[i].key     = values[row_ids[i*rel_num + table_index]];
             tuples[i].payload = i;
         }
+
+        std::cerr << "HEREreeeL" << '\n';
+        flush(cerr);
 
         new_relation->tuples = tuples;
     }
     else {
         /* Initialize relation */
-        uint32_t size = table->relations_row_ids->at(0).size();
+        uint32_t size = table->tups_num;
         new_relation->num_tuples = size;
         tuple_t * tuples = (tuple_t *) malloc(sizeof(tuple_t) * size);
 
@@ -179,9 +180,8 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
-
 
     return new_relation;
 }
@@ -200,38 +200,56 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     gettimeofday(&start, NULL);
 #endif
 
+    std::cerr << "HERE" << '\n';
+    flush(cerr);
+
     /* Cut the unused relations */
     unordered_map<unsigned, unsigned>::iterator itr;
+    vector<unsigned> help_v_r;
+    vector<unsigned> help_v_s;
     bool victimize = true;
     int  index     = -1;
-    for (size_t i = 0; i < table_r->relations_bindings.size(); i++) {
+    int left_removed = 0, right_removed = 0;
+    itr  = table_r->relations_bindings.begin();
+    for (int i = 0; i < table_r->relations_bindings.size(); i++) {
         victimize = true;
         for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == table_r->relations_bindings[i]) {
+            if (it->first.binding == itr->first) {
                 victimize = false;
+                help_v_r.push_back(itr->second);
                 break;
             }
         }
         if (victimize) {
-            table_r->relations_bindings.erase(table_r->relations_bindings.begin() + i);
-            table_r->relations_row_ids->erase(table_r->relations_row_ids->begin() + i);
+            table_r->relations_bindings.erase(itr);
+            left_removed++;
         }
+        itr++;
     }
 
-    for (size_t i = 0; i < table_s->relations_bindings.size(); i++) {
+    itr  = table_s->relations_bindings.begin();
+    for (int i = 0; i < table_s->relations_bindings.size(); i++) {
         victimize = true;
         for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == table_s->relations_bindings[i]) {
+            if (it->first.binding == itr->first) {
                 victimize = false;
+                help_v_s.push_back(itr->second + help_v_r.size());
                 break;
             }
         }
         if (victimize) {
-            table_s->relations_bindings.erase(table_s->relations_bindings.begin() + i);
-            table_s->relations_row_ids->erase(table_s->relations_row_ids->begin() + i);
+            table_s->relations_bindings.erase(itr);
+            right_removed++;
         }
+        itr++;
     }
 
+    std::cerr << "HERE" << '\n';
+    flush(cerr);
+
+    /* sort the un-victimized helping arrays */
+    std::sort(help_v_r.begin(), help_v_r.end());
+    std::sort(help_v_s.begin(), help_v_s.end());
 
 
     /* The num of relations for the two tables */
@@ -243,22 +261,32 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     table_t * new_table = new table_t;
     new_table->intermediate_res = true;
     new_table->column_j = new column_t;
-    new_table->relations_row_ids = new matrix(num_relations);
+    new_table->tups_num = result->totalresults;
+    new_table->rels_num = num_relations;
+    new_table->row_ids = (unsigned *) malloc(sizeof(unsigned) * num_relations * result->totalresults);
 
-    /* Allocate space for the row ids matrix */
-    uint64_t  allocated_size = result->totalresults;
-    for (size_t relation = 0; relation < num_relations; relation++) {
-            new_table->relations_row_ids->at(relation).reserve(allocated_size);
+    /* Create the new maping vector */
+    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
+        (itr->second > left_removed)
+        ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
+        : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
+    }
+    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
+        (itr->second > right_removed)
+        ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
+        : new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second));
     }
 
-    new_table->relations_bindings.reserve(num_relations);
-    new_table->relations_bindings.insert(new_table->relations_bindings.end() ,table_r->relations_bindings.begin(), table_r->relations_bindings.end());
-    new_table->relations_bindings.insert(new_table->relations_bindings.end() ,table_s->relations_bindings.begin(), table_s->relations_bindings.end());
+    std::cerr << "New mapping ";
+    for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
+        std::cerr << itr->first << "." << itr->second << " ";
+    }
+    std::cerr << '\n';
 
     /* Get the 3 row_ids matrixes in referances */
-    matrix & rids_res = *new_table->relations_row_ids;
-    matrix & rids_r   = *table_r->relations_row_ids;
-    matrix & rids_s   = *table_s->relations_row_ids;
+    unsigned * rids_res = new_table->row_ids;
+    unsigned * rids_r   = table_r->row_ids;
+    unsigned * rids_s   = table_s->row_ids;
 
     /* Get the chained buffer */
     /* TODO Make it possible for multi threading */
@@ -271,40 +299,129 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     //qsort(tb->tuples, cb->writepos, sizeof(tuple_t), compare);
 
-    /* Create table_t from tuples */
-    for (uint32_t rel = 0; rel < relnum_r; rel++) {
-        for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            rids_res[rel].push_back( rids_r[rel][row_i] );
-        }
-    }
+    fprintf(stderr, "Numrl %d , Numrr %d , numr %d\n", relnum_r, relnum_s, num_relations);
+    flush(cerr);
 
-    for (uint32_t rel = 0; rel < relnum_s; rel++) {
-        for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
+    /* Create table_t from tuples */
+    unordered_map<unsigned, unsigned> & relB_r = table_r->relations_bindings;
+    unordered_map<unsigned, unsigned> & relB_s = table_s->relations_bindings;
+    uint32_t new_tbi = 0;
+    uint32_t tup_i;
+
+    /* Depending on tables choose what to pass */
+    if (table_r->intermediate_res && table_s->intermediate_res)
+        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            row_i = tb->tuples[tup_i].key;
+            for (size_t i = 0; i < help_v_r.size(); i++) {
+                rids_res[tup_i*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+            }
+
             row_i = tb->tuples[tup_i].payload;
-            rids_res[relnum_r + rel].push_back( rids_s[rel][row_i] );
+            for (size_t i = 0; i < help_v_s.size(); i++) {
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+            }
         }
-    }
+    else if (table_r->intermediate_res)
+        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            row_i = tb->tuples[tup_i].key;
+            for (size_t i = 0; i < help_v_r.size(); i++) {
+                rids_res[tup_i*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+            }
+
+            row_i = tb->tuples[tup_i].payload;
+            for (size_t i = 0; i < help_v_s.size(); i++) {
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  row_i;
+            }
+        }
+    else if (table_s->intermediate_res)
+        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            std::cerr << "EDW MAN " << '\n';
+            flush(cerr);
+            row_i = tb->tuples[tup_i].key;
+            for (size_t i = 0; i < help_v_r.size(); i++) {
+                rids_res[tup_i*num_relations + i] = row_i;
+            }
+
+            row_i = tb->tuples[tup_i].payload;
+            for (size_t i = 0; i < help_v_s.size(); i++) {
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+            }
+        }
+    else
+        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            row_i = tb->tuples[tup_i].key;
+            for (size_t i = 0; i < help_v_r.size(); i++) {
+                rids_res[tup_i*num_relations + i] = row_i;
+            }
+
+            row_i = tb->tuples[tup_i].payload;
+            for (size_t i = 0; i < help_v_s.size(); i++) {
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  row_i;
+            }
+        }
+
+    std::cerr << "EDW MAN" << '\n';
+    flush(cerr);
 
     /* --------------------------------------------------------------------------------------
     The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
     ---------------------------------------------------------------------------------------- */
     tb = tb->next;
+    new_tbi = tup_i;
     for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-        /* Create table_t from tuples */
-        for (uint32_t rel = 0; rel < relnum_r; rel++) {
-            for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
-                row_i = tb->tuples[tup_i].key;
-                rids_res[rel].push_back( rids_r[rel][row_i] );
-            }
-        }
 
-            for (uint32_t rel = 0; rel < relnum_s; rel++) {
-                for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+        if (table_r->intermediate_res && table_s->intermediate_res)
+            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].key;
+                for (size_t i = 0; i < help_v_r.size(); i++) {
+                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                }
+
                 row_i = tb->tuples[tup_i].payload;
-                rids_res[relnum_r + rel].push_back( rids_s[rel][row_i] );
+                for (size_t i = 0; i < help_v_s.size(); i++) {
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                }
+                new_tbi++;
             }
-        }
+        else if (table_r->intermediate_res)
+            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].key;
+                for (size_t i = 0; i < help_v_r.size(); i++) {
+                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                }
+
+                row_i = tb->tuples[tup_i].payload;
+                for (size_t i = 0; i < help_v_s.size(); i++) {
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
+                }
+                new_tbi++;
+            }
+        else if (table_s->intermediate_res)
+            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].key;
+                for (size_t i = 0; i < help_v_r.size(); i++) {
+                    rids_res[new_tbi*num_relations + i] = row_i;
+                }
+
+                row_i = tb->tuples[tup_i].payload;
+                for (size_t i = 0; i < help_v_s.size(); i++) {
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                }
+                new_tbi++;
+            }
+        else
+            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].key;
+                for (size_t i = 0; i < help_v_r.size(); i++) {
+                    rids_res[new_tbi*num_relations + i] = row_i;
+                }
+
+                row_i = tb->tuples[tup_i].payload;
+                for (size_t i = 0; i < help_v_s.size(); i++) {
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
+                }
+                new_tbi++;
+            }
 
         /* Go the the next buffer */
         tb = tb->next;
@@ -335,7 +452,6 @@ void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
 
     /* Create a new column_t for table */
     column_t &column = *table->column_j;
-    std::vector<unsigned> &relation_mapping = table->relations_bindings;
 
     /* Get the relation from joiner */
     Relation &rel = getRelation(sel_info.relId);
@@ -347,16 +463,11 @@ void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
 
 
     /* Get the right index from the relation id table */
-    for (size_t index = 0; index < relation_mapping.size(); index++) {
-        if (relation_mapping[index] == relation_binding){
-            column.table_index = index;
-            break;
-        }
-    }
-
-    /* Error msg for debuging */
-    if (column.table_index == -1)
-        std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors" << '\n';
+    unordered_map<unsigned, unsigned>::iterator itr = table->relations_bindings.find(relation_binding);
+    if (itr != table->relations_bindings.end())
+        column.table_index = itr->second;
+    else
+        std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors for " << relation_binding <<'\n';
 
 #ifdef time
     struct timeval end;
@@ -380,17 +491,18 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     table_t *const table_t_ptr = new table_t;
     table_t_ptr->column_j = new column_t;
     table_t_ptr->intermediate_res = false;
-    table_t_ptr->relations_row_ids = new matrix(1, j_vector(rel.size));
-    matrix & rel_row_ids = *table_t_ptr->relations_row_ids;
+    table_t_ptr->tups_num = rel.size;
+    table_t_ptr->rels_num = 1;
+    table_t_ptr->row_ids = NULL;
 
     /* Create the relations_row_ids and relation_ids vectors */
-    uint64_t rel_size  = rel.size;
-    for (size_t i = 0; i < rel_size; i++) {
-        rel_row_ids[0][i] = i;
-    }
+    // uint64_t rel_size  = rel.size;
+    // for (size_t i = 0; i < rel_size; i++) {
+    //     rel_row_ids[0][i] = i;
+    // }
 
     /* Keep a mapping with the rowids table and the relaito ids na bindings */
-    table_t_ptr->relations_bindings.push_back(rel_binding);
+    table_t_ptr->relations_bindings.insert(make_pair(rel_binding, 0));
 
 #ifdef time
     struct timeval end;
@@ -449,6 +561,8 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size
 void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, vector<uint64_t> > columns) {
+
+#ifdef hot
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
@@ -698,9 +812,12 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
     for (uint64_t i = 0; i < check_sum_map.size(); i++)
         for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
             cerr << check_sum_map[i][j] << endl;
+    #endif
 }
 
 void Joiner::construct(table_t *table) {
+
+#ifdef hot
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
@@ -734,6 +851,7 @@ void Joiner::construct(table_t *table) {
     gettimeofday(&end, NULL);
     timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
+#endif
 }
 
 struct threadSumArg_t {
@@ -763,14 +881,16 @@ void *threadSum(void * arg) {
 //CHECK SUM FUNCTION
 std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
 
+
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
     //construct(table);
 
     uint64_t* col = table->column_j->values;
     int  tbi = table->column_j->table_index;
-    matrix & row_ids = *table->relations_row_ids;
-    const uint64_t size = row_ids[tbi].size();
+    unsigned * row_ids = table->row_ids;
+    unsigned   rels_num = table->rels_num;
+    unsigned   size = table->tups_num;
 
     uint64_t sum = 0;
 
@@ -779,7 +899,7 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     }
     else { //if (size < 1000) {
         for (uint64_t i = 0 ; i < size; i++)
-            sum += col[row_ids[tbi][i]];
+            sum += col[row_ids[i*rels_num + tbi]];
         return to_string(sum);
     }
     // else {
@@ -945,10 +1065,10 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
-        //q_counter++;
+        q_counter++;
 
         #ifdef time
         struct timeval start;

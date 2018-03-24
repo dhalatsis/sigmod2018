@@ -9,6 +9,7 @@ double timeSelectFilter = 0;
 
 /* The self Join Function */
 table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap) {
+#ifdef hot
 
 #ifdef time
     struct timeval start;
@@ -80,13 +81,15 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
 
     /*Delete old table_t */
     //delete table->relations_row_ids;
-
     return new_table;
+#endif
+    return NULL;
 }
 
 /* The self Join Function */
 void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections) {
 
+#ifdef hot
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
@@ -177,10 +180,11 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
     timeSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
+#endif
     return;
 }
 
-/* Its better not to use it TODO change it */
+/* Its better hot to use it TODO change it */
 void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 
 #ifdef time
@@ -189,7 +193,7 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 #endif
 
     /* Construct table  - Initialize variable */
-    (table->intermediate_res)? (construct(table)) : ((void)0);
+    //(table->intermediate_res)? (construct(table)) : ((void)0);
     SelectInfo &sel_info = fil_info.filterColumn;
     uint64_t filter = fil_info.constant;
 
@@ -212,77 +216,124 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 void Joiner::SelectEqual(table_t *table, int filter) {
     /* Initialize helping variables */
     uint64_t *const values  = table->column_j->values;
-    int table_index         = table->column_j->table_index;
-    const uint64_t rel_num  = table->relations_row_ids->size();
+    const unsigned table_index = table->column_j->table_index;
+    const unsigned rel_num = table->rels_num;
+    const unsigned size = table->tups_num;
 
-    matrix & old_row_ids = *table->relations_row_ids;
-    const uint64_t size  = old_row_ids[table_index].size();
-    matrix * new_row_ids = new matrix(rel_num);
-    new_row_ids->at(0).reserve(size/2);
+    unsigned * old_row_ids = table->row_ids;
+    unsigned * new_row_ids = (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
 
     /* Update the row ids of the table */
+    bool inter_res = table->intermediate_res;
+    unsigned new_tbi = 0;
     for (size_t index = 0; index < size; index++) {
-        if (values[index] == filter) {
-            for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
-                new_row_ids->operator[](rel_index).push_back(old_row_ids[rel_index][index]);
+
+        /* Intermediate result */
+        if (inter_res) {
+            if (values[old_row_ids[index]] == filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                new_row_ids[new_tbi] = old_row_ids[index];
+                new_tbi++;
+                //}
+            }
+        }
+        else {
+            if (values[index] == filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                std::cerr << "SIZE " << size << '\n';
+                new_row_ids[new_tbi] = index;
+                new_tbi++;
+                //}
             }
         }
     }
 
     /* Swap the old vector with the new one */
-    delete table->relations_row_ids;
-    table->relations_row_ids = new_row_ids;
+    (inter_res) ? (free(old_row_ids)) : ((void)0);
+    table->row_ids = new_row_ids;
+    table->tups_num = new_tbi;
     table->intermediate_res = true;
 }
 
 void Joiner::SelectGreater(table_t *table, int filter){
+
     /* Initialize helping variables */
     uint64_t *const values  = table->column_j->values;
-    int table_index         = table->column_j->table_index;
-    const uint64_t rel_num  = table->relations_row_ids->size();
+    const unsigned table_index = table->column_j->table_index;
+    const unsigned rel_num = table->rels_num;
+    const unsigned size = table->tups_num;
 
-    matrix & old_row_ids = *table->relations_row_ids;
-    const uint64_t size  = old_row_ids[table_index].size();
-    matrix * new_row_ids = new matrix(rel_num);
-    new_row_ids->at(0).reserve(size/2);
+    unsigned * old_row_ids = table->row_ids;
+    unsigned * new_row_ids = (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
 
     /* Update the row ids of the table */
+    bool inter_res = table->intermediate_res;
+    unsigned new_tbi = 0;
     for (size_t index = 0; index < size; index++) {
-        if (values[index] > filter) {
-            for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
-                new_row_ids->operator[](rel_index).push_back(old_row_ids[rel_index][index]);
+
+        /* Intermediate result */
+        if (inter_res) {
+            if (values[old_row_ids[index]] > filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                new_row_ids[new_tbi] = old_row_ids[index];
+                new_tbi++;
+                //}
+            }
+        }
+        else {
+            if (values[index] > filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                new_row_ids[new_tbi] = index;
+                new_tbi++;
+                //}
             }
         }
     }
 
     /* Swap the old vector with the new one */
-    delete table->relations_row_ids;
-    table->relations_row_ids = new_row_ids;
+    (inter_res) ? (free(old_row_ids)) : ((void)0);
+    table->row_ids = new_row_ids;
+    table->tups_num = new_tbi;
     table->intermediate_res = true;
 }
 
 void Joiner::SelectLess(table_t *table, int filter){
     /* Initialize helping variables */
     uint64_t *const values  = table->column_j->values;
-    int table_index         = table->column_j->table_index;
-    const uint64_t rel_num  = table->relations_row_ids->size();
+    const unsigned table_index = table->column_j->table_index;
+    const unsigned rel_num = table->rels_num;
+    const unsigned size = table->tups_num;
 
-    matrix & old_row_ids = *table->relations_row_ids;
-    const uint64_t size  = old_row_ids[table_index].size();
-    matrix * new_row_ids = new matrix(rel_num);
-    new_row_ids->at(0).reserve(size/2);
+    unsigned * old_row_ids = table->row_ids;
+    unsigned * new_row_ids = (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
 
     /* Update the row ids of the table */
+    bool inter_res = table->intermediate_res;
+    unsigned new_tbi = 0;
     for (size_t index = 0; index < size; index++) {
-        if (values[index] < filter) {
-            for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
-                new_row_ids->operator[](rel_index).push_back(old_row_ids[rel_index][index]);
+
+        /* Intermediate result */
+        if (inter_res) {
+            if (values[old_row_ids[index]] < filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                new_row_ids[new_tbi] = old_row_ids[index];
+                new_tbi++;
+                //}
+            }
+        }
+        else {
+            if (values[index] < filter) {
+                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
+                new_row_ids[new_tbi] = index;
+                new_tbi++;
+                //}
             }
         }
     }
 
     /* Swap the old vector with the new one */
-    delete table->relations_row_ids;
-    table->relations_row_ids = new_row_ids;
+    (inter_res) ? (free(old_row_ids)) : ((void)0);
+    table->row_ids = new_row_ids;
+    table->tups_num = new_tbi;
     table->intermediate_res = true;
 }
