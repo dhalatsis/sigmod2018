@@ -445,28 +445,118 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     //return low_join(table_r, table_s);
 }
 
+// utility function for for_join
+vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
+    // cerr << "getTablesFromTree in" << endl;
+
+    JTree *left = jTreePtr->left, *right = jTreePtr->right;
+    table_t *table_l, *table_r, *res;
+    vector<table_t*> tableVec;
+
+    if (left == NULL && right == NULL) {
+        // cerr << "a1" << endl;
+        res = this->CreateTableTFromId(jTreePtr->node_id, jTreePtr->binding_id);
+        tableVec.push_back(res);
+        // cerr << "a2" << endl;
+        return tableVec;
+    }
+
+    tableVec = this->getTablesFromTree(left);
+    table_l = tableVec[0];
+
+    /* Its join for sure */
+    if (right != NULL) {
+        // cerr << "b1" << endl;
+        vector<table_t*> temp = this->getTablesFromTree(right);
+        tableVec.insert(tableVec.end(), temp.begin(), temp.end());
+        table_r = tableVec[1];
+        // cerr << "b2" << endl;
+        this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
+        this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
+        /* Filter on right ? */
+        this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
+        this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
+        // res = joiner.join(table_l, table_r, *jTreePtr->predPtr);
+        return tableVec;
+    }
+    /* Fiter or predicate to the same table (simple constraint)*/
+    else {
+        if (jTreePtr->filterPtr == NULL) {
+            // cerr << "c1" << endl << "c2" << endl;
+            // res = joiner.SelfJoin(table_l, jTreePtr->predPtr);
+            return tableVec;
+        }
+        // table filter
+        else {
+            // cerr << "d1" << endl;
+            FilterInfo &filter = *(jTreePtr->filterPtr);
+            this->AddColumnToTableT(jTreePtr->filterPtr->filterColumn, table_l);
+            // cerr << "d1.5" << endl;
+            this->Select(filter, table_l);
+            // cerr << "d2" << endl;
+            // tableVec.push_back(table_l);
+            return tableVec;
+        }
+    }
+}
+
+/*  join relations using for_2, for_3, for_4 --
+    traverse the JTree in a DFS manner and form of a vector of it's tables (filtered if required)
+    and a map of vectors with the selected columns of each table,
+    then call the appropriate for_n n=2,3,4 implementation */
+void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
+    // cerr << "for_join in" << endl;
+    // tables vector
+    vector<table_t*> tableVec = this->getTablesFromTree(jTreePtr);
+    assert(tableVec.size() => 2 && tableVec.size() <= 4);
+
+    // selected columns map
+    unordered_map< uint64_t, vector<uint64_t> > columns;
+    for (auto s : selections) {
+        if (columns.find(s.relId) == columns.end())
+            columns[s.relId] = *(new vector<uint64_t>(s.colId));
+        else
+            columns[s.relId].push_back(s.colId);
+    }
+
+    // join tables and print the required check-sum "on-the-fly"
+    if (tableVec.size() == 2)
+        this->for_2(tableVec[0], tableVec[1], columns);
+    else if (tableVec.size() == 3)
+        this->for_3(tableVec[0], tableVec[1], tableVec[2], columns);
+    else// if (tableVec.size() == 4)
+        this->for_4(tableVec[0], tableVec[1], tableVec[2], tableVec[3], columns);
+
+    // cerr << "for_join out" << endl;
+}
+
 // for_2 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size
 void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, vector<uint64_t> > columns) {
+    // cerr << "for_2 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
+    // cerr << "a1" << endl;
     for (uint64_t i = 0; i <= 1; i++) {
         for(auto c : columns[i]) {
             SelectInfo temp;
-            temp.relId = i;
+            temp.relId = columns.find(i)->first;
             temp.binding = i;
             temp.colId = c;
             if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
             else colMap[i].push_back(CreateRelationT(table_b, temp));
         }
     }
+    // cerr << "a2" << endl;
     // check_sum_map maps the check_sum of each SELECTed column of each table to the respective table
     unordered_map< uint64_t, vector<uint64_t> > check_sum_map;
     for (uint64_t i = 0; i <= 1; i++)
         for (uint64_t j = 0; j <= columns[i].size(); j++)
             check_sum_map[i].push_back(0);
+    // cerr << "a2" << endl;
     /* create hash_table for the hash_join phase */
     std::unordered_multimap<uint64_t, hash_entry> hash_c;
     /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
@@ -482,6 +572,7 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
     iter_col = table_b->column_j;
     matrix &i_rows = *table_b->relations_row_ids;
 
+    // cerr << "b1" << endl;
     /* now put the values of the column_r in the hash_table(construction phase) */
     for (uint64_t i = 0; i < hash_size; i++) {
         /* store hash[value of the column] = {rowid, index} */
@@ -490,40 +581,58 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
         hs.index = i;
         hash_c.insert({hash_col->values[i], hs});
     }
+    // cerr << "b2" << endl;
+    // cerr << "c1" << endl;
     /* now the phase of hashing */
     for (uint64_t i = 0; i < iter_size; i++) {
         /* remember we may have multi vals in 1 key,if it isnt a primary key */
+        // cerr << columns.size() << " vs " << i << endl;
         /* vals->first = key ,vals->second = value */
         auto range_vals = hash_c.equal_range(iter_col->values[i]);
         for (auto &vals = range_vals.first; vals != range_vals.second; vals++) {
             for (uint64_t j = 0; j <= 1; j++) {
-                for(uint64_t k = 0; k < columns[i].size(); k++) {
+                // cerr << "c1.5" << endl;
+                for(uint64_t k = 0; k < columns[j].size(); k++) {
+                    // cerr << "c1.75 " << j << " " << k << " vs " << colMap.size() << " " << colMap[j].size() << endl;
                     check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
                 }
+                // cerr << "c1.5 " << check_sum_map[j][0] << endl;
             }
         }
     }
+    // cerr << "c2" << endl;
     /* do the cleaning */
     delete table_a->relations_row_ids;
     delete table_b->relations_row_ids;
 
+    // cerr << "d1" << endl;
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
+    // cerr << "d2" << endl;
+    // cerr << "for_2 out" << endl;
 }
 
 // for_3 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size
 void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unordered_map< uint64_t, vector<uint64_t> > columns) {
+    cerr << "for_3 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
     for (uint64_t i = 0; i <= 2; i++) {
         for(auto c : columns[i]) {
             SelectInfo temp;
-            temp.relId = i;
+            temp.relId = columns.find(i)->first;
             temp.binding = i;
             temp.colId = c;
             if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
@@ -581,7 +690,7 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
         auto range_vals = hash_c2.equal_range(iter_col2->values[i]);
         for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
             for (uint64_t j = 0; j <= 2; j++) {
-                for(uint64_t k = 0; k < columns[i].size(); k++) {
+                for(uint64_t k = 0; k < columns[j].size(); k++) {
                     check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
                 }
             }
@@ -593,22 +702,32 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
     delete table_c->relations_row_ids;
 
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
+
+    cerr << "for_3 out" << endl;
 }
 
 // for_4 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size <= table_d->column_j->size
 void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, unordered_map< uint64_t, vector<uint64_t> > columns) {
+    cerr << "for_4 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
     for (uint64_t i = 0; i <= 3; i++) {
         for(auto c : columns[i]) {
             SelectInfo temp;
-            temp.relId = i;
+            temp.relId = columns.find(i)->first;
             temp.binding = i;
             temp.colId = c;
             if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
@@ -682,7 +801,7 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
         auto range_vals = hash_c3.equal_range(iter_col3->values[i]);
         for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
             for (uint64_t j = 0; j <= 3; j++) {
-                for(uint64_t k = 0; k < columns[i].size(); k++) {
+                for(uint64_t k = 0; k < columns[j].size(); k++) {
                     check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
                 }
             }
@@ -695,9 +814,17 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
     delete table_d->relations_row_ids;
 
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
+
+    cerr << "for_4 out" << endl;
 }
 
 void Joiner::construct(table_t *table) {
@@ -955,9 +1082,13 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        //JTree *jTreePtr = treegen(&i);
+        JoinTree* optimalJoinTree;
+        // JTree *jTreePtr;
+        // if (i.predicates.size() == 1)
+        //     jTreePtr = treegen(&i);
         // Create the optimal join tree
-        JoinTree* optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        // else
+            optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
         //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
@@ -970,9 +1101,12 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        int *plan = NULL, plan_size = 0;
-        table_t *result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
-        //table_t * result =  jTreeMakePlan(jTreePtr, joiner, plan);
+        table_t *result;
+        // if (i.predicates.size() == 1)
+        //     joiner.for_join(jTreePtr, i.selections);
+        // else
+            result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        // table_t * result = jTreeMakePlan(jTreePtr, joiner);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -988,50 +1122,52 @@ int main(int argc, char* argv[]) {
         uint64_t checksum = 0;
         unordered_map<string, string> cached_sums;
         vector<SelectInfo> &selections = i.selections;
-        for (size_t i = 0; i < selections.size(); i++) {
+        // if (i.predicates.size() != 1) {
+            for (size_t i = 0; i < selections.size(); i++) {
 
-            // Check if checksum is cached
-            string key = to_string(selections[i].binding) + to_string(selections[i].colId);
-            unordered_map<string, string>::const_iterator got = cached_sums.find(key);
-            if (got != cached_sums.end()) {
-                result_str += got->second;
-            } else {
-                //string str = joiner.check_sum(selections[i], result, pool, futures);
-                string str = joiner.check_sum(selections[i], result);
-                cached_sums.insert(make_pair(key, str));
-                result_str += str;
+                // Check if checksum is cached
+                string key = to_string(selections[i].binding) + to_string(selections[i].colId);
+                unordered_map<string, string>::const_iterator got = cached_sums.find(key);
+                if (got != cached_sums.end()) {
+                    result_str += got->second;
+                } else {
+                    //string str = joiner.check_sum(selections[i], result, pool, futures);
+                    string str = joiner.check_sum(selections[i], result);
+                    cached_sums.insert(make_pair(key, str));
+                    result_str += str;
+                }
+
+                // Create the write check sum
+                if (i != selections.size() - 1) {
+                    result_str +=  " ";
+                }
             }
 
-            // Create the write check sum
-            if (i != selections.size() - 1) {
-                result_str +=  " ";
-            }
-        }
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            #endif
 
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-
-        // Print the result
-        std::cout << result_str << endl;
-}
+            // Print the result
+            std::cout << result_str << endl;
+        // }
+    }
 
 #ifdef time
-    std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
-    std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
-    std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
-    std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
-    std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
-    //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
-    std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
-    std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
-    std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
-    std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
-    std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
-    flush(std::cerr);
+    // std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
+    // std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    // std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
+    // std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
+    // std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
+    // std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
+    // //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
+    // //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
+    // std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
+    // std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
+    // std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
+    // std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
+    // std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
+    // flush(std::cerr);
 #endif
 
     return 0;
