@@ -10,7 +10,7 @@
 #warning Enumeration will return duplicates LEFT DEEP ONLY trees
 #endif
 
-vector<JTree*> *allTress(QueryInfo *info)
+vector<JTree*> *allTrees(QueryInfo *info)
 {
 	/*create all trees that can exist for a given query */
 

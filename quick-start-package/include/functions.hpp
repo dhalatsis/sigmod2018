@@ -3,6 +3,9 @@
 #include "header.hpp"
 #include "Joiner.hpp"
 
+#include <vector>
+
+
 /*          Sample query tree:
 
             ---D3=C3
@@ -32,4 +35,5 @@ void jTreePrintPlan(int* plan, int plan_size);
 
 
 JTree *treegen(QueryInfo *);
-vector<JTree *> *allTress(QueryInfo *info);
+
+std::vector<JTree *>* allTrees(QueryInfo *info);
