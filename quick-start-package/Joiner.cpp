@@ -447,7 +447,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 
 // utility function for for_join
 vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
-    cerr << "getTablesFromTree in" << endl;
+    // cerr << "getTablesFromTree in" << endl;
 
     JTree *left = jTreePtr->left, *right = jTreePtr->right;
     table_t *table_l, *table_r, *res;
@@ -505,7 +505,7 @@ vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
     and a map of vectors with the selected columns of each table,
     then call the appropriate for_n n=2,3,4 implementation */
 void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
-    cerr << "for_join in" << endl;
+    // cerr << "for_join in" << endl;
     // tables vector
     vector<table_t*> tableVec = this->getTablesFromTree(jTreePtr);
     assert(tableVec.size() => 2 && tableVec.size() <= 4);
@@ -527,14 +527,15 @@ void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
     else// if (tableVec.size() == 4)
         this->for_4(tableVec[0], tableVec[1], tableVec[2], tableVec[3], columns);
 
-    cerr << "for_join out" << endl;
+    // cerr << "for_join out" << endl;
 }
 
 // for_2 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size
 void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, vector<uint64_t> > columns) {
-    cerr << "for_2 in" << endl;
+    // cerr << "for_2 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
@@ -606,11 +607,17 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
 
     // cerr << "d1" << endl;
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
     // cerr << "d2" << endl;
-    cerr << "for_2 out" << endl;
+    // cerr << "for_2 out" << endl;
 }
 
 // for_3 join UNOPTIMIZED
@@ -618,6 +625,7 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size
 void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unordered_map< uint64_t, vector<uint64_t> > columns) {
     cerr << "for_3 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
@@ -694,9 +702,15 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
     delete table_c->relations_row_ids;
 
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
 
     cerr << "for_3 out" << endl;
 }
@@ -706,6 +720,7 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size <= table_d->column_j->size
 void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, unordered_map< uint64_t, vector<uint64_t> > columns) {
     cerr << "for_4 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
     // colMap maps the values of the SELECTed columns of each table to the respective table
     unordered_map< uint64_t, vector<relation_t*> > colMap;
@@ -799,9 +814,15 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
     delete table_d->relations_row_ids;
 
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++)
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++)
-            cerr << check_sum_map[i][j] << endl;
+    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
+            // cerr << check_sum_map[i][j] << endl;
+            result_str += to_string(check_sum_map[i][j]);
+            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+                result_str += " ";
+        }
+    }
+    cout << result_str << endl;
 
     cerr << "for_4 out" << endl;
 }
@@ -1063,10 +1084,11 @@ int main(int argc, char* argv[]) {
 
         JoinTree* optimalJoinTree;
         // JTree *jTreePtr;
-        // if (i.predicates.size() == 1) jTreePtr = treegen(&i);
+        // if (i.predicates.size() == 1)
+        //     jTreePtr = treegen(&i);
         // Create the optimal join tree
         // else
-        optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+            optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
         //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
@@ -1080,9 +1102,10 @@ int main(int argc, char* argv[]) {
         #endif
 
         table_t *result;
-        // if (i.predicates.size() == 1) joiner.for_join(jTreePtr, i.selections);
+        // if (i.predicates.size() == 1)
+        //     joiner.for_join(jTreePtr, i.selections);
         // else
-        result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+            result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
         // table_t * result = jTreeMakePlan(jTreePtr, joiner);
 
         #ifdef time
