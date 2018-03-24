@@ -193,12 +193,46 @@ int compare(const void * a, const void * b)
 }
 
 
-table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s) {
+table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
 #endif
+
+    /* Cut the unused relations */
+    unordered_map<unsigned, unsigned>::iterator itr;
+    bool victimize = true;
+    int  index     = -1;
+    for (size_t i = 0; i < table_r->relations_bindings.size(); i++) {
+        victimize = true;
+        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+            if (it->first.binding == table_r->relations_bindings[i]) {
+                victimize = false;
+                break;
+            }
+        }
+        if (victimize) {
+            table_r->relations_bindings.erase(table_r->relations_bindings.begin() + i);
+            table_r->relations_row_ids->erase(table_r->relations_row_ids->begin() + i);
+        }
+    }
+
+    for (size_t i = 0; i < table_s->relations_bindings.size(); i++) {
+        victimize = true;
+        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+            if (it->first.binding == table_s->relations_bindings[i]) {
+                victimize = false;
+                break;
+            }
+        }
+        if (victimize) {
+            table_s->relations_bindings.erase(table_s->relations_bindings.begin() + i);
+            table_s->relations_row_ids->erase(table_s->relations_row_ids->begin() + i);
+        }
+    }
+
+
 
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
@@ -235,19 +269,19 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t numbufs = cb->numbufs;
     uint32_t row_i;
 
-
-
     //qsort(tb->tuples, cb->writepos, sizeof(tuple_t), compare);
 
     /* Create table_t from tuples */
-    for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
-        row_i = tb->tuples[tup_i].key;
-        for (uint32_t rel = 0; rel < relnum_r; rel++) {
+    for (uint32_t rel = 0; rel < relnum_r; rel++) {
+        for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            row_i = tb->tuples[tup_i].key;
             rids_res[rel].push_back( rids_r[rel][row_i] );
         }
+    }
 
-        row_i = tb->tuples[tup_i].payload;
-        for (uint32_t rel = 0; rel < relnum_s; rel++) {
+    for (uint32_t rel = 0; rel < relnum_s; rel++) {
+        for (uint32_t tup_i = 0; tup_i < cb->writepos; tup_i++) {
+            row_i = tb->tuples[tup_i].payload;
             rids_res[relnum_r + rel].push_back( rids_s[rel][row_i] );
         }
     }
@@ -258,14 +292,16 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     tb = tb->next;
     for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
         /* Create table_t from tuples */
-        for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            for (uint32_t rel = 0; rel < relnum_r; rel++) {
+        for (uint32_t rel = 0; rel < relnum_r; rel++) {
+            for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].key;
                 rids_res[rel].push_back( rids_r[rel][row_i] );
             }
+        }
 
-            row_i = tb->tuples[tup_i].payload;
             for (uint32_t rel = 0; rel < relnum_s; rel++) {
+                for (uint32_t tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                row_i = tb->tuples[tup_i].payload;
                 rids_res[relnum_r + rel].push_back( rids_s[rel][row_i] );
             }
         }
@@ -365,7 +401,7 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections) {
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap) {
 
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
@@ -391,7 +427,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 #ifdef TIME_DETAILS
     gettimeofday(&start, NULL);
 #endif
-    table_t *temp = CreateTableT(res, table_r, table_s);
+    table_t *temp = CreateTableT(res, table_r, table_s, cmap);
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
     dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;

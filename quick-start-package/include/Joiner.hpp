@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <sys/time.h>
 #include <string.h>
@@ -22,6 +23,9 @@
 /*----------------*/
 
 #define time
+
+struct ColumnInfo;
+typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
 
 /*
  * Prints a column
@@ -52,7 +56,7 @@ class Joiner {
 
     table_t* CreateTableTFromId(unsigned rel_id, unsigned rel_binding);
     relation_t * CreateRelationT(table_t * table, SelectInfo &sel_info);
-    table_t * CreateTableT(result_t * result, table_t * table_r, table_t * table_s);
+    table_t * CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
     void AddColumnToTableT(SelectInfo &sel_info, table_t *table);
 
     // The select functions
@@ -63,8 +67,8 @@ class Joiner {
 
     // Joins a given set of relations
     void join(QueryInfo& i);
-    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, std::vector<SelectInfo>* selections);
-    table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, std::vector<SelectInfo>* selections);
+    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap);
+    table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
 
@@ -94,5 +98,7 @@ class Joiner {
      void construct(table_t *table);
 
 };
+
+#include "QueryPlan.hpp"
 
 int cleanQuery(QueryInfo &);
