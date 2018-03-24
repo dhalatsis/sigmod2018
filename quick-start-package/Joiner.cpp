@@ -18,7 +18,6 @@
 
 using namespace std;
 
-
 //#define TIME_DETAILS
 //#include <sstream>
 //string timeDetStr = "";
@@ -40,6 +39,7 @@ double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
 double timeCreateTableT = 0;
 double timeExecute = 0;
+double timePreparation = 0;
 
 int cleanQuery(QueryInfo &info) {
     /* Remove weak filters */
@@ -634,6 +634,11 @@ int main(int argc, char* argv[]) {
         joiner.addRelation(line.c_str());
     }
 
+    #ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    #endif
+
     // Preparation phase (not timed)
     QueryPlan queryPlan;
 
@@ -706,9 +711,8 @@ int main(int argc, char* argv[]) {
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
-
 
     // Thread pool Initialize
     //threadpool11::Pool pool;  // Create a threadPool
@@ -717,18 +721,17 @@ int main(int argc, char* argv[]) {
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 1;
+    int q_counter = 0;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         //q_counter++;
 
         #ifdef time
-        struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
@@ -738,7 +741,6 @@ int main(int argc, char* argv[]) {
         //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
-        struct timeval end;
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
@@ -795,6 +797,7 @@ int main(int argc, char* argv[]) {
 }
 
 #ifdef time
+    std::cerr << "timePreparation: " << (long)(timePreparation * 1000) << endl;
     std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
     std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;

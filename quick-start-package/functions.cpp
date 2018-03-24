@@ -243,7 +243,7 @@ table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner, int *depth) {
         //std::cerr << "++++JOIN Predicates: " <<  '\n';
         //std::cerr << "Left: "  << jTreePtr->predPtr->left.relId << "." << jTreePtr->predPtr->left.colId << '\n';
         //std::cerr << "Right: " << jTreePtr->predPtr->right.relId << "." << jTreePtr->predPtr->right.colId << '\n';
-        res = joiner.join(table_l, table_r, *jTreePtr->predPtr);
+        res = joiner.join(table_l, table_r, *jTreePtr->predPtr, NULL);
         //std::cerr << "Intermediate rows: " << res->relations_row_ids->operator[](0).size()  << '\n';
         //std::cerr << "-------" << '\n';
         return res;
@@ -257,7 +257,7 @@ table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner, int *depth) {
             //std::cerr << "====Self JOIN Predicates: " <<  '\n';
             //std::cerr << "Left: "  << jTreePtr->predPtr->left.relId << "." << jTreePtr->predPtr->left.colId << '\n';
             //std::cerr << "Right: " << jTreePtr->predPtr->right.relId << "." << jTreePtr->predPtr->right.colId << '\n';
-            res = joiner.SelfJoin(table_l, jTreePtr->predPtr);
+            res = joiner.SelfJoin(table_l, jTreePtr->predPtr, NULL);
             //std::cerr << "Intermediate rows: " << res->relations_row_ids->operator[](0).size()  << '\n';
             //std::cerr << "-------" << '\n';
             return res;
