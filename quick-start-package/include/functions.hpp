@@ -32,3 +32,4 @@ void jTreePrintPlan(int* plan, int plan_size);
 
 
 JTree *treegen(QueryInfo *);
+vector<JTree *> *allTress(QueryInfo *info);
