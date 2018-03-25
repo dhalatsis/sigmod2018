@@ -2,9 +2,32 @@
 
 #include <set>
 #include <map>
+#include <vector>
 
 #include <cstdio>
 
+#ifdef LEFT_DEEP_ONLY
+#warning Enumeration will return duplicates LEFT DEEP ONLY trees
+#endif
+
+vector<JTree*> *allTrees(QueryInfo *info)
+{
+	/*create all trees that can exist for a given query */
+
+	vector<JTree*> *alltrees = new vector<JTree* >();
+	
+
+	int size = info->predicates.size();
+
+	do {
+		
+		alltrees->push_back(treegen(info));
+
+
+	} while (std::next_permutation(info->predicates.begin(), info->predicates.end()));
+	return alltrees;
+
+}
 
 
 int shiftpred(std::vector<PredicateInfo> predicates, int i) 
@@ -70,7 +93,7 @@ JTree *treegen(QueryInfo *info)
 		node = new JTree;
 		node->node_id = -1;
 		node->visited = 0;
-		node->filterPtr = &(info->filters[i]);
+		node->filterPtr = new FilterInfo(info->filters[i]);
 		node->predPtr = NULL;
 
 		node->intermediate_res = NULL;
@@ -91,7 +114,7 @@ JTree *treegen(QueryInfo *info)
 	/*apply the constraints */
 	for (unsigned int i=0; i < info->predicates.size(); i++) {
 
-
+#ifdef LEFT_DEEP_ONLY
 		int k = info->predicates.size()-i;
 		while ((worklist[info->predicates[i].left.binding]->predPtr == NULL &&
 		worklist[info->predicates[i].right.binding]->predPtr == NULL )
@@ -104,11 +127,11 @@ JTree *treegen(QueryInfo *info)
 				break;
 			k--;
 		}
-
+#endif
 		node = new JTree;
 		node->node_id = -1;
 		node->visited = 0;
-		node->predPtr = &(info->predicates[i]);
+		node->predPtr = new PredicateInfo(info->predicates[i]);
 		node->filterPtr = NULL;
 
 		node->intermediate_res = NULL;
@@ -139,7 +162,7 @@ JTree *treegen(QueryInfo *info)
 			node->right->parent = node;
 		}
 
-
+#ifdef LEFT_DEEP_ONLY
 		if (node->left->predPtr == NULL) {
 
 			JTree *tmp = node->left;
@@ -155,7 +178,7 @@ JTree *treegen(QueryInfo *info)
 
 
 		}
-
+#endif
 	}
 
 	/*join the remainiing tables , those for which parent = null*/

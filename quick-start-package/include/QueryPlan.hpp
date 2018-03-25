@@ -15,6 +15,7 @@ using namespace std;
 
 /* Initial Cost Estimations for Join */
 // steps (horizontally & vertically): 1000 11000 21000 31000 41000
+/*
 const std::vector< std::vector<int> > smallSameRelJoin{
                             {271, 2571, 6567, 11396, 18273},
                             {233, 1708, 6030, 11315, 17764},
@@ -46,7 +47,7 @@ const std::vector< std::vector<int> > smallSameRelJoinCreateTableT{
                             {12, 940, 2601, 6348, 9833},
                             {13, 952, 2835, 6297, 9914}
                             };
-
+*/
 const std::vector< std::vector<int> > smallDiffRelJoinRJ{
                             {165, 414, 789, 987, 1200},
                             {431, 1075, 1755, 2035, 3625},
@@ -54,7 +55,7 @@ const std::vector< std::vector<int> > smallDiffRelJoinRJ{
                             {813, 2258, 3336, 4446, 5806},
                             {1379, 2960, 4307, 6771, 7801}
                             };
-
+/*
 const std::vector< std::vector<int> > smallDiffRelJoinCreateTableT{
                             {6, 48, 138, 163, 321},
                             {49, 883, 2085, 3301, 3933},
@@ -62,12 +63,13 @@ const std::vector< std::vector<int> > smallDiffRelJoinCreateTableT{
                             {150, 2594, 5348, 6555, 8282},
                             {321, 3391, 6246, 9346, 11947}
                             };
-
+*/
 // for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
+/*
 const std::vector<int> smallSameRelJoinCreateTableTResults{
                             15, 955, 5000, 10000
                             };
-
+*/
 // for < 10000 results, for < 100000 results, for < 1000000 results, for < 10000000 results respectively
 const std::vector<int> smallDiffRelJoinCreateTableTResults{
                             400, 800, 5000, 10150
@@ -95,14 +97,14 @@ typedef map<SelectInfo, ColumnInfo> columnInfoMap;
 // Join Tree's node
 struct JoinTreeNode {
     unsigned nodeId;
-    double treeCost; // An estimation of the total cost of the join tree
+    uint64_t treeCost; // An estimation of the total cost of the join tree
 
     JoinTreeNode* left;
     JoinTreeNode* right;
     JoinTreeNode* parent;
 
     PredicateInfo* predicatePtr;
-    FilterInfo* filterPtr;
+    vector<FilterInfo*> filterPtrs;
     ColumnInfo columnInfo;
 
     columnInfoMap usedColumnInfos; // Keeps track of all the columns of every relation to be used in the query
