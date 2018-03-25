@@ -19,7 +19,6 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
-#define THREAD_NUM 4
 /*----------------*/
 
 #define time
