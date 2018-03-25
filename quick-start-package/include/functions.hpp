@@ -3,6 +3,9 @@
 #include "header.hpp"
 #include "Joiner.hpp"
 
+#include <vector>
+
+
 /*          Sample query tree:
 
             ---D3=C3
@@ -25,10 +28,12 @@ void jTreePrintTree(JTree* jTreePtr);
 /* Make an execution plan out of a query-tree */
 /* For now, our execution plan can be represented by a "vector" of query-tree node ID's */
 //int* jTreeMakePlan(JTree* jTreePtr, int* plan_size, Joiner& joiner);
-table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner, int *depth);
+table_t* jTreeMakePlan(JTree* jTreePtr, Joiner& joiner);
 
 /* Print plan -- for debugging */
 void jTreePrintPlan(int* plan, int plan_size);
 
 
 JTree *treegen(QueryInfo *);
+
+std::vector<JTree *>* allTrees(QueryInfo *info);

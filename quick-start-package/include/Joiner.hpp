@@ -22,7 +22,9 @@
 #define THREAD_NUM 4
 /*----------------*/
 
-#define time
+//#define time
+
+class JTree;
 
 struct ColumnInfo;
 typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
@@ -73,6 +75,8 @@ class Joiner {
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
 
     // nested loops joins
+    std::vector<table_t*> getTablesFromTree(JTree* jTreePtr);
+    void for_join(JTree* jTreePtr, std::vector<SelectInfo> selections);
     void for_2(table_t* table_a, table_t* table_b, std::unordered_map< uint64_t, std::vector<uint64_t> > columns);
     void for_3(table_t* table_a, table_t* table_b, table_t* table_c, std::unordered_map< uint64_t, std::vector<uint64_t> > columns);
     void for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, std::unordered_map< uint64_t, std::vector<uint64_t> > columns);
@@ -99,6 +103,7 @@ class Joiner {
 
 };
 
+#include "header.hpp"
 #include "QueryPlan.hpp"
 
 int cleanQuery(QueryInfo &);
