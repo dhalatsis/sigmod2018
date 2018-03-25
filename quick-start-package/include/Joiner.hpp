@@ -22,7 +22,7 @@
 #define THREAD_NUM 4
 /*----------------*/
 
-//#define time
+#define time
 
 class JTree;
 

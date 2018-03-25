@@ -745,12 +745,14 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
     cout << result_str << endl;
     // cerr << "d2" << endl;
     // cerr << "for_2 out" << endl;
+#endif
 }
 
 // for_3 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size
 void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unordered_map< uint64_t, vector<uint64_t> > columns) {
+#ifdef hot
     cerr << "for_3 in" << endl;
     string result_str;
     // we will need the values for the check_sum
@@ -840,12 +842,14 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
     cout << result_str << endl;
 
     cerr << "for_3 out" << endl;
+    #endif
 }
 
 // for_4 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size <= table_d->column_j->size
 void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, unordered_map< uint64_t, vector<uint64_t> > columns) {
+#ifdef hot
     cerr << "for_4 in" << endl;
     string result_str;
     // we will need the values for the check_sum
@@ -953,44 +957,6 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
     cout << result_str << endl;
 
     cerr << "for_4 out" << endl;
-}
-
-void Joiner::construct(table_t *table) {
-
-#ifdef hot
-#ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-#endif
-
-    /* Innitilize helping variables */
-    column_t &column = *table->column_j;
-    const uint64_t *column_values = column.values;
-    const int       table_index   = column.table_index;
-    const uint64_t  column_size   = table->relations_row_ids->operator[](table_index).size();
-    matrix &row_ids = *table->relations_row_ids;
-
-    /* Create a new value's array  */
-    uint64_t *const new_values  = new uint64_t[column_size];
-
-    /* construct a new array with the row ids that it's sorted */
-    //vector<int> rids = row_ids[table_index];  //cp construct
-    //std::sort(rids.begin(), rids.end());
-
-    /* Pass the values of the old column to the new one, based on the row ids of the joiner */
-    for (int i = 0; i < column_size; i++) {
-    	new_values[i] = column_values[row_ids[table_index][i]];//rids[i]];
-    }
-
-    /* Update the column of the table */
-    column.values = new_values;
-    column.size   = column_size;
-
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
 #endif
 }
 

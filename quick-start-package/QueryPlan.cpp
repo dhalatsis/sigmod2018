@@ -2,7 +2,6 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
-#include "tbb/concurrent_unordered_set.h"
 
 using namespace std;
 
@@ -710,7 +709,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         BestTree[rootToVector] = AddFilterJoin(BestTree[rootToVector], *(predicatesSet.begin()));
         predicatesSet.erase(predicatesSet.begin());
     }
-    
+
     return BestTree[rootToVector];
 }
 
@@ -798,9 +797,10 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
         // Apply the filter
-        if (joinTreeNodePtr->filterPtr != NULL) {
-            joiner.AddColumnToTableT(joinTreeNodePtr->filterPtr->filterColumn, res);
-            joiner.Select(*(joinTreeNodePtr->filterPtr), res);
+        // Apply the filter
+        for (auto filter : joinTreeNodePtr->filterPtrs) {
+            joiner.AddColumnToTableT(filter->filterColumn, res);
+            joiner.Select(*filter, res);
             #ifdef prints
             std::cerr << "----Filter Predicates: " <<  '\n';
             std::cerr << "Relation.column: "  << (*(joinTreeNodePtr->filterPtr)).filterColumn.relId << "." << (*(joinTreeNodePtr->filterPtr)).filterColumn.colId << '\n';
@@ -809,7 +809,6 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             std::cerr << "-------" << '\n';
             #endif
         }
-
         return res;
     }
 
@@ -856,7 +855,7 @@ void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
 /*
     unsigned joinRowIndex = (this->left->usedColumnInfos[predicateInfo.left].size + 1000) / 10000;
     unsigned joinColIndex = (this->right->usedColumnInfos[predicateInfo.right].size + 1000) / 10000;
-    
+
     unsigned constructIndex;
     if (this->usedColumnInfos[predicateInfo.left].size < 10000) constructIndex = 0;
     else if (this->usedColumnInfos[predicateInfo.left].size < 100000) constructIndex = 1;
