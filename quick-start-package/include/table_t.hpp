@@ -1,18 +1,11 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 
-typedef std::vector<std::vector<int>> matrix;
-typedef std::vector<int> j_vector;
+
 typedef struct table_t table_t;
 typedef struct column_t column_t;
-typedef struct hash_entry hash_entry;
-typedef struct cartesian_product cartesian_product_t;
-
-struct hash_entry {
-    uint64_t row_id;
-    uint64_t index;
-};
 
 struct column_t {
     uint64_t *values;
@@ -24,10 +17,12 @@ struct column_t {
 struct table_t {
 
     /* Row Ids and relation Ids */
-    matrix  *relations_row_ids;
+    unsigned * row_ids;
+    unsigned   tups_num;
+    unsigned   rels_num;
 
     /* use the binfing to map the relations */
-    std::vector<unsigned>          relations_bindings;
+    std::unordered_map<unsigned, unsigned> relations_bindings;
 
     /* Intermediate result falg */
     bool intermediate_res;
