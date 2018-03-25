@@ -2,7 +2,7 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
-#include "tbb/concurrent_unordered_set.h"
+//#include "tbb/concurrent_unordered_set.h"
 
 using namespace std;
 
@@ -710,7 +710,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         BestTree[rootToVector] = AddFilterJoin(BestTree[rootToVector], *(predicatesSet.begin()));
         predicatesSet.erase(predicatesSet.begin());
     }
-    
+
     return BestTree[rootToVector];
 }
 
@@ -827,7 +827,7 @@ void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
 /*
     unsigned joinRowIndex = (this->left->usedColumnInfos[predicateInfo.left].size + 1000) / 10000;
     unsigned joinColIndex = (this->right->usedColumnInfos[predicateInfo.right].size + 1000) / 10000;
-    
+
     unsigned constructIndex;
     if (this->usedColumnInfos[predicateInfo.left].size < 10000) constructIndex = 0;
     else if (this->usedColumnInfos[predicateInfo.left].size < 100000) constructIndex = 1;

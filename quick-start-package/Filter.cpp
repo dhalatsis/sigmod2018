@@ -189,7 +189,7 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 #endif
 
     /* Construct table  - Initialize variable */
-    (table->intermediate_res)? (construct(table)) : ((void)0);
+    //(table->intermediate_res)? (construct(table)) : ((void)0);
     SelectInfo &sel_info = fil_info.filterColumn;
     uint64_t filter = fil_info.constant;
 

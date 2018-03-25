@@ -179,7 +179,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
 
