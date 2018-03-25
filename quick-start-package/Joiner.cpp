@@ -157,9 +157,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             tuples[i].payload = i;
         }
 
-        std::cerr << "HEREreeeL" << '\n';
-        flush(cerr);
-
         new_relation->tuples = tuples;
     }
     else {
@@ -200,18 +197,16 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     gettimeofday(&start, NULL);
 #endif
 
-    std::cerr << "HERE" << '\n';
-    flush(cerr);
-
     /* Cut the unused relations */
     unordered_map<unsigned, unsigned>::iterator itr;
     vector<unsigned> help_v_r;
     vector<unsigned> help_v_s;
+    vector<unordered_map<unsigned, unsigned>::iterator> victimized_r;
+    vector<unordered_map<unsigned, unsigned>::iterator> victimized_s;
     bool victimize = true;
     int  index     = -1;
     int left_removed = 0, right_removed = 0;
-    itr  = table_r->relations_bindings.begin();
-    for (int i = 0; i < table_r->relations_bindings.size(); i++) {
+    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
         victimize = true;
         for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
             if (it->first.binding == itr->first) {
@@ -221,31 +216,33 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             }
         }
         if (victimize) {
-            table_r->relations_bindings.erase(itr);
+            victimized_r.push_back(itr);
             left_removed++;
         }
-        itr++;
     }
 
-    itr  = table_s->relations_bindings.begin();
-    for (int i = 0; i < table_s->relations_bindings.size(); i++) {
+    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
         victimize = true;
         for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
             if (it->first.binding == itr->first) {
                 victimize = false;
-                help_v_s.push_back(itr->second + help_v_r.size());
+                help_v_s.push_back(itr->second);
                 break;
             }
         }
         if (victimize) {
-            table_s->relations_bindings.erase(itr);
+            victimized_s.push_back(itr);
             right_removed++;
         }
-        itr++;
     }
 
-    std::cerr << "HERE" << '\n';
-    flush(cerr);
+    /* Erase Victimized */
+    for (size_t i = 0; i < victimized_r.size(); i++) {
+        table_r->relations_bindings.erase(victimized_r[i]);
+    }
+    for (size_t i = 0; i < victimized_s.size(); i++) {
+        table_s->relations_bindings.erase(victimized_s[i]);
+    }
 
     /* sort the un-victimized helping arrays */
     std::sort(help_v_r.begin(), help_v_r.end());
@@ -267,21 +264,36 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     /* Create the new maping vector */
     for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
-        (itr->second > left_removed)
+        (itr->second >= left_removed)
         ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
         : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
     }
+
     for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
-        (itr->second > right_removed)
+        (itr->second >= right_removed)
         ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
         : new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second));
     }
 
-    std::cerr << "New mapping ";
+    /* PRINTS
+    std::cerr << endl << "New mapping ";
     for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
         std::cerr << itr->first << "." << itr->second << " ";
     }
     std::cerr << '\n';
+
+    std::cerr << "Helper v R ";
+    for (size_t i = 0; i < help_v_r.size(); i++) {
+        cerr << help_v_r[i] << " ";
+    }
+    std::cerr << endl << "Helper v S ";
+    for (size_t i = 0; i < help_v_s.size(); i++) {
+        cerr << help_v_s[i] << " ";
+    }
+    std::cerr << '\n';
+    */
+
+
 
     /* Get the 3 row_ids matrixes in referances */
     unsigned * rids_res = new_table->row_ids;
@@ -297,14 +309,11 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t numbufs = cb->numbufs;
     uint32_t row_i;
 
-    //qsort(tb->tuples, cb->writepos, sizeof(tuple_t), compare);
-
-    fprintf(stderr, "Numrl %d , Numrr %d , numr %d\n", relnum_r, relnum_s, num_relations);
-    flush(cerr);
-
     /* Create table_t from tuples */
     unordered_map<unsigned, unsigned> & relB_r = table_r->relations_bindings;
     unordered_map<unsigned, unsigned> & relB_s = table_s->relations_bindings;
+    const unsigned old_relnum_r = table_r->rels_num;
+    const unsigned old_relnum_s = table_s->rels_num;
     uint32_t new_tbi = 0;
     uint32_t tup_i;
 
@@ -313,19 +322,19 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
             row_i = tb->tuples[tup_i].key;
             for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[tup_i*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                rids_res[tup_i*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
             }
 
             row_i = tb->tuples[tup_i].payload;
             for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
             }
         }
     else if (table_r->intermediate_res)
         for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
             row_i = tb->tuples[tup_i].key;
             for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[tup_i*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                rids_res[tup_i*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
             }
 
             row_i = tb->tuples[tup_i].payload;
@@ -335,8 +344,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         }
     else if (table_s->intermediate_res)
         for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            std::cerr << "EDW MAN " << '\n';
-            flush(cerr);
             row_i = tb->tuples[tup_i].key;
             for (size_t i = 0; i < help_v_r.size(); i++) {
                 rids_res[tup_i*num_relations + i] = row_i;
@@ -344,7 +351,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
             row_i = tb->tuples[tup_i].payload;
             for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                rids_res[tup_i*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
             }
         }
     else
@@ -360,9 +367,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             }
         }
 
-    std::cerr << "EDW MAN" << '\n';
-    flush(cerr);
-
     /* --------------------------------------------------------------------------------------
     The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
     ---------------------------------------------------------------------------------------- */
@@ -374,12 +378,12 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
-                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
                 }
 
                 row_i = tb->tuples[tup_i].payload;
                 for (size_t i = 0; i < help_v_s.size(); i++) {
-                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
                 }
                 new_tbi++;
             }
@@ -387,7 +391,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
-                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*relnum_r + help_v_r[i]];
+                    rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
                 }
 
                 row_i = tb->tuples[tup_i].payload;
@@ -405,7 +409,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
                 row_i = tb->tuples[tup_i].payload;
                 for (size_t i = 0; i < help_v_s.size(); i++) {
-                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_r[row_i*relnum_s + help_v_s[i]];
+                    rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
                 }
                 new_tbi++;
             }
@@ -891,15 +895,16 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     unsigned * row_ids = table->row_ids;
     unsigned   rels_num = table->rels_num;
     unsigned   size = table->tups_num;
-
     uint64_t sum = 0;
 
     if (size == 0) {
         return "NULL";
     }
     else { //if (size < 1000) {
-        for (uint64_t i = 0 ; i < size; i++)
+        for (uint64_t i = 0 ; i < size; i++) {
             sum += col[row_ids[i*rels_num + tbi]];
+        }
+
         return to_string(sum);
     }
     // else {
@@ -1060,12 +1065,12 @@ int main(int argc, char* argv[]) {
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 1;
+    int q_counter = 0;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         q_counter++;
