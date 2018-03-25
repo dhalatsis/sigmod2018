@@ -1,6 +1,8 @@
-#include <set>
+#include <bitset>
+#include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
+//#include "tbb/concurrent_unordered_set.h"
 
 using namespace std;
 
@@ -514,7 +516,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         joinTreeNodePtr->right = NULL;
         joinTreeNodePtr->parent = NULL;
         joinTreeNodePtr->predicatePtr = NULL;
-        joinTreeNodePtr->filterPtr = NULL;
 
         // Save the initial info of all the columns to be used in the query
         unsigned relationId, columnId;
@@ -607,7 +608,7 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         // of the relation whose column will be filtered
         vector<bool> relationToVector(relationsCount, false);
         relationToVector[queryInfo.filters[i].filterColumn.binding] = true;
-        BestTree[relationToVector]->root->filterPtr = &(queryInfo.filters[i]);
+        BestTree[relationToVector]->root->filterPtrs.push_back(&(queryInfo.filters[i]));
 
         // Update the column info
         BestTree[relationToVector]->root->estimateInfoAfterFilter(queryInfo.filters[i]);
@@ -704,13 +705,13 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     }
 
     // Return the optimal tree
-    if (predicatesSet.size() != 0) {
+    while (predicatesSet.size() != 0) {
         // Merge the self joins with the root
-        return AddFilterJoin(BestTree[rootToVector], *(predicatesSet.begin()));
+        BestTree[rootToVector] = AddFilterJoin(BestTree[rootToVector], *(predicatesSet.begin()));
+        predicatesSet.erase(predicatesSet.begin());
     }
-    else {
-        return BestTree[rootToVector];
-    }
+
+    return BestTree[rootToVector];
 }
 
 // Merges two join trees
@@ -726,7 +727,6 @@ JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree, Pred
     joinTreeNodePtr->right = rightTree->root;
     joinTreeNodePtr->parent = NULL;
     joinTreeNodePtr->predicatePtr = NULL;
-    joinTreeNodePtr->filterPtr = NULL;
 
     // Assign a cost to this node
     joinTreeNodePtr->cost(predicateInfo);
@@ -757,7 +757,6 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
     joinTreeNodePtr->right = NULL;
     joinTreeNodePtr->parent = NULL;
     joinTreeNodePtr->predicatePtr = predicateInfo;
-    joinTreeNodePtr->filterPtr = NULL;
     joinTreeNodePtr->usedColumnInfos = joinTreeNodePtr->left->usedColumnInfos;
 
     ColumnInfo *leftColumnInfo, *rightColumnInfo;
@@ -797,9 +796,9 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
         // Apply the filter
-        if (joinTreeNodePtr->filterPtr != NULL) {
-            joiner.AddColumnToTableT(joinTreeNodePtr->filterPtr->filterColumn, res);
-            joiner.Select(*(joinTreeNodePtr->filterPtr), res);
+        for (auto filter : joinTreeNodePtr->filterPtrs) {
+            joiner.AddColumnToTableT(filter->filterColumn, res);
+            joiner.Select(*filter, res);
         }
 
         return res;
@@ -825,6 +824,24 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 // Esteimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
     this->treeCost = this->left->treeCost + this->right->usedColumnInfos[predicateInfo.right].size;
+/*
+    unsigned joinRowIndex = (this->left->usedColumnInfos[predicateInfo.left].size + 1000) / 10000;
+    unsigned joinColIndex = (this->right->usedColumnInfos[predicateInfo.right].size + 1000) / 10000;
+
+    unsigned constructIndex;
+    if (this->usedColumnInfos[predicateInfo.left].size < 10000) constructIndex = 0;
+    else if (this->usedColumnInfos[predicateInfo.left].size < 100000) constructIndex = 1;
+    else if (this->usedColumnInfos[predicateInfo.left].size < 1000000) constructIndex = 2;
+    else constructIndex = 3;
+
+    fprintf(stderr, "left size       = %lu\n", this->left->usedColumnInfos[predicateInfo.left].size);
+    fprintf(stderr, "right size      = %lu\n", this->right->usedColumnInfos[predicateInfo.right].size);
+    fprintf(stderr, "join row index  = %d\n", joinRowIndex);
+    fprintf(stderr, "join col index  = %d\n", joinColIndex);
+    fprintf(stderr, "result size     = %lu\n", this->usedColumnInfos[predicateInfo.left].size);
+    fprintf(stderr, "construct index = %d\n\n", constructIndex);
+*/
+    //this->treeCost = this->left->treeCost + joinCost + constructCost;
 }
 
 // Returns the cost of a given JoinTree
@@ -901,12 +918,13 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
         if (joinTreeNodePtr->right != NULL) {
             for (int i=0; i < depth; i++) fprintf(stderr,"    ");
             fprintf(stderr, "Right child has id = %d\n", joinTreeNodePtr->right->nodeId);
-            if (joinTreeNodePtr->right->filterPtr != NULL) {
-                for (int i=0; i < depth; i++) fprintf(stderr,"    ");
-                fprintf(stderr, "Right child has filter = ");
-                fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->right->filterPtr->filterColumn.binding,
-                    joinTreeNodePtr->right->filterPtr->filterColumn.colId,
-                    joinTreeNodePtr->right->filterPtr->comparison, joinTreeNodePtr->right->filterPtr->constant);
+            if (joinTreeNodePtr->right->filterPtrs.size() > 0) {
+                for (auto filter : joinTreeNodePtr->right->filterPtrs) {
+                    for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+                    fprintf(stderr, "Right child has filters = ");
+                    fprintf(stderr,"%d.%d %c %ld\n", filter->filterColumn.binding, filter->filterColumn.colId,
+                        filter->comparison, filter->constant);
+                }
             }
             else {
                 for (int i=0; i < depth; i++) fprintf(stderr,"    ");
@@ -920,12 +938,13 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
 
         for (int i=0; i < depth; i++) fprintf(stderr,"    ");
         fprintf(stderr, "Left child has id = %d\n", joinTreeNodePtr->left->nodeId);
-        if (joinTreeNodePtr->left->filterPtr != NULL) {
-            for (int i=0; i < depth; i++) fprintf(stderr,"    ");
-            fprintf(stderr, "Left child has filter = ");
-            fprintf(stderr,"%d.%d %c %ld\n", joinTreeNodePtr->left->filterPtr->filterColumn.binding,
-                joinTreeNodePtr->left->filterPtr->filterColumn.colId,
-                joinTreeNodePtr->left->filterPtr->comparison, joinTreeNodePtr->left->filterPtr->constant);
+        if (joinTreeNodePtr->left->filterPtrs.size() > 0) {
+            for (auto filter : joinTreeNodePtr->left->filterPtrs) {
+                for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+                fprintf(stderr, "Left child has filters = ");
+                fprintf(stderr,"%d.%d %c %ld\n", filter->filterColumn.binding, filter->filterColumn.colId,
+                    filter->comparison, filter->constant);
+            }
         }
         else {
             for (int i=0; i < depth; i++) fprintf(stderr,"    ");
@@ -958,23 +977,34 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
 
         // Get the info of every column
         for (int col = 0; col < columnsCount; col++) {
-            uint64_t minimum = numeric_limits<uint64_t>::max(); // Value of minimum element
-            uint64_t maximum = 0; // Value of maximum element
-            set<uint64_t> distinctElements; // Keep the distinct elements of the column
-
-            uint64_t tuples = relation->size;
+            uint64_t minimum = numeric_limits<uint64_t>::max();
+            uint64_t maximum = 0;
+            uint64_t tuples  = relation->size;
+            uint64_t element;
+            // One pass for the minimum and maximum
             for (int i = 0; i < tuples; i++) {
-                uint64_t element = relation->columns[col][i];
+                element = relation->columns[col][i];
                 if (element > maximum) maximum = element;
                 if (element < minimum) minimum = element;
-                distinctElements.insert(element);
+            }
+
+            // One pass for the distinct elements
+            vector<bool> distinctElements(maximum - minimum + 1, false);
+            uint64_t distinctCounter = 0;
+
+            for (int i = 0; i < tuples; i++) {
+                element = relation->columns[col][i];
+                if (distinctElements[element - minimum] == false) {
+                    distinctCounter++;
+                    distinctElements[element - minimum] = true;
+                }
             }
 
             // Save the infos
             columnInfos[rel][col].min      = minimum;
             columnInfos[rel][col].max      = maximum;
             columnInfos[rel][col].size     = tuples;
-            columnInfos[rel][col].distinct = (uint64_t) distinctElements.size();
+            columnInfos[rel][col].distinct = distinctCounter;
             columnInfos[rel][col].n        = maximum - minimum + 1;
             columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
 
@@ -983,36 +1013,36 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         }
     }
 }
-
+/*
 // JoinTree destructor
 void JoinTree::destrJoinTree() {
-    /* destruct query-tree in a DFS fassion */
+    // destruct query-tree in a DFS fassion
     JoinTreeNode *currNodePtr = this->root;
     bool from_left = false;
 
     while(currNodePtr) {
-        /* if there are left children */
+        // if there are left children
         if (currNodePtr->left) {
             currNodePtr = currNodePtr->left;
             from_left = true;
         }
-        /* if there are right children */
+        // if there are right children
         else if (currNodePtr->right) {
             currNodePtr = currNodePtr->right;
             from_left = false;
         }
-        /* if there are no left or right children */
+        // if there are no left or right children
         else {
-            /* clean-up node */
+            // clean-up node
             free(currNodePtr->filterPtr);
             currNodePtr->filterPtr = NULL;
             free(currNodePtr->predicatePtr);
             currNodePtr->predicatePtr = NULL;
-            /* essentially, not head node */
+            // essentially, not head node
             if (currNodePtr->parent) {
-                /* go to the parent */
+                // go to the parent
                 currNodePtr = currNodePtr->parent;
-                /* free the correct child's node */
+                // free the correct child's node
                 if (from_left) {
                     free(currNodePtr->left);
                     currNodePtr->left = NULL;
@@ -1022,7 +1052,7 @@ void JoinTree::destrJoinTree() {
                     currNodePtr->right = NULL;
                 }
             }
-            /* essentially, head node */
+            // essentially, head node
             else {
                 free(currNodePtr);
                 currNodePtr = NULL;
@@ -1044,3 +1074,4 @@ void QueryPlan::destrQueryPlan(Joiner& joiner) {
 
     free(columnInfos);
 }
+*/

@@ -18,7 +18,6 @@
 
 using namespace std;
 
-
 //#define TIME_DETAILS
 //#include <sstream>
 //string timeDetStr = "";
@@ -40,6 +39,7 @@ double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
 double timeCreateTableT = 0;
 double timeExecute = 0;
+double timePreparation = 0;
 
 int cleanQuery(QueryInfo &info) {
     /* Remove weak filters */
@@ -179,7 +179,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
 
@@ -411,7 +411,18 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&start, NULL);
 #endif
 
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     result_t * res  = RJ(r1, r2, 0);
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
 #ifdef TIME_DETAILS
     gettimeofday(&end, NULL);
@@ -998,6 +1009,11 @@ int main(int argc, char* argv[]) {
         joiner.addRelation(line.c_str());
     }
 
+    #ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    #endif
+
     // Preparation phase (not timed)
     QueryPlan queryPlan;
 
@@ -1070,9 +1086,8 @@ int main(int argc, char* argv[]) {
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    //timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
-
 
     // Thread pool Initialize
     //threadpool11::Pool pool;  // Create a threadPool
@@ -1081,18 +1096,17 @@ int main(int argc, char* argv[]) {
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 1;
+    int q_counter = 0;
     while (getline(cin, line)) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << "Q " << q_counter  << ":" << line << '\n';
+        //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         //q_counter++;
 
         #ifdef time
-        struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
@@ -1106,7 +1120,6 @@ int main(int argc, char* argv[]) {
         //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
-        struct timeval end;
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
@@ -1168,6 +1181,22 @@ int main(int argc, char* argv[]) {
     }
 
 #ifdef time
+    std::cerr << "timePreparation: " << (long)(timePreparation * 1000) << endl;
+    std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
+    std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
+    std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
+    std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
+    std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
+    //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
+    //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
+    std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
+    std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
+    std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
+    std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
+    std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
+    flush(std::cerr);
+
     // std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
     // std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
     // std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
