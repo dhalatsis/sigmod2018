@@ -803,8 +803,8 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             joiner.Select(*filter, res);
             #ifdef prints
             std::cerr << "----Filter Predicates: " <<  '\n';
-            std::cerr << "Relation.column: "  << (*(joinTreeNodePtr->filterPtr)).filterColumn.relId << "." << (*(joinTreeNodePtr->filterPtr)).filterColumn.colId << '\n';
-            std::cerr << "Constant: " << (*(joinTreeNodePtr->filterPtr)).constant << '\n';
+            std::cerr << "Relation.column: "  << filter->filterColumn.relId << "." << filter->filterColumn.colId << '\n';
+            std::cerr << "Constant: " << filter->constant << '\n';
             std::cerr << "Intermediate rows: " << res->tups_num << '\n';
             std::cerr << "-------" << '\n';
             #endif

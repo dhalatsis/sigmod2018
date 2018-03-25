@@ -10,6 +10,8 @@
 #include "Parser.hpp"
 #include "table_t.hpp"
 #include "parallel_radix_join.h"
+#include "tuple_buffer.h"
+#include "prj_params.h"
 
 /* THread pool Includes */
 #include "threadpool11/threadpool11.hpp"
@@ -19,7 +21,6 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
-#define THREAD_NUM 4
 /*----------------*/
 
 #define time

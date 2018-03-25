@@ -2,7 +2,7 @@
  * @file    parallel_radix_join.h
  * @author  Cagri Balkesen <cagri.balkesen@inf.ethz.ch>
  * @date    Sun Feb 20:09:59 2012
- * @version $Id: parallel_radix_join.h 3017 2012-12-07 10:56:20Z bcagri $
+ * @version $Id: parallel_radix_join.h 4419 2013-10-21 16:24:35Z bcagri $
  *
  * @brief  Provides interfaces for several variants of Radix Hash Join.
  *
@@ -14,8 +14,8 @@
 #define PARALLEL_RADIX_JOIN_H
 
 #include "types.h" /* relation_t */
-#include "prj_params.h"
-#include "tuple_buffer.h"
+
+#define NO_TIMING
 
 /**
  * PRO: Parallel Radix Join Optimized.
@@ -32,7 +32,7 @@
  *
  * @return number of result tuples
  */
-int64_t
+result_t *
 PRO(relation_t * relR, relation_t * relS, int nthreads);
 
 /**
@@ -48,7 +48,8 @@ PRO(relation_t * relR, relation_t * relS, int nthreads);
  * @warning nthreads parameter does not have any effect for this algorithm.
  * @return number of result tuples
  */
-result_t* RJ(relation_t * relR, relation_t * relS, int nthreads);
+result_t *
+RJ(relation_t * relR, relation_t * relS, int nthreads);
 
 /**
  * PRH: Parallel Radix Join Histogram-based.
@@ -63,7 +64,7 @@ result_t* RJ(relation_t * relR, relation_t * relS, int nthreads);
  *
  * @return number of result tuples
  */
-int64_t
+result_t *
 PRH(relation_t * relR, relation_t * relS, int nthreads);
 
 /**
@@ -79,7 +80,7 @@ PRH(relation_t * relR, relation_t * relS, int nthreads);
  *
  * @return number of result tuples
  */
-int64_t
+result_t *
 PRHO(relation_t * relR, relation_t * relS, int nthreads);
 
 #endif /* PARALLEL_RADIX_JOIN_H */
