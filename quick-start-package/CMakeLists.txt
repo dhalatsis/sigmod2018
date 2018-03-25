@@ -6,13 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
 #set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fsanitize=address -fuse-ld=gold -Ofast -march=native -lpthread -lnuma -msse4.2")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread -lnuma")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fuse-ld=gold -Ofast -march=native -lpthread  -msse4.2")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread ")
 add_compile_options(-Ofast -march=native)
 
 include_directories(include)
 
-add_library(database QueryPlan.cpp Relation.cpp Filter.cpp treegen.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Parser.cpp Utils.cpp)
+add_library(database QueryPlan.cpp Relation.cpp Filter.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -31,7 +31,7 @@ if (CMAKE_BUILD_TYPE MATCHES "[Dd][Ee][Bb][Uu][Gg]" OR FORCE_TESTS)
     add_subdirectory(test)
 endif()
 
-set(SOURCE_FILES QueryPlan.cpp treegen.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
+set(SOURCE_FILES QueryPlan.cpp treegen.cpp sys.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES})
 target_link_libraries(Joiner database threadPool)
 

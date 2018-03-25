@@ -10,7 +10,7 @@
  */
 #ifndef CPU_MAPPING_H
 #define CPU_MAPPING_H
-
+#include "sys.h"
 /** 
  * @defgroup cpumapping CPU mapping tool
  * @{

@@ -3,7 +3,6 @@
 #include <stdio.h>  /* FILE, fopen */
 #include <stdlib.h> /* exit, perror */
 #include <unistd.h> /* sysconf */
-#include <numaif.h> /* get_mempolicy() */
 
 #include "cpu_mapping.h"
 
