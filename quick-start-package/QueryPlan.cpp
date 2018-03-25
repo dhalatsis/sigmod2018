@@ -5,6 +5,8 @@
 
 using namespace std;
 
+//#define prints
+
 void ColumnInfo::print() {
     cerr << "min:      " << this->min << endl;
     cerr << "max:      " << this->max << endl;

@@ -13,9 +13,14 @@
 
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
+#include "tbb/tbb.h"
+#include "tbb/parallel_reduce.h"
+#include "tbb/blocked_range.h"
+
 
 #define THREAD_NUM 4
 
+using namespace tbb;
 using namespace std;
 
 //#define TIME_DETAILS
@@ -564,13 +569,14 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         flush(cerr);
     }
 #endif
-    return temp;
 
-    /* Construct the tables in case of intermediate results */
-    //(table_r->intermediate_res)? (construct(table_r)) : ((void)0);
-    //(table_s->intermediate_res)? (construct(table_s)) : ((void)0);
-    /* Join the columns */
-    //return low_join(table_r, table_s);
+    /* Free the tables */
+    free(table_r->row_ids);
+    delete table_r;
+    free(table_s->row_ids);
+    delete table_s;
+
+    return temp;
 }
 
 // utility function for for_join
@@ -985,9 +991,42 @@ void *threadSum(void * arg) {
     return (void *)res;
 }
 
+struct CheckSumT
+{
+public:
+    uint64_t my_sum;
+
+    /* Initial constructor */
+    CheckSumT(uint64_t * dataPtr, unsigned * row_ids, unsigned rnum, int idx)
+    :col{dataPtr}, rids{row_ids}, rels_num{rnum}, tbi{idx}, my_sum(0)
+    {}
+
+    /* Slpitting constructor */
+    CheckSumT(CheckSumT & x, split)
+    :col{x.col}, rids{x.rids}, rels_num{x.rels_num}, tbi{x.tbi}, my_sum(0) {}
+
+    /* How to join the thiefs */
+    void join(const CheckSumT & y) {my_sum += y.my_sum;}
+
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        uint64_t sum = my_sum;
+        for (size_t i = range.begin(); i < range.end(); ++i)
+            sum += col[rids[i*rels_num + tbi]];
+
+        my_sum = sum;
+    }
+
+
+
+private:
+    uint64_t * col;
+    unsigned * rids;
+    unsigned   rels_num;
+    int  tbi;
+};
+
 //CHECK SUM FUNCTION
 std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-
 
     /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
@@ -1003,39 +1042,22 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     if (size == 0) {
         return "NULL";
     }
-    else { //if (size < 1000) {
+    else if (size < 1000) {
         for (uint64_t i = 0 ; i < size; i++) {
             sum += col[row_ids[i*rels_num + tbi]];
         }
 
         return to_string(sum);
     }
-    // else {
-    //     // 4 thread array
-    //     pthread_t threads[THREAD_NUM];
-    //
-    //     // Creating THREAD_NUM threads
-    //     for (int i = 0; i < THREAD_NUM; i++) {
-    //         struct threadSumArg_t * arg = (struct threadSumArg_t *) malloc(sizeof(struct threadSumArg_t));
-    //         arg->low   = (i == 0) ? 0 : size/THREAD_NUM*i + size%THREAD_NUM;
-    //         arg->high  = (i == 0) ? size/THREAD_NUM + size%THREAD_NUM - 1 : arg->low + size/THREAD_NUM - 1;
-    //         arg->array = col;
-    //         pthread_create(&threads[i], NULL, threadSum, (void*)arg);
-    //     }
-    //
-    //     // joining THREAD_NUM threads i.e. waiting for all THREAD_NUM threads to complete
-    //     uint64_t * res;
-    //     int threads_joined = 0;
-    //     //while (threads_joined != THREAD_NUM){
-    //     for (size_t i = 0; i < THREAD_NUM; i++) {
-    //         pthread_join(threads[i], (void**)&res);
-    //         sum += *res;
-    //         free(res);
-    //     }
-    //     //}
-    //
-    //     return to_string(sum);
-    // }
+    else {
+
+        /* Create the Sum obj */
+        CheckSumT cs( col, row_ids, rels_num, tbi );
+        int grainzie = 1;
+        parallel_reduce( blocked_range<size_t>(0, size, grainzie), cs );
+
+        return to_string( cs.my_sum );
+    }
 }
 
 // Loads a relation from disk
@@ -1089,6 +1111,9 @@ int main(int argc, char* argv[]) {
     struct timeval start;
     gettimeofday(&start, NULL);
     #endif
+
+    // Create threads
+    task_scheduler_init init(4); // Number of threads
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
@@ -1166,9 +1191,8 @@ int main(int argc, char* argv[]) {
     #endif
 
     // Thread pool Initialize
-    //threadpool11::Pool pool;  // Create a threadPool
-    //std::array<std::future<uint64_t>, THREAD_NUM> futures;
-    //pool.setWorkerCount(std::thread::hardware_concurrency());
+    std::array<std::future<uint64_t>, THREAD_NUM> futures;
+    joiner.pool.setWorkerCount(THREAD_NUM);
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
@@ -1272,21 +1296,6 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
     std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
-
-    // std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
-    // std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
-    // std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
-    // std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
-    // std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    // std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
-    // //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    // //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
-    // std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
-    // std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
-    // std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
-    // std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
-    // std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
-    // flush(std::cerr);
 #endif
 
     return 0;

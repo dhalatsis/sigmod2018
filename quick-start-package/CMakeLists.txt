@@ -7,10 +7,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
 #set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fsanitize=address -fuse-ld=gold -Ofast -march=native -lpthread -lnuma -msse4.2")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread -lnuma")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread -lnuma -ltbb")
 add_compile_options(-Ofast -march=native)
 
-include_directories(include)
+include_directories(include ~/tbb/tbb2018_20171205oss/include)
 
 add_library(database QueryPlan.cpp Relation.cpp Filter.cpp treegen.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC
@@ -33,7 +33,7 @@ endif()
 
 set(SOURCE_FILES QueryPlan.cpp treegen.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES})
-target_link_libraries(Joiner database threadPool)
+target_link_libraries(Joiner tbb database threadPool)
 
 
 # Interactive command line tool to translate our query format to SQL queries
