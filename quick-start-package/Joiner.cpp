@@ -485,8 +485,8 @@ vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
         this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
         this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
         /* Filter on right ? */
-        this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
-        this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
+        // this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
+        // this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
         // res = joiner.join(table_l, table_r, *jTreePtr->predPtr);
         return tableVec;
     }
@@ -550,37 +550,25 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo
     string result_str;
     // we will need the values for the check_sum
     // colVec maps the values of the SELECTed columns of each table to the respective table
-    vector< vector<relation_t*> > colVec(1);
+    vector< vector<uint64_t*> > colVec(1);
     // cerr << "a1" << endl;
     assert(columns.size() == 2);
     for (uint64_t i = 0; i < columns.size(); i++) {
         if (i == colVec.size())
             colVec.resize(colVec.size()+1);
         for(uint64_t j = 0; j < columns[i].size(); j++) {
-            SelectInfo temp;
-            temp.relId = columns[i][j].relId;
-            temp.binding = columns[i][j].binding;
-            temp.colId = columns[i][j].colId;
-            if (i == 0) colVec[i].push_back(CreateRelationT(table_a, temp));
-            else colVec[i].push_back(CreateRelationT(table_b, temp));
-            // if (colVec.find(columns[i][j].binding) == colVec.end())
-            //     colVec.emplace(columns[i][j].binding, *(new vector<uint64_t>()));
-            // else
-            // colVec[columns[i][j].binding].push_back(temp);
+            vector<uint64_t*> temp = this->getRelation(columns[i][j].relId).columns;
+            colVec[i].push_back(temp[columns[i][j].colId]);
         }
     }
     // cerr << "a2" << endl;
     // check_sum_vec maps the check_sum of each SELECTed column of each table to the respective table
     vector< vector<uint64_t> > check_sum_vec(1);
     for (uint64_t i = 0; i < columns.size(); i++) {
-        // cerr << columns.size() << " " << columns[i].size() << endl;
         if (i == check_sum_vec.size())
             check_sum_vec.resize(check_sum_vec.size()+1);
-        for (uint64_t j = 0; j < columns[i].size(); j++) {
-            // cerr << columns[i][j] << "\t";
+        for (uint64_t j = 0; j < columns[i].size(); j++)
             check_sum_vec[i].push_back(0);
-        }
-        // cerr << endl;
     }
     // cerr << "a2" << endl;
     /* create hash_table for the hash_join phase */
@@ -616,13 +604,20 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo
         /* vals->first = key ,vals->second = value */
         auto range_vals = hash_c.equal_range(iter_col->values[i]);
         for (auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            for (uint64_t j = 0; j < columns.size(); j++) {
-                // cerr << "c1.5" << endl;
-                for(uint64_t k = 0; k < columns[j].size(); k++) {
-                    // cerr << "c1.75 " << j << " " << k << " vs " << colVec.size() << " " << colVec[j].size() << endl;
-                    check_sum_vec[j][k] += colVec[j][k]->tuples[i].key;
+            for (uint64_t j = 0; j < check_sum_vec.size(); j++) {
+                // cerr << "c1.5 a" << endl;
+                for(uint64_t k = 0; k < check_sum_vec[j].size(); k++) {
+                    // cerr << "c1.75 " << j << " " << k << " " << i << " vs " << colVec.size() << " " << colVec[j].size() << endl;
+                    // cerr << "c1.75 " << j << " " << k << " " << i << "| " << h_rows[j][vals->second.index] << " " << i_rows[j][i] << " vs " << colVec.size() << " " << colVec[j].size() << endl;
+                    // check_sum_vec[j][k] += colVec[j][k][i];
+                    for (uint64_t l = 0 ; l < h_rows.size(); l++)
+                        check_sum_vec[j][k] += h_rows[l][vals->second.index];
+                    // cerr << "c1.75 b" << endl;
+                    /* then go to the s's row ids to get the values */
+                    for (uint64_t l = 0; l < i_rows.size(); l++)
+                        check_sum_vec[j][k] += i_rows[l][i];
                 }
-                // cerr << "c1.5 " << check_sum_vec[j][0] << endl;
+                // cerr << "c1.5 b" << endl;
             }
         }
     }
