@@ -270,7 +270,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
         : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
     }
-  
+
     for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
         (itr->second >= right_removed)
         ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
@@ -771,10 +771,8 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo
     cout << result_str << endl;
     // cerr << "d2" << endl;
     // cerr << "for_2 out" << endl;
-#endif
 }
 
-#endif
 
 // for_3 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
@@ -870,7 +868,6 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, vector<
     // cout << result_str << endl;
 
     cerr << "for_3 out" << endl;
-    #endif
 }
 
 // for_4 join UNOPTIMIZED
@@ -985,6 +982,7 @@ void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t
 
     cerr << "for_4 out" << endl;
 }
+#endif
 
 void Joiner::construct(table_t *table) {
 // #ifdef time
@@ -1021,41 +1019,6 @@ void Joiner::construct(table_t *table) {
 //     timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 // #endif
 }
-
-
-struct CheckSumT
-{
-public:
-    uint64_t my_sum;
-
-    /* Initial constructor */
-    CheckSumT(uint64_t * dataPtr, unsigned * row_ids, unsigned rnum, int idx)
-    :col{dataPtr}, rids{row_ids}, rels_num{rnum}, tbi{idx}, my_sum(0)
-    {}
-
-    /* Slpitting constructor */
-    CheckSumT(CheckSumT & x, split)
-    :col{x.col}, rids{x.rids}, rels_num{x.rels_num}, tbi{x.tbi}, my_sum(0) {}
-
-    /* How to join the thiefs */
-    void join(const CheckSumT & y) {my_sum += y.my_sum;}
-
-    void operator()(const tbb::blocked_range<size_t>& range) {
-        uint64_t sum = my_sum;
-        for (size_t i = range.begin(); i < range.end(); ++i)
-            sum += col[rids[i*rels_num + tbi]];
-
-        my_sum = sum;
-    }
-
-
-
-private:
-    uint64_t * col;
-    unsigned * rids;
-    unsigned   rels_num;
-    int  tbi;
-};
 
 //CHECK SUM FUNCTION
 std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
