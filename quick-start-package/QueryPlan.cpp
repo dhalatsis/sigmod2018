@@ -7,7 +7,7 @@
 
 using namespace std;
 
-//#define prints
+#define prints
 
 void ColumnInfo::print() {
     cerr << "min:      " << this->min << endl;
@@ -855,7 +855,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
 // Esteimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
-    this->treeCost = this->left->treeCost + this->right->usedColumnInfos[predicateInfo.right].size;
+    this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;
 /*
     unsigned joinRowIndex = (this->left->usedColumnInfos[predicateInfo.left].size + 1000) / 10000;
     unsigned joinColIndex = (this->right->usedColumnInfos[predicateInfo.right].size + 1000) / 10000;

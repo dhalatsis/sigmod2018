@@ -58,6 +58,7 @@ init_mappings()
         int i;
 
         max_cpus  = sysconf(_SC_NPROCESSORS_ONLN);
+        fprintf(stderr, "Mas cpus %d\n", max_cpus);
         for(i = 0; i < max_cpus; i++){
             node_mapping[i] = i;
         }
@@ -88,7 +89,10 @@ get_cpu_id(int thread_id)
  node 2 cpus: 2 6 10 14 18 22 26 30 34 38 42 46 50 54 58 62
  node 3 cpus: 3 7 11 15 19 23 27 31 35 39 43 47 51 55 59 63
 */
-#define INTEL_E5 1
+//#define INTEL_E5 1
+
+#define my_Topology
+#ifdef my_Topology
 
 /* TODO CHANGE
 static int numa[][16] = {
@@ -129,6 +133,47 @@ get_num_numa_regions(void)
     return 1;
 #endif
 }
+
+#else  /* SIGMOD PC */
+
+/* ----------------SIGMODS PC --------*/
+/* 2 NODES,offset 4 */
+static int numa[][20] = {
+    {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38},
+    {1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39}};
+
+int
+get_numa_id(int mytid)
+{
+#if INTEL_E5
+    int ret = 0;
+
+    for(int i = 0; i < 2; i++)
+        for(int j = 0; j < 20; j++)
+            if(numa[i][j] == mytid){
+                ret = i;
+                break;
+            }
+
+    return ret;
+#else
+    return 0;
+#endif
+}
+
+int
+get_num_numa_regions(void)
+{
+    /* TODO: FIXME automate it from the system config. */
+#if INTEL_E5
+    return 2; /* sigmods pc */
+    //return 1; /* my pc */
+#else
+    return 1;
+#endif
+}
+
+#endif  /*---------------- END OF SIGMOD TOPOLOGY ---------------- */
 
 int
 get_numa_node_of_address(void * ptr)

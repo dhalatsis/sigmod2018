@@ -72,15 +72,8 @@ relation_t *
 gen_rel(int num_tuples)
 {
     relation_t * r1 = (relation_t *) malloc(sizeof(relation_t));
-
-    r1->tuples = (tuple_t *)MALLOC(sizeof(tuple_t) * num_tuples);
-
     r1->num_tuples = num_tuples;
-    for (int i = 0; i < num_tuples; ++i) {
-        r1->tuples[i].key = i;
-        r1->tuples[i].payload = i;
-    }
-
+    r1->tuples = (tuple_t *)MALLOC(sizeof(tuple_t) * num_tuples);
     return r1;
 }
 
