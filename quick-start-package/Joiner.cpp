@@ -17,7 +17,6 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/blocked_range.h"
 
-
 #define THREAD_NUM 4
 
 using namespace tbb;
@@ -1189,10 +1188,6 @@ int main(int argc, char* argv[]) {
     gettimeofday(&end, NULL);
     timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
-
-    // Thread pool Initialize
-    std::array<std::future<uint64_t>, THREAD_NUM> futures;
-    joiner.pool.setWorkerCount(THREAD_NUM);
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;

@@ -41,8 +41,6 @@ class Joiner {
     std::vector<Relation> relations; // The relations that might be joined
 
     public:
-        threadpool11::Pool pool;  // Create a threadPool
-
 
     /* do the checksum */
     //std::string check_sum(SelectInfo &sel_info, table_t *table, threadpool11::Pool & p, std::array<std::future<uint64_t>, THREAD_NUM> & f);
