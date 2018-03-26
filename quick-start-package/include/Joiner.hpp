@@ -14,12 +14,10 @@
 #include "prj_params.h"
 
 /* THread pool Includes */
-#include "threadpool11/threadpool11.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <iostream>
-#include <mutex>
 #include <thread>
 /*----------------*/
 

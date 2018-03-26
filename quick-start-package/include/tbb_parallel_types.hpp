@@ -6,7 +6,7 @@
 
 using namespace tbb;
 
-/* Ctruct for praralle check sum */
+/* Struct for praralle check sum */
 struct CheckSumT
 {
 public:
