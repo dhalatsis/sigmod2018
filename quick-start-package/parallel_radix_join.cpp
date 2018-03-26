@@ -40,7 +40,6 @@
 #endif
 
 /** \internal */
-
 #ifndef BARRIER_ARRIVE
 /** barrier wait macro */
 #define BARRIER_ARRIVE(B,RV)                            \

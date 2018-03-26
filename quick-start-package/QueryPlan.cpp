@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#define prints
+//#define prints
 
 void ColumnInfo::print() {
     cerr << "min:      " << this->min << endl;

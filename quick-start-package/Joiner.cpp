@@ -17,7 +17,7 @@
 #include "tbb_parallel_types.hpp"
 
 #define THREAD_NUM 4
-#define prints
+//#define prints
 
 using namespace tbb;
 using namespace std;
@@ -318,8 +318,8 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t idx = 0;  // POints to the right index on the res
     uint32_t tup_i;
 
-    for (int th = 0; th < THREAD_NUM; th++) {
-        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+    //for (int th = 0; th < THREAD_NUM; th++) {
+        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[0].results;
 
         /* Get the touples form the results */
         tuplebuffer_t * tb = cb->buf;
@@ -422,7 +422,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             idx += CHAINEDBUFF_NUMTUPLESPERBUF;
             tb = tb->next;
         }
-    }
+    //}
 
 #ifdef time
     struct timeval end;
@@ -506,8 +506,18 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap) {
 
+    #ifdef prints
+    std::cerr << "Before creating Rels" << '\n';
+    flush(cerr);
+    #endif
+
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
+
+    #ifdef prints
+    std::cerr << "Created Rels" << '\n';
+    flush(cerr);
+    #endif
 
 #ifdef TIME_DETAILS
     struct timeval start, end;
@@ -519,7 +529,12 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&start, NULL);
 #endif
 
-    result_t * res  = PRO(r1, r2, THREAD_NUM);
+    result_t * res  = RJ(r1, r2, 0);
+
+    #ifdef prints
+    std::cerr << "After RJ" << '\n';
+    flush(cerr);
+    #endif
 
 #ifdef time
     struct timeval end;
@@ -1001,8 +1016,10 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     AddColumnToTableT(sel_info, table);
     //construct(table);
 
+    #ifdef prints
     std::cerr << "IN checksum" << '\n';
     flush(cerr);
+    #endif
 
     uint64_t* col = table->column_j->values;
     int  tbi = table->column_j->table_index;
