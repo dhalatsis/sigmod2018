@@ -17,7 +17,7 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/blocked_range.h"
 
-#define THREAD_NUM 4
+#define THREAD_NUM 20
 
 using namespace tbb;
 using namespace std;
@@ -310,8 +310,8 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     uint32_t new_tbi = 0;
     uint32_t tup_i;
-    for (int th = 0; th < THREAD_NUM; th++) {
-        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+    //for (int th = 0; th < THREAD_NUM; th++) {
+        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[0].results;
 
         /* Get the touples form the results */
         tuplebuffer_t * tb = cb->buf;
@@ -434,7 +434,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             /* Go the the next buffer */
             tb = tb->next;
         }
-    }
+    //}
 
 #ifdef time
     struct timeval end;
@@ -537,7 +537,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&start, NULL);
 #endif
 
-    result_t * res  = PRO(r1, r2, THREAD_NUM);
+    result_t * res  = RJ(r1, r2, 0);
 
 #ifdef time
     struct timeval end;
