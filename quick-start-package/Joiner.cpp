@@ -270,7 +270,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
         : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
     }
-
+  
     for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
         (itr->second >= right_removed)
         ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
@@ -284,6 +284,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     }
     std::cerr << '\n';
 
+
+    /* PRINTS
+    std::cerr << endl << "New mapping ";
+    for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
+        std::cerr << itr->first << "." << itr->second << " ";
+    }
+    std::cerr << '\n';
     std::cerr << "Helper v R ";
     for (size_t i = 0; i < help_v_r.size(); i++) {
         cerr << help_v_r[i] << " ";
@@ -309,78 +316,17 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     uint32_t new_tbi = 0;
     uint32_t tup_i;
 
-    /* TODO multi thread */
     //for (int th = 0; th < THREAD_NUM; th++) {
+        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[0].results;
 
-    chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[0].results;
+        /* Get the touples form the results */
+        tuplebuffer_t * tb = cb->buf;
+        uint32_t numbufs = cb->numbufs;
+        uint32_t row_i;
 
-    /* Get the touples form the results */
-    tuplebuffer_t * tb = cb->buf;
-    uint32_t numbufs = cb->numbufs;
-    uint32_t row_i;
-
-    /* Depending on tables choose what to pass */
-    if (table_r->intermediate_res && table_s->intermediate_res)
-        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
-            }
-
-            row_i = tb->tuples[tup_i].payload;
-            for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
-            }
-            new_tbi++;
-        }
-    else if (table_r->intermediate_res)
-        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
-            }
-
-            row_i = tb->tuples[tup_i].payload;
-            for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
-            }
-            new_tbi++;
-        }
-    else if (table_s->intermediate_res)
-        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[new_tbi*num_relations + i] = row_i;
-            }
-
-            row_i = tb->tuples[tup_i].payload;
-            for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
-            }
-            new_tbi++;
-        }
-    else
-        for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
-            row_i = tb->tuples[tup_i].key;
-            for (size_t i = 0; i < help_v_r.size(); i++) {
-                rids_res[new_tbi*num_relations + i] = row_i;
-            }
-
-            row_i = tb->tuples[tup_i].payload;
-            for (size_t i = 0; i < help_v_s.size(); i++) {
-                rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
-            }
-            new_tbi++;
-        }
-
-    /* --------------------------------------------------------------------------------------
-    The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
-    ---------------------------------------------------------------------------------------- */
-    tb = tb->next;
-    for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
+        /* Depending on tables choose what to pass */
         if (table_r->intermediate_res && table_s->intermediate_res)
-            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+            for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
                     rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
@@ -393,7 +339,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 new_tbi++;
             }
         else if (table_r->intermediate_res)
-            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+            for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
                     rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
@@ -406,7 +352,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 new_tbi++;
             }
         else if (table_s->intermediate_res)
-            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+            for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
                     rids_res[new_tbi*num_relations + i] = row_i;
@@ -419,10 +365,11 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 new_tbi++;
             }
         else
-            for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+            for (tup_i = 0; tup_i < cb->writepos; tup_i++) {
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
                     rids_res[new_tbi*num_relations + i] = row_i;
+
                 }
 
                 row_i = tb->tuples[tup_i].payload;
@@ -430,11 +377,72 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
                 }
                 new_tbi++;
+
             }
 
-        /* Go the the next buffer */
+        /* --------------------------------------------------------------------------------------
+        The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
+        ---------------------------------------------------------------------------------------- */
         tb = tb->next;
-    }
+        for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+            if (table_r->intermediate_res && table_s->intermediate_res)
+                for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                    row_i = tb->tuples[tup_i].key;
+                    for (size_t i = 0; i < help_v_r.size(); i++) {
+                        rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
+                    }
+
+                    row_i = tb->tuples[tup_i].payload;
+                    for (size_t i = 0; i < help_v_s.size(); i++) {
+                        rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
+                    }
+                    new_tbi++;
+                }
+            else if (table_r->intermediate_res)
+                for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                    row_i = tb->tuples[tup_i].key;
+                    for (size_t i = 0; i < help_v_r.size(); i++) {
+                        rids_res[new_tbi*num_relations + i] =  rids_r[row_i*old_relnum_r + help_v_r[i]];
+                    }
+
+                    row_i = tb->tuples[tup_i].payload;
+                    for (size_t i = 0; i < help_v_s.size(); i++) {
+                        rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
+                    }
+                    new_tbi++;
+                }
+            else if (table_s->intermediate_res)
+                for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                    row_i = tb->tuples[tup_i].key;
+                    for (size_t i = 0; i < help_v_r.size(); i++) {
+                        rids_res[new_tbi*num_relations + i] = row_i;
+                    }
+
+                    row_i = tb->tuples[tup_i].payload;
+                    for (size_t i = 0; i < help_v_s.size(); i++) {
+                        rids_res[new_tbi*num_relations + i + help_v_r.size()] =  rids_s[row_i*old_relnum_s + help_v_s[i]];
+                    }
+                    new_tbi++;
+                }
+            else
+                for (tup_i = 0; tup_i < CHAINEDBUFF_NUMTUPLESPERBUF; tup_i++) {
+                    row_i = tb->tuples[tup_i].key;
+                    for (size_t i = 0; i < help_v_r.size(); i++) {
+                        rids_res[new_tbi*num_relations + i] = row_i;
+                    }
+
+                    row_i = tb->tuples[tup_i].payload;
+                    for (size_t i = 0; i < help_v_s.size(); i++) {
+                        rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
+                    }
+                    new_tbi++;
+                }
+
+            /* Go the the next buffer */
+            tb = tb->next;
+        }
+    //}
 
 #ifdef time
     struct timeval end;
@@ -459,6 +467,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
        gettimeofday(&start, NULL);
    #endif
 
+
        /* Create a new column_t for table */
        column_t &column = *table->column_j;
 
@@ -469,7 +478,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
        column.id     = sel_info.colId;
        column.table_index = -1;
        unsigned relation_binding = sel_info.binding;
-
 
        /* Get the right index from the relation id table */
        unordered_map<unsigned, unsigned>::iterator itr = table->relations_bindings.find(relation_binding);
@@ -568,13 +576,14 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         flush(cerr);
     }
 #endif
-    return temp;
 
-    /* Construct the tables in case of intermediate results */
-    //(table_r->intermediate_res)? (construct(table_r)) : ((void)0);
-    //(table_s->intermediate_res)? (construct(table_s)) : ((void)0);
-    /* Join the columns */
-    //return low_join(table_r, table_s);
+    /* Free the tables */
+    free(table_r->row_ids);
+    delete table_r;
+    free(table_s->row_ids);
+    delete table_s;
+
+    return temp;
 }
 
 #ifdef HOT_STUFF
@@ -762,6 +771,7 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo
     cout << result_str << endl;
     // cerr << "d2" << endl;
     // cerr << "for_2 out" << endl;
+#endif
 }
 
 #endif
@@ -769,6 +779,7 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo
 // for_3 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size
+
 void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, vector< vector<SelectInfo> > columns) {
     cerr << "for_3 in" << endl;
     // string result_str;
@@ -859,11 +870,13 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, vector<
     // cout << result_str << endl;
 
     cerr << "for_3 out" << endl;
+    #endif
 }
 
 // for_4 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size <= table_d->column_j->size
+
 void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, vector< vector<SelectInfo> > columns) {
     cerr << "for_4 in" << endl;
     // string result_str;
@@ -1010,6 +1023,40 @@ void Joiner::construct(table_t *table) {
 }
 
 
+struct CheckSumT
+{
+public:
+    uint64_t my_sum;
+
+    /* Initial constructor */
+    CheckSumT(uint64_t * dataPtr, unsigned * row_ids, unsigned rnum, int idx)
+    :col{dataPtr}, rids{row_ids}, rels_num{rnum}, tbi{idx}, my_sum(0)
+    {}
+
+    /* Slpitting constructor */
+    CheckSumT(CheckSumT & x, split)
+    :col{x.col}, rids{x.rids}, rels_num{x.rels_num}, tbi{x.tbi}, my_sum(0) {}
+
+    /* How to join the thiefs */
+    void join(const CheckSumT & y) {my_sum += y.my_sum;}
+
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        uint64_t sum = my_sum;
+        for (size_t i = range.begin(); i < range.end(); ++i)
+            sum += col[rids[i*rels_num + tbi]];
+
+        my_sum = sum;
+    }
+
+
+
+private:
+    uint64_t * col;
+    unsigned * rids;
+    unsigned   rels_num;
+    int  tbi;
+};
+
 //CHECK SUM FUNCTION
 std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
 
@@ -1100,6 +1147,7 @@ int main(int argc, char* argv[]) {
     // Create threads
     task_scheduler_init init(THREAD_NUM); // Number of threads
 
+
     // Preparation phase (not timed)
     QueryPlan queryPlan;
 
@@ -1175,11 +1223,6 @@ int main(int argc, char* argv[]) {
     timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
 
-    // Thread pool Initialize
-    //threadpool11::Pool pool;  // Create a threadPool
-    //std::array<std::future<uint64_t>, THREAD_NUM> futures;
-    //pool.setWorkerCount(std::thread::hardware_concurrency());
-
     // The test harness will send the first query after 1 second.
     QueryInfo i;
     int q_counter = 0;
@@ -1190,7 +1233,7 @@ int main(int argc, char* argv[]) {
         //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
-        //q_counter++;
+        q_counter++;
 
         #ifdef time
         gettimeofday(&start, NULL);
@@ -1281,21 +1324,6 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
     std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
-
-    // std::cerr << "timeCreateTableT: " << (long)(timeCreateTableT * 1000) << endl;
-    // std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
-    // std::cerr << "timeConstruct: " << (long)(timeConstruct * 1000) << endl;
-    // std::cerr << "timeSelectFilter: " << (long)(timeSelectFilter * 1000) << endl;
-    // std::cerr << "timeSelfJoin: " << (long)(timeSelfJoin * 1000) << endl;
-    // std::cerr << "timeRadixJoin: " << (long)(timeRadixJoin * 1000) << endl;
-    // //std::cerr << "->timeBuildPhase: " << (long)(timeBuildPhase * 1000) << endl;
-    // //std::cerr << "->timeProbePhase: " << (long)(timeProbePhase * 1000) << endl;
-    // std::cerr << "timeAddColumn: " << (long)(timeAddColumn * 1000) << endl;
-    // std::cerr << "timeCreateTable: " << (long)(timeCreateTable * 1000) << endl;
-    // std::cerr << "timeTreegen: " << (long)(timeTreegen * 1000) << endl;
-    // std::cerr << "timeCheckSum: " << (long)(timeCheckSum * 1000) << endl;
-    // std::cerr << "timeExecute: " << (long)(timeExecute * 1000) << endl;
-    // flush(std::cerr);
 #endif
 
     return 0;

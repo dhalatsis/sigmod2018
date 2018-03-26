@@ -2,9 +2,12 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
+
 //#include "tbb/concurrent_unordered_set.h"
 
 using namespace std;
+
+//#define prints
 
 void ColumnInfo::print() {
     cerr << "min:      " << this->min << endl;
@@ -783,6 +786,8 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
     return joinTreePtr;
 }
 
+//#define prints
+
 // execute the plan described by a Plan Tree
 table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo) {
     JoinTreeNode *left  = joinTreeNodePtr->left;
@@ -796,11 +801,18 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
         // Apply the filter
+        // Apply the filter
         for (auto filter : joinTreeNodePtr->filterPtrs) {
             joiner.AddColumnToTableT(filter->filterColumn, res);
             joiner.Select(*filter, res);
+            #ifdef prints
+            std::cerr << "----Filter Predicates: " <<  '\n';
+            std::cerr << "Relation.column: "  << filter->filterColumn.relId << "." << filter->filterColumn.colId << '\n';
+            std::cerr << "Constant: " << filter->constant << '\n';
+            std::cerr << "Intermediate rows: " << res->tups_num << '\n';
+            std::cerr << "-------" << '\n';
+            #endif
         }
-
         return res;
     }
 
@@ -813,11 +825,31 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->left, table_l);
         joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->right, table_r);
 
-        return joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        #ifdef prints
+        std::cerr << "++++JOIN Predicates: " <<  '\n';
+        std::cerr << "Left: "  << joinTreeNodePtr->predicatePtr->left.relId << "." << joinTreeNodePtr->predicatePtr->left.colId << " Size " << table_l->tups_num << '\n';
+        std::cerr << "Right: " << joinTreeNodePtr->predicatePtr->right.relId << "." << joinTreeNodePtr->predicatePtr->right.colId << " Size " << table_r->tups_num << '\n';
+        #endif
+        res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        #ifdef prints
+        std::cerr << "Intermediate rows: " << res->tups_num << '\n';
+        std::cerr << "-------" << '\n';
+        #endif
+        return res;
 
     }
     else {
-        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        #ifdef prints
+        std::cerr << "======SELF Predicates: " <<  '\n';
+        std::cerr << "Left: "  << joinTreeNodePtr->predicatePtr->left.relId << "." << joinTreeNodePtr->predicatePtr->left.colId << " Size " << table_l->tups_num << '\n';
+        std::cerr << "Right: " << joinTreeNodePtr->predicatePtr->right.relId << "." << joinTreeNodePtr->predicatePtr->right.colId << " Size " << table_l->tups_num << '\n';
+        #endif
+        res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        #ifdef prints
+        std::cerr << "Intermediate rows: " << res->tups_num << '\n';
+        std::cerr << "-------" << '\n';
+        #endif
+        return res;
     }
 }
 

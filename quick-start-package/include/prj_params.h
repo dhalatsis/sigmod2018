@@ -30,7 +30,7 @@
  * Whether to use software write-combining optimized partitioning,
  * see --enable-optimized-part config option
  */
-/* #define USE_SWWC_OPTIMIZED_PART 1 */
+//#define USE_SWWC_OPTIMIZED_PART 1
 
 /** @defgroup SystemParameters System Parameters
  *  Various system specific parameters such as cache/cache-line sizes,

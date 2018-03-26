@@ -19,9 +19,13 @@
  * @{
  */
 
+#ifdef KEY_8B /* 64-bit key/value, 16B tuples */
 typedef int64_t intkey_t;
 typedef int64_t value_t;
-
+#else /* 32-bit key/value, 8B tuples */
+typedef int32_t intkey_t;
+typedef int32_t value_t;
+#endif
 
 typedef struct tuple_t    tuple_t;
 typedef struct relation_t relation_t;
