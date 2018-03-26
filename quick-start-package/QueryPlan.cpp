@@ -2,10 +2,10 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
-
-//#include "tbb/concurrent_unordered_set.h"
+#include "tbb/tbb.h"
 
 using namespace std;
+using namespace tbb;
 
 //#define prints
 
@@ -853,7 +853,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 }
 
-// Esteimate the cost of a JoinTreeNode
+// Estimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
     this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;
 /*
@@ -989,6 +989,33 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
     fprintf(stderr, "\n");
 }
 
+struct ParallelReduction {
+private:
+    uint64_t *array;
+    uint64_t max, min;
+
+public:
+    ParallelReduction() { array = NULL; max = 0; min = numeric_limits<uint64_t>::max(); }
+    ParallelReduction(uint64_t *arr) : array(arr), max(0), min(numeric_limits<uint64_t>::max()) {}
+    ParallelReduction(ParallelReduction& p) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()) {}
+    ParallelReduction(ParallelReduction& p, split) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()){}
+
+    uint64_t getMax() { return max; }
+    uint64_t getMin() { return min; }
+
+    void operator()(const blocked_range<size_t> &r) {
+        for (size_t count = r.begin(); count != r.end(); count++) {
+            max = (max > array[count] ? max : array[count]);
+            min = (min > array[count] ? array[count] : min);
+        }
+    }
+
+    void join(const ParallelReduction& pReductionSub) {
+        max = (max > pReductionSub.max ? max : pReductionSub.max);
+        min = (min > pReductionSub.min ? pReductionSub.min : min);
+    }
+};
+
 // Fills the columnInfo matrix with the data of every column
 void QueryPlan::fillColumnInfo(Joiner& joiner) {
     Relation* relation;
@@ -1013,12 +1040,21 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             uint64_t maximum = 0;
             uint64_t tuples  = relation->size;
             uint64_t element;
+
+            // Find the minimum and maximum
+            ParallelReduction pr(relation->columns[col]);
+            parallel_reduce(blocked_range<uint64_t>(0, tuples, 1000), pr);
+            minimum = pr.getMin();
+            maximum = pr.getMax();
+
             // One pass for the minimum and maximum
+            /*
             for (int i = 0; i < tuples; i++) {
                 element = relation->columns[col][i];
                 if (element > maximum) maximum = element;
                 if (element < minimum) minimum = element;
             }
+            */
 
             // One pass for the distinct elements
             vector<bool> distinctElements(maximum - minimum + 1, false);

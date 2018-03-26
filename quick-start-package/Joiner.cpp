@@ -16,7 +16,7 @@
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
 
-#define THREAD_NUM 4
+#define THREAD_NUM 20
 //#define prints
 
 using namespace tbb;
@@ -1014,10 +1014,7 @@ void Joiner::construct(table_t *table) {
 
 //CHECK SUM FUNCTION
 std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-
-    /* to create the final cehcksum column */
     AddColumnToTableT(sel_info, table);
-    //construct(table);
 
     #ifdef prints
     std::cerr << "IN checksum" << '\n';
@@ -1105,8 +1102,7 @@ int main(int argc, char* argv[]) {
     #endif
 
     // Create threads
-    task_scheduler_init init(THREAD_NUM); // Number of threads
-
+    task_scheduler_init init(THREAD_NUM);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
