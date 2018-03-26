@@ -1004,6 +1004,8 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         relation = &(joiner.getRelation(rel));
         columnsCount = relation->columns.size();
 
+        if (rel >= 24) fprintf(stderr, "relation %d\n", rel);
+
         // Allocate memory for the columns
         columnInfos[rel] = (ColumnInfo*) malloc(columnsCount * sizeof(ColumnInfo));
 
@@ -1020,7 +1022,10 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
                 if (element < minimum) minimum = element;
             }
 
+            if (rel >= 24) fprintf(stderr, "   column %d min = %-5d max = %-5d\n", col, minimum, maximum);
+
             // One pass for the distinct elements
+            /*
             vector<bool> distinctElements(maximum - minimum + 1, false);
             uint64_t distinctCounter = 0;
 
@@ -1031,12 +1036,12 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
                     distinctElements[element - minimum] = true;
                 }
             }
-
+            */
             // Save the infos
             columnInfos[rel][col].min      = minimum;
             columnInfos[rel][col].max      = maximum;
             columnInfos[rel][col].size     = tuples;
-            columnInfos[rel][col].distinct = distinctCounter;
+            columnInfos[rel][col].distinct = 100;
             columnInfos[rel][col].n        = maximum - minimum + 1;
             columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
 
