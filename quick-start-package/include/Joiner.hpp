@@ -84,7 +84,6 @@ class Joiner {
 
 };
 
-#include "header.hpp"
 #include "QueryPlan.hpp"
 
 int cleanQuery(QueryInfo &);
