@@ -6,11 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
 #set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
+
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fuse-ld=gold -Ofast -march=native -lpthread  -msse4.2")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread  -ltbb")
+
 add_compile_options(-Ofast -march=native)
 
 include_directories(include ~/tbb/tbb2018_20171205oss/include)
+
 
 add_library(database QueryPlan.cpp Relation.cpp Filter.cpp sys.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC

@@ -13,11 +13,10 @@
 
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
-#include "tbb/tbb.h"
-#include "tbb/parallel_reduce.h"
-#include "tbb/blocked_range.h"
+#include "tbb_parallel_types.hpp"
 
-#define THREAD_NUM 20
+
+#define THREAD_NUM 10
 
 using namespace tbb;
 using namespace std;
@@ -187,7 +186,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
-
 int compare(const void * a, const void * b)
 {
     return ( ((tuple_t*)a)->key - ((tuple_t*)b)->key );
@@ -272,7 +270,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
         : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
     }
-
+  
     for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
         (itr->second >= right_removed)
         ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
@@ -286,6 +284,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     }
     std::cerr << '\n';
 
+
+    /* PRINTS
+    std::cerr << endl << "New mapping ";
+    for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
+        std::cerr << itr->first << "." << itr->second << " ";
+    }
+    std::cerr << '\n';
     std::cerr << "Helper v R ";
     for (size_t i = 0; i < help_v_r.size(); i++) {
         cerr << help_v_r[i] << " ";
@@ -310,6 +315,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     uint32_t new_tbi = 0;
     uint32_t tup_i;
+
     //for (int th = 0; th < THREAD_NUM; th++) {
         chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[0].results;
 
@@ -363,6 +369,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 row_i = tb->tuples[tup_i].key;
                 for (size_t i = 0; i < help_v_r.size(); i++) {
                     rids_res[new_tbi*num_relations + i] = row_i;
+
                 }
 
                 row_i = tb->tuples[tup_i].payload;
@@ -370,6 +377,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     rids_res[new_tbi*num_relations + i + help_v_r.size()] =  row_i;
                 }
                 new_tbi++;
+
             }
 
         /* --------------------------------------------------------------------------------------
@@ -452,39 +460,39 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
    +---------------------+ */
 
 
-void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
+   void Joiner::AddColumnToTableT(SelectInfo &sel_info, table_t *table) {
 
-#ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-#endif
-
-    /* Create a new column_t for table */
-    column_t &column = *table->column_j;
-
-    /* Get the relation from joiner */
-    Relation &rel = getRelation(sel_info.relId);
-    column.size   = rel.size;
-    column.values = rel.columns.at(sel_info.colId);
-    column.id     = sel_info.colId;
-    column.table_index = -1;
-    unsigned relation_binding = sel_info.binding;
+   #ifdef time
+       struct timeval start;
+       gettimeofday(&start, NULL);
+   #endif
 
 
-    /* Get the right index from the relation id table */
-    unordered_map<unsigned, unsigned>::iterator itr = table->relations_bindings.find(relation_binding);
-    if (itr != table->relations_bindings.end())
-        column.table_index = itr->second;
-    else
-        std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors for " << relation_binding <<'\n';
+       /* Create a new column_t for table */
+       column_t &column = *table->column_j;
 
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeAddColumn += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
+       /* Get the relation from joiner */
+       Relation &rel = getRelation(sel_info.relId);
+       column.size   = rel.size;
+       column.values = rel.columns.at(sel_info.colId);
+       column.id     = sel_info.colId;
+       column.table_index = -1;
+       unsigned relation_binding = sel_info.binding;
 
-}
+       /* Get the right index from the relation id table */
+       unordered_map<unsigned, unsigned>::iterator itr = table->relations_bindings.find(relation_binding);
+       if (itr != table->relations_bindings.end())
+           column.table_index = itr->second;
+       else
+           std::cerr << "At AddColumnToTableT, Id not matchin with intermediate result vectors for " << relation_binding <<'\n';
+
+   #ifdef time
+       struct timeval end;
+       gettimeofday(&end, NULL);
+       timeAddColumn += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+   #endif
+
+   }
 
 table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 
@@ -578,6 +586,8 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     return temp;
 }
 
+#ifdef HOT_STUFF
+
 // utility function for for_join
 vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
     // cerr << "getTablesFromTree in" << endl;
@@ -607,8 +617,8 @@ vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
         this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
         this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
         /* Filter on right ? */
-        this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
-        this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
+        // this->AddColumnToTableT(jTreePtr->predPtr->left, table_l);
+        // this->AddColumnToTableT(jTreePtr->predPtr->right, table_r);
         // res = joiner.join(table_l, table_r, *jTreePtr->predPtr);
         return tableVec;
     }
@@ -617,6 +627,7 @@ vector<table_t*> Joiner::getTablesFromTree(JTree* jTreePtr) {
         if (jTreePtr->filterPtr == NULL) {
             // cerr << "c1" << endl << "c2" << endl;
             // res = joiner.SelfJoin(table_l, jTreePtr->predPtr);
+            tableVec.push_back(table_l);
             return tableVec;
         }
         // table filter
@@ -644,12 +655,12 @@ void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
     assert(tableVec.size() => 2 && tableVec.size() <= 4);
 
     // selected columns map
-    unordered_map< uint64_t, vector<uint64_t> > columns;
+    vector< vector<SelectInfo> > columns(1);
     for (auto s : selections) {
-        if (columns.find(s.relId) == columns.end())
-            columns[s.relId] = *(new vector<uint64_t>(s.colId));
-        else
-            columns[s.relId].push_back(s.colId);
+        // cerr << s.binding << "->" << s.colId << endl;
+        if (columns.size() <= s.binding)
+            columns.resize(columns.size()+1);
+        columns[s.binding].push_back(s);
     }
 
     // join tables and print the required check-sum "on-the-fly"
@@ -657,7 +668,7 @@ void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
         this->for_2(tableVec[0], tableVec[1], columns);
     else if (tableVec.size() == 3)
         this->for_3(tableVec[0], tableVec[1], tableVec[2], columns);
-    else// if (tableVec.size() == 4)
+    else    // if (tableVec.size() == 4)
         this->for_4(tableVec[0], tableVec[1], tableVec[2], tableVec[3], columns);
 
     // cerr << "for_join out" << endl;
@@ -666,29 +677,31 @@ void Joiner::for_join(JTree* jTreePtr, vector<SelectInfo> selections) {
 // for_2 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size
-void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, vector<uint64_t> > columns) {
-
-#ifdef hot
+void Joiner::for_2(table_t* table_a, table_t* table_b, vector< vector<SelectInfo> > columns) {
+    // cerr << "for_2 in" << endl;
+    string result_str;
     // we will need the values for the check_sum
-    // colMap maps the values of the SELECTed columns of each table to the respective table
-    unordered_map< uint64_t, vector<relation_t*> > colMap;
+    // colVec maps the values of the SELECTed columns of each table to the respective table
+    vector< vector<uint64_t*> > colVec(1);
     // cerr << "a1" << endl;
-    for (uint64_t i = 0; i <= 1; i++) {
-        for(auto c : columns[i]) {
-            SelectInfo temp;
-            temp.relId = columns.find(i)->first;
-            temp.binding = i;
-            temp.colId = c;
-            if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
-            else colMap[i].push_back(CreateRelationT(table_b, temp));
+    assert(columns.size() == 2);
+    for (uint64_t i = 0; i < columns.size(); i++) {
+        if (i == colVec.size())
+            colVec.resize(colVec.size()+1);
+        for(uint64_t j = 0; j < columns[i].size(); j++) {
+            vector<uint64_t*> temp = this->getRelation(columns[i][j].relId).columns;
+            colVec[i].push_back(temp[columns[i][j].colId]);
         }
     }
     // cerr << "a2" << endl;
-    // check_sum_map maps the check_sum of each SELECTed column of each table to the respective table
-    unordered_map< uint64_t, vector<uint64_t> > check_sum_map;
-    for (uint64_t i = 0; i <= 1; i++)
-        for (uint64_t j = 0; j <= columns[i].size(); j++)
-            check_sum_map[i].push_back(0);
+    // check_sum_vec maps the check_sum of each SELECTed column of each table to the respective table
+    vector< vector<uint64_t> > check_sum_vec(1);
+    for (uint64_t i = 0; i < columns.size(); i++) {
+        if (i == check_sum_vec.size())
+            check_sum_vec.resize(check_sum_vec.size()+1);
+        for (uint64_t j = 0; j < columns[i].size(); j++)
+            check_sum_vec[i].push_back(0);
+    }
     // cerr << "a2" << endl;
     /* create hash_table for the hash_join phase */
     std::unordered_multimap<uint64_t, hash_entry> hash_c;
@@ -723,13 +736,20 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
         /* vals->first = key ,vals->second = value */
         auto range_vals = hash_c.equal_range(iter_col->values[i]);
         for (auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            for (uint64_t j = 0; j <= 1; j++) {
-                // cerr << "c1.5" << endl;
-                for(uint64_t k = 0; k < columns[j].size(); k++) {
-                    // cerr << "c1.75 " << j << " " << k << " vs " << colMap.size() << " " << colMap[j].size() << endl;
-                    check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
+            for (uint64_t j = 0; j < check_sum_vec.size(); j++) {
+                // cerr << "c1.5 a" << endl;
+                for(uint64_t k = 0; k < check_sum_vec[j].size(); k++) {
+                    // cerr << "c1.75 " << j << " " << k << " " << i << " vs " << colVec.size() << " " << colVec[j].size() << endl;
+                    // cerr << "c1.75 " << j << " " << k << " " << i << "| " << h_rows[j][vals->second.index] << " " << i_rows[j][i] << " vs " << colVec.size() << " " << colVec[j].size() << endl;
+                    // check_sum_vec[j][k] += colVec[j][k][i];
+                    for (uint64_t l = 0 ; l < h_rows.size(); l++)
+                        check_sum_vec[j][k] += h_rows[l][vals->second.index];
+                    // cerr << "c1.75 b" << endl;
+                    /* then go to the s's row ids to get the values */
+                    for (uint64_t l = 0; l < i_rows.size(); l++)
+                        check_sum_vec[j][k] += i_rows[l][i];
                 }
-                // cerr << "c1.5 " << check_sum_map[j][0] << endl;
+                // cerr << "c1.5 b" << endl;
             }
         }
     }
@@ -740,11 +760,11 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
 
     // cerr << "d1" << endl;
     // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
-            // cerr << check_sum_map[i][j] << endl;
-            result_str += to_string(check_sum_map[i][j]);
-            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
+    for (uint64_t i = 0; i < check_sum_vec.size(); i++) {
+        for (uint64_t j = 0; j < check_sum_vec[i].size(); j++) {
+            // cerr << check_sum_vec[i][j] << endl;
+            result_str += to_string(check_sum_vec[i][j]);
+            if (j < check_sum_vec[i].size()-1 || i < check_sum_vec.size()-1)
                 result_str += " ";
         }
     }
@@ -754,98 +774,100 @@ void Joiner::for_2(table_t* table_a, table_t* table_b, unordered_map< uint64_t, 
 #endif
 }
 
+#endif
+
 // for_3 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size
-void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unordered_map< uint64_t, vector<uint64_t> > columns) {
-#ifdef hot
+
+void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, vector< vector<SelectInfo> > columns) {
     cerr << "for_3 in" << endl;
-    string result_str;
-    // we will need the values for the check_sum
-    // colMap maps the values of the SELECTed columns of each table to the respective table
-    unordered_map< uint64_t, vector<relation_t*> > colMap;
-    for (uint64_t i = 0; i <= 2; i++) {
-        for(auto c : columns[i]) {
-            SelectInfo temp;
-            temp.relId = columns.find(i)->first;
-            temp.binding = i;
-            temp.colId = c;
-            if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
-            else colMap[i].push_back(CreateRelationT(table_b, temp));
-        }
-    }
-    // check_sum_map maps the check_sum of each SELECTed column of each table to the respective table
-    unordered_map< uint64_t, vector<uint64_t> > check_sum_map;
-    for (uint64_t i = 0; i <= 2; i++)
-        for (uint64_t j = 0; j <= columns[i].size(); j++)
-            check_sum_map[i].push_back(0);
-    /* create hash_table for the hash_join phase */
-    std::unordered_multimap<uint64_t, hash_entry> hash_c, hash_c2;
-    /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
-    uint64_t hash_size, iter_size, iter_size2;
-    column_t *hash_col, *iter_col, *iter_col2;
-
-    /* check on wich table will create the hash_table */
-    hash_size = table_a->column_j->size;
-    hash_col = table_a->column_j;
-    matrix &h_rows = *table_a->relations_row_ids;
-
-    iter_size = table_b->column_j->size;
-    iter_col = table_b->column_j;
-    matrix &i_rows = *table_b->relations_row_ids;
-
-    iter_size2 = table_c->column_j->size;
-    iter_col2 = table_c->column_j;
-    matrix &i_rows2 = *table_c->relations_row_ids;
-
-    /* now put the values of the column_r in the hash_table(construction phase) */
-    for (uint64_t i = 0; i < hash_size; i++) {
-        /* store hash[value of the column] = {rowid, index} */
-        hash_entry hs;
-        hs.row_id = h_rows[hash_col->table_index][i];
-        hs.index = i;
-        hash_c.insert({hash_col->values[i], hs});
-    }
-    /* now the first phase of hashing */
-    for (uint64_t i = 0; i < iter_size; i++) {
-        /* remember we may have multi vals in 1 key,if it isnt a primary key */
-        /* vals->first = key ,vals->second = value */
-        auto range_vals = hash_c.equal_range(iter_col->values[i]);
-        for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            hash_entry hs;
-            hs.row_id = i_rows[iter_col->table_index][i];
-            hs.index = i;
-            hash_c2.insert({iter_col->values[i], hs});
-        }
-    }
-    /* now the second phase of hashing */
-    for (uint64_t i = 0; i < iter_size2; i++) {
-        /* remember we may have multi vals in 1 key,if it isnt a primary key */
-        /* vals->first = key ,vals->second = value */
-        auto range_vals = hash_c2.equal_range(iter_col2->values[i]);
-        for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            for (uint64_t j = 0; j <= 2; j++) {
-                for(uint64_t k = 0; k < columns[j].size(); k++) {
-                    check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
-                }
-            }
-        }
-    }
-    /* do the cleaning */
-    delete table_a->relations_row_ids;
-    delete table_b->relations_row_ids;
-    delete table_c->relations_row_ids;
-
-    // print checksums
-    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
-            // cerr << check_sum_map[i][j] << endl;
-            result_str += to_string(check_sum_map[i][j]);
-            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
-                result_str += " ";
-        }
-    }
-    cout << result_str << endl;
+    // string result_str;
+    // // we will need the values for the check_sum
+    // // colVec maps the values of the SELECTed columns of each table to the respective table
+    // unordered_map< uint64_t, vector<relation_t*> > colVec;
+    // for (uint64_t i = 0; i < columns.size(); i++) {
+    //     for(auto c : columns[i]) {
+    //         SelectInfo temp;
+    //         temp.relId = c.relId;
+    //         temp.binding = c.binding;
+    //         temp.colId = c.colId;
+    //         if (i == 1) colVec[i].push_back(CreateRelationT(table_a, temp));
+    //         else colVec[i].push_back(CreateRelationT(table_b, temp));
+    //     }
+    // }
+    // // check_sum_vec maps the check_sum of each SELECTed column of each table to the respective table
+    // unordered_map< uint64_t, vector<uint64_t> > check_sum_vec;
+    // for (uint64_t i = 0; i <= 2; i++)
+    //     for (uint64_t j = 0; j < columns[i].size(); j++)
+    //         check_sum_vec[i].push_back(0);
+    // /* create hash_table for the hash_join phase */
+    // std::unordered_multimap<uint64_t, hash_entry> hash_c, hash_c2;
+    // /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
+    // uint64_t hash_size, iter_size, iter_size2;
+    // column_t *hash_col, *iter_col, *iter_col2;
+    //
+    // /* check on wich table will create the hash_table */
+    // hash_size = table_a->column_j->size;
+    // hash_col = table_a->column_j;
+    // matrix &h_rows = *table_a->relations_row_ids;
+    //
+    // iter_size = table_b->column_j->size;
+    // iter_col = table_b->column_j;
+    // matrix &i_rows = *table_b->relations_row_ids;
+    //
+    // iter_size2 = table_c->column_j->size;
+    // iter_col2 = table_c->column_j;
+    // matrix &i_rows2 = *table_c->relations_row_ids;
+    //
+    // /* now put the values of the column_r in the hash_table(construction phase) */
+    // for (uint64_t i = 0; i < hash_size; i++) {
+    //     /* store hash[value of the column] = {rowid, index} */
+    //     hash_entry hs;
+    //     hs.row_id = h_rows[hash_col->table_index][i];
+    //     hs.index = i;
+    //     hash_c.insert({hash_col->values[i], hs});
+    // }
+    // /* now the first phase of hashing */
+    // for (uint64_t i = 0; i < iter_size; i++) {
+    //     /* remember we may have multi vals in 1 key,if it isnt a primary key */
+    //     /* vals->first = key ,vals->second = value */
+    //     auto range_vals = hash_c.equal_range(iter_col->values[i]);
+    //     for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+    //         hash_entry hs;
+    //         hs.row_id = i_rows[iter_col->table_index][i];
+    //         hs.index = i;
+    //         hash_c2.insert({iter_col->values[i], hs});
+    //     }
+    // }
+    // /* now the second phase of hashing */
+    // for (uint64_t i = 0; i < iter_size2; i++) {
+    //     /* remember we may have multi vals in 1 key,if it isnt a primary key */
+    //     /* vals->first = key ,vals->second = value */
+    //     auto range_vals = hash_c2.equal_range(iter_col2->values[i]);
+    //     for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+    //         for (uint64_t j = 0; j <= 2; j++) {
+    //             for(uint64_t k = 0; k < columns[j].size(); k++) {
+    //                 check_sum_vec[j][k] += colVec[j][k]->tuples[i].payload;
+    //             }
+    //         }
+    //     }
+    // }
+    // /* do the cleaning */
+    // delete table_a->relations_row_ids;
+    // delete table_b->relations_row_ids;
+    // delete table_c->relations_row_ids;
+    //
+    // // print checksums
+    // for (uint64_t i = 0; i < check_sum_vec.size(); i++) {
+    //     for (uint64_t j = 0; j < check_sum_vec[i].size(); j++) {
+    //         // cerr << check_sum_vec[i][j] << endl;
+    //         result_str += to_string(check_sum_vec[i][j]);
+    //         if (j < check_sum_vec[i].size()-1 || i < check_sum_vec.size()-1)
+    //             result_str += " ";
+    //     }
+    // }
+    // cout << result_str << endl;
 
     cerr << "for_3 out" << endl;
     #endif
@@ -854,141 +876,152 @@ void Joiner::for_3(table_t* table_a, table_t* table_b, table_t* table_c, unorder
 // for_4 join UNOPTIMIZED
 // columns maps the SELECTed columns of each table to the respective table
 // we assume that table_a->column_j->size <= table_b->column_j->size <= table_c->column_j->size <= table_d->column_j->size
-void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, unordered_map< uint64_t, vector<uint64_t> > columns) {
-#ifdef hot
+
+void Joiner::for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, vector< vector<SelectInfo> > columns) {
     cerr << "for_4 in" << endl;
-    string result_str;
-    // we will need the values for the check_sum
-    // colMap maps the values of the SELECTed columns of each table to the respective table
-    unordered_map< uint64_t, vector<relation_t*> > colMap;
-    for (uint64_t i = 0; i <= 3; i++) {
-        for(auto c : columns[i]) {
-            SelectInfo temp;
-            temp.relId = columns.find(i)->first;
-            temp.binding = i;
-            temp.colId = c;
-            if (i == 1) colMap[i].push_back(CreateRelationT(table_a, temp));
-            else colMap[i].push_back(CreateRelationT(table_b, temp));
-        }
-    }
-    // check_sum_map maps the check_sum of each SELECTed column of each table to the respective table
-    unordered_map< uint64_t, vector<uint64_t> > check_sum_map;
-    for (uint64_t i = 0; i <= 3; i++)
-        for (uint64_t j = 0; j <= columns[i].size(); j++)
-            check_sum_map[i].push_back(0);
-    /* create hash_table for the hash_join phase */
-    std::unordered_multimap<uint64_t, hash_entry> hash_c, hash_c2, hash_c3;
-    /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
-    uint64_t hash_size, iter_size, iter_size2, iter_size3;
-    column_t *hash_col, *iter_col, *iter_col2, *iter_col3;
-
-    /* check on wich table will create the hash_table */
-    hash_size = table_a->column_j->size;
-    hash_col = table_a->column_j;
-    matrix &h_rows = *table_a->relations_row_ids;
-
-    iter_size = table_b->column_j->size;
-    iter_col = table_b->column_j;
-    matrix &i_rows = *table_b->relations_row_ids;
-
-    iter_size2 = table_c->column_j->size;
-    iter_col2 = table_c->column_j;
-    matrix &i_rows2 = *table_c->relations_row_ids;
-
-    iter_size3 = table_d->column_j->size;
-    iter_col3 = table_d->column_j;
-    matrix &i_rows3 = *table_d->relations_row_ids;
-
-    /* now put the values of the column_r in the hash_table(construction phase) */
-    for (uint64_t i = 0; i < hash_size; i++) {
-        /* store hash[value of the column] = {rowid, index} */
-        hash_entry hs;
-        hs.row_id = h_rows[hash_col->table_index][i];
-        hs.index = i;
-        hash_c.insert({hash_col->values[i], hs});
-    }
-    /* now the first phase of hashing */
-    for (uint64_t i = 0; i < iter_size; i++) {
-        /* remember we may have multi vals in 1 key,if it isnt a primary key */
-        /* vals->first = key ,vals->second = value */
-        auto range_vals = hash_c.equal_range(iter_col->values[i]);
-        for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            hash_entry hs;
-            hs.row_id = i_rows[iter_col->table_index][i];
-            hs.index = i;
-            hash_c2.insert({iter_col->values[i], hs});
-        }
-    }
-    /* now the second phase of hashing */
-    for (uint64_t i = 0; i < iter_size2; i++) {
-        /* remember we may have multi vals in 1 key,if it isnt a primary key */
-        /* vals->first = key ,vals->second = value */
-        auto range_vals = hash_c2.equal_range(iter_col2->values[i]);
-        for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            hash_entry hs;
-            hs.row_id = i_rows2[iter_col2->table_index][i];
-            hs.index = i;
-            hash_c3.insert({iter_col2->values[i], hs});
-        }
-    }
-    /* now the third phase of hashing */
-    for (uint64_t i = 0; i < iter_size3; i++) {
-        /* remember we may have multi vals in 1 key,if it isnt a primary key */
-        /* vals->first = key ,vals->second = value */
-        auto range_vals = hash_c3.equal_range(iter_col3->values[i]);
-        for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
-            for (uint64_t j = 0; j <= 3; j++) {
-                for(uint64_t k = 0; k < columns[j].size(); k++) {
-                    check_sum_map[j][k] += colMap[j][k]->tuples[i].payload;
-                }
-            }
-        }
-    }
-    /* do the cleaning */
-    delete table_a->relations_row_ids;
-    delete table_b->relations_row_ids;
-    delete table_c->relations_row_ids;
-    delete table_d->relations_row_ids;
-
-    // print checksums
-
-    for (uint64_t i = 0; i < check_sum_map.size(); i++) {
-        for (uint64_t j = 0; j < check_sum_map[i].size(); j++) {
-            // cerr << check_sum_map[i][j] << endl;
-            result_str += to_string(check_sum_map[i][j]);
-            if (j < check_sum_map[i].size()-1 || i < check_sum_map.size()-1)
-                result_str += " ";
-        }
-    }
-    cout << result_str << endl;
+    // string result_str;
+    // // we will need the values for the check_sum
+    // // colVec maps the values of the SELECTed columns of each table to the respective table
+    // unordered_map< uint64_t, vector<relation_t*> > colVec;
+    // for (uint64_t i = 0; i < columns.size(); i++) {
+    //     for(auto c : columns[i]) {
+    //         SelectInfo temp;
+    //         temp.relId = c.relId;
+    //         temp.binding = c.binding;
+    //         temp.colId = c.colId;
+    //         if (i == 1) colVec[i].push_back(CreateRelationT(table_a, temp));
+    //         else colVec[i].push_back(CreateRelationT(table_b, temp));
+    //     }
+    // }
+    // // check_sum_vec maps the check_sum of each SELECTed column of each table to the respective table
+    // unordered_map< uint64_t, vector<uint64_t> > check_sum_vec;
+    // for (uint64_t i = 0; i <= 3; i++)
+    //     for (uint64_t j = 0; j < columns[i].size(); j++)
+    //         check_sum_vec[i].push_back(0);
+    // /* create hash_table for the hash_join phase */
+    // std::unordered_multimap<uint64_t, hash_entry> hash_c, hash_c2, hash_c3;
+    // /* hash_size->size of the hashtable,iter_size->size to iterate over to find same vals */
+    // uint64_t hash_size, iter_size, iter_size2, iter_size3;
+    // column_t *hash_col, *iter_col, *iter_col2, *iter_col3;
+    //
+    // /* check on wich table will create the hash_table */
+    // hash_size = table_a->column_j->size;
+    // hash_col = table_a->column_j;
+    // matrix &h_rows = *table_a->relations_row_ids;
+    //
+    // iter_size = table_b->column_j->size;
+    // iter_col = table_b->column_j;
+    // matrix &i_rows = *table_b->relations_row_ids;
+    //
+    // iter_size2 = table_c->column_j->size;
+    // iter_col2 = table_c->column_j;
+    // matrix &i_rows2 = *table_c->relations_row_ids;
+    //
+    // iter_size3 = table_d->column_j->size;
+    // iter_col3 = table_d->column_j;
+    // matrix &i_rows3 = *table_d->relations_row_ids;
+    //
+    // /* now put the values of the column_r in the hash_table(construction phase) */
+    // for (uint64_t i = 0; i < hash_size; i++) {
+    //     /* store hash[value of the column] = {rowid, index} */
+    //     hash_entry hs;
+    //     hs.row_id = h_rows[hash_col->table_index][i];
+    //     hs.index = i;
+    //     hash_c.insert({hash_col->values[i], hs});
+    // }
+    // /* now the first phase of hashing */
+    // for (uint64_t i = 0; i < iter_size; i++) {
+    //     /* remember we may have multi vals in 1 key,if it isnt a primary key */
+    //     /* vals->first = key ,vals->second = value */
+    //     auto range_vals = hash_c.equal_range(iter_col->values[i]);
+    //     for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+    //         hash_entry hs;
+    //         hs.row_id = i_rows[iter_col->table_index][i];
+    //         hs.index = i;
+    //         hash_c2.insert({iter_col->values[i], hs});
+    //     }
+    // }
+    // /* now the second phase of hashing */
+    // for (uint64_t i = 0; i < iter_size2; i++) {
+    //     /* remember we may have multi vals in 1 key,if it isnt a primary key */
+    //     /* vals->first = key ,vals->second = value */
+    //     auto range_vals = hash_c2.equal_range(iter_col2->values[i]);
+    //     for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+    //         hash_entry hs;
+    //         hs.row_id = i_rows2[iter_col2->table_index][i];
+    //         hs.index = i;
+    //         hash_c3.insert({iter_col2->values[i], hs});
+    //     }
+    // }
+    // /* now the third phase of hashing */
+    // for (uint64_t i = 0; i < iter_size3; i++) {
+    //     /* remember we may have multi vals in 1 key,if it isnt a primary key */
+    //     /* vals->first = key ,vals->second = value */
+    //     auto range_vals = hash_c3.equal_range(iter_col3->values[i]);
+    //     for(auto &vals = range_vals.first; vals != range_vals.second; vals++) {
+    //         for (uint64_t j = 0; j <= 3; j++) {
+    //             for(uint64_t k = 0; k < columns[j].size(); k++) {
+    //                 check_sum_vec[j][k] += colVec[j][k]->tuples[i].payload;
+    //             }
+    //         }
+    //     }
+    // }
+    // /* do the cleaning */
+    // delete table_a->relations_row_ids;
+    // delete table_b->relations_row_ids;
+    // delete table_c->relations_row_ids;
+    // delete table_d->relations_row_ids;
+    //
+    // // print checksums
+    // for (uint64_t i = 0; i < check_sum_vec.size(); i++) {
+    //     for (uint64_t j = 0; j < check_sum_vec[i].size(); j++) {
+    //         // cerr << check_sum_vec[i][j] << endl;
+    //         result_str += to_string(check_sum_vec[i][j]);
+    //         if (j < check_sum_vec[i].size()-1 || i < check_sum_vec.size()-1)
+    //             result_str += " ";
+    //     }
+    // }
+    // cout << result_str << endl;
 
     cerr << "for_4 out" << endl;
-#endif
 }
 
-struct threadSumArg_t {
-    uint32_t low;
-    uint32_t high;
-    const uint64_t * array;
-};
-
-void *threadSum(void * arg) {
-    struct threadSumArg_t * sumArg = (struct threadSumArg_t *) arg;
-
-    // Loop the array for the checksum
-    uint64_t * res  = (uint64_t*) malloc(sizeof(uint64_t)); *res = 0;
-    uint32_t low  = sumArg->low;
-    uint32_t high = sumArg->high;
-    const uint64_t * array = sumArg->array;
-    for (uint32_t idx = low; idx <= high; idx++) {
-        *res += array[idx];
-    }
-
-    // Free the argument
-    free(sumArg);
-
-    return (void *)res;
+void Joiner::construct(table_t *table) {
+// #ifdef time
+//     struct timeval start;
+//     gettimeofday(&start, NULL);
+// #endif
+//
+//     /* Innitilize helping variables */
+//     column_t &column = *table->column_j;
+//     const uint64_t *column_values = column.values;
+//     const int       table_index   = column.table_index;
+//     const uint64_t  column_size   = table->relations_row_ids->operator[](table_index).size();
+//     matrix &row_ids = *table->relations_row_ids;
+//
+//     /* Create a new value's array  */
+//     uint64_t *const new_values  = new uint64_t[column_size];
+//
+//     /* construct a new array with the row ids that it's sorted */
+//     //vector<int> rids = row_ids[table_index];  //cp construct
+//     //std::sort(rids.begin(), rids.end());
+//
+//     /* Pass the values of the old column to the new one, based on the row ids of the joiner */
+//     for (int i = 0; i < column_size; i++) {
+//     	new_values[i] = column_values[row_ids[table_index][i]];//rids[i]];
+//     }
+//
+//     /* Update the column of the table */
+//     column.values = new_values;
+//     column.size   = column_size;
+//
+// #ifdef time
+//     struct timeval end;
+//     gettimeofday(&end, NULL);
+//     timeConstruct += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+// #endif
 }
+
 
 struct CheckSumT
 {
@@ -1112,7 +1145,8 @@ int main(int argc, char* argv[]) {
     #endif
 
     // Create threads
-    task_scheduler_init init(4); // Number of threads
+    task_scheduler_init init(THREAD_NUM); // Number of threads
+
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
@@ -1209,8 +1243,7 @@ int main(int argc, char* argv[]) {
         // JTree *jTreePtr;
         // if (i.predicates.size() == 1)
         //     jTreePtr = treegen(&i);
-        // Create the optimal join tree
-        // else
+        // else                            // Create the optimal join tree
             optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
         //optimalJoinTree->root->print(optimalJoinTree->root);
 
