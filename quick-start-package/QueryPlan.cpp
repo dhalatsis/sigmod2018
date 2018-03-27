@@ -995,9 +995,9 @@ private:
     uint64_t max, min;
 
 public:
-    ParallelReduction() { array = NULL; max = 0; min = numeric_limits<uint64_t>::max(); }
+    //ParallelReduction() { array = NULL; max = 0; min = numeric_limits<uint64_t>::max(); }
     ParallelReduction(uint64_t *arr) : array(arr), max(0), min(numeric_limits<uint64_t>::max()) {}
-    ParallelReduction(ParallelReduction& p) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()) {}
+    //ParallelReduction(ParallelReduction& p) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()) {}
     ParallelReduction(ParallelReduction& p, split) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()){}
 
     uint64_t getMax() { return max; }
@@ -1057,22 +1057,22 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             */
 
             // One pass for the distinct elements
-            vector<bool> distinctElements(maximum - minimum + 1, false);
-            uint64_t distinctCounter = 0;
-
-            for (int i = 0; i < tuples; i++) {
-                element = relation->columns[col][i];
-                if (distinctElements[element - minimum] == false) {
-                    distinctCounter++;
-                    distinctElements[element - minimum] = true;
-                }
-            }
+            // vector<bool> distinctElements(maximum - minimum + 1, false);
+            // uint64_t distinctCounter = 0;
+            //
+            // for (int i = 0; i < tuples; i++) {
+            //     element = relation->columns[col][i];
+            //     if (distinctElements[element - minimum] == false) {
+            //         distinctCounter++;
+            //         distinctElements[element - minimum] = true;
+            //     }
+            // }
 
             // Save the infos
             columnInfos[rel][col].min      = minimum;
             columnInfos[rel][col].max      = maximum;
             columnInfos[rel][col].size     = tuples;
-            columnInfos[rel][col].distinct = distinctCounter;
+            columnInfos[rel][col].distinct = 100;//distinctCounter;
             columnInfos[rel][col].n        = maximum - minimum + 1;
             columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
 

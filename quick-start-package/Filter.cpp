@@ -1,7 +1,50 @@
 #include "Joiner.hpp"
 
+#include "tbb/tbb.h"
+#include "tbb/parallel_reduce.h"
+#include "tbb/parallel_for.h"
+#include "tbb/blocked_range.h"
 
+
+using namespace tbb;
 using namespace std;
+spin_mutex FilterMutex;
+
+
+/*----------- Struct to parallelize filter  ----------------*/
+/* Create Relation T parallel ctruct */
+struct ParallelNonItermediateFilterT {
+
+public:
+    unsigned new_tbi;
+
+    /* Initial constructor */
+    ParallelNonItermediateFilterT ( uint64_t * values, unsigned * old_rids, unsigned * rids, int filter )
+    :values{values}, old_rids{old_rids}, rids{rids}, filter{filter}, new_tbi(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) const {
+
+        /* Do the write */
+        spin_mutex::scoped_lock lock;
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            if (values[i] == filter) {
+                lock.acquire(FilterMutex);
+                rids[new_tbi] = i;
+                //new_tbi++;
+                lock.release();
+            }
+        }
+    }
+
+private:
+    uint64_t * values;
+    unsigned * old_rids;
+    unsigned * rids;
+    int filter;
+};
+
 
 double timeSelfJoin = 0;
 double timeSelectFilter = 0;
@@ -217,26 +260,26 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    for (size_t index = 0; index < size; index++) {
 
-        /* Intermediate result */
-        if (inter_res) {
+    /* Intermediate result */
+    if (inter_res) {
+        for (size_t index = 0; index < size; index++) {
             if (values[old_row_ids[index]] == filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
                 new_row_ids[new_tbi] = old_row_ids[index];
                 new_tbi++;
-                //}
             }
         }
-        else {
+    }
+    else {
+        for (size_t index = 0; index < size; index++) {
             if (values[index] == filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
-                //std::cerr << "SIZE " << size << '\n';
                 new_row_ids[new_tbi] = index;
                 new_tbi++;
-                //}
             }
         }
+        //ParallelNonItermediateFilterT pft( values, old_row_ids, new_row_ids, filter );
+        //parallel_for(blocked_range<size_t>(0,size), pft);
+
     }
 
     /* Swap the old vector with the new one */
@@ -260,23 +303,19 @@ void Joiner::SelectGreater(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    for (size_t index = 0; index < size; index++) {
-
-        /* Intermediate result */
-        if (inter_res) {
+    if (inter_res) {
+        for (size_t index = 0; index < size; index++) {
             if (values[old_row_ids[index]] > filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
                 new_row_ids[new_tbi] = old_row_ids[index];
                 new_tbi++;
-                //}
             }
         }
-        else {
+    }
+    else {
+        for (size_t index = 0; index < size; index++) {
             if (values[index] > filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
                 new_row_ids[new_tbi] = index;
                 new_tbi++;
-                //}
             }
         }
     }
@@ -301,23 +340,19 @@ void Joiner::SelectLess(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    for (size_t index = 0; index < size; index++) {
-
-        /* Intermediate result */
-        if (inter_res) {
+    if (inter_res) {
+        for (size_t index = 0; index < size; index++) {
             if (values[old_row_ids[index]] < filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
                 new_row_ids[new_tbi] = old_row_ids[index];
                 new_tbi++;
-                //}
             }
         }
-        else {
+    }
+    else {
+        for (size_t index = 0; index < size; index++) {
             if (values[index] < filter) {
-                //for (size_t rel_index = 0; rel_index < rel_num; rel_index++) {
                 new_row_ids[new_tbi] = index;
                 new_tbi++;
-                //}
             }
         }
     }

@@ -3,6 +3,7 @@
 #include <stdio.h>  /* FILE, fopen */
 #include <stdlib.h> /* exit, perror */
 #include <unistd.h> /* sysconf */
+#include <errno.h>
 
 #include "cpu_mapping.h"
 
@@ -89,7 +90,7 @@ get_cpu_id(int thread_id)
  node 2 cpus: 2 6 10 14 18 22 26 30 34 38 42 46 50 54 58 62
  node 3 cpus: 3 7 11 15 19 23 27 31 35 39 43 47 51 55 59 63
 */
-//#define INTEL_E5 1
+#define INTEL_E5 1
 
 #define my_Topology
 #ifdef my_Topology
@@ -178,7 +179,6 @@ get_num_numa_regions(void)
 int
 get_numa_node_of_address(void * ptr)
 {
-    int numa_node = -1;
-    get_mempolicy(&numa_node, NULL, 0, ptr, MPOL_F_NODE | MPOL_F_ADDR);
+    int numa_node = 0;
     return numa_node;
 }

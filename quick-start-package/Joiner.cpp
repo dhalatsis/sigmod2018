@@ -16,7 +16,7 @@
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
 
-#define THREAD_NUM 20
+#define THREAD_NUM 4 //20
 //#define prints
 
 using namespace tbb;
