@@ -16,7 +16,8 @@
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
 
-#define THREAD_NUM 4 //20
+#define THREAD_NUM 20
+#define GRAINSIZE 100
 //#define prints
 
 using namespace tbb;
@@ -160,7 +161,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         // }
 
         RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
-        parallel_for(blocked_range<size_t>(0,size), rct);
+        parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
     }
     else {
         /* Initialize relation */
@@ -175,7 +176,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         // }
 
         RelationNonIntermediateCT rct( new_relation->tuples, values );
-        parallel_for(blocked_range<size_t>(0,size), rct);
+        parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
 
     }
 
@@ -335,7 +336,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 &help_v_r, &help_v_s,
                 idx, old_relnum_r, old_relnum_s, num_relations
             );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
         }
         else if (table_r->intermediate_res) {
             TableRIntermediateCT tct
@@ -345,7 +346,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 &help_v_r, &help_v_s,
                 idx, old_relnum_r, old_relnum_s, num_relations
             );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
         }
         else if (table_s->intermediate_res) {
             TableSIntermediateCT tct
@@ -355,7 +356,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 &help_v_r, &help_v_s,
                 idx, old_relnum_r, old_relnum_s, num_relations
             );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
         }
         else {
             TableNoneIntermediateCT tct
@@ -365,7 +366,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 &help_v_r, &help_v_s,
                 idx, old_relnum_r, old_relnum_s, num_relations
             );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
         }
 
 
@@ -384,7 +385,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
 
             }
             else if (table_r->intermediate_res) {
@@ -395,7 +396,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
             }
             else if (table_s->intermediate_res) {
                 TableSIntermediateCT tct
@@ -405,7 +406,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
             }
             else {
                 TableNoneIntermediateCT tct
@@ -415,7 +416,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
             }
 
             /* Go the the next buffer */
@@ -1042,8 +1043,7 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
 
         /* Create the Sum obj */
         CheckSumT cs( col, row_ids, rels_num, tbi );
-        int grainzie = 1;
-        parallel_reduce( blocked_range<size_t>(0, size, grainzie), cs );
+        parallel_reduce( blocked_range<size_t>(0, size, GRAINSIZE), cs );
 
         return to_string( cs.my_sum );
     }

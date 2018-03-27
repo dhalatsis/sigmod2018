@@ -59,7 +59,6 @@ init_mappings()
         int i;
 
         max_cpus  = sysconf(_SC_NPROCESSORS_ONLN);
-        fprintf(stderr, "Mas cpus %d\n", max_cpus);
         for(i = 0; i < max_cpus; i++){
             node_mapping[i] = i;
         }
@@ -92,7 +91,7 @@ get_cpu_id(int thread_id)
 */
 #define INTEL_E5 1
 
-#define my_Topology
+//#define my_Topology
 #ifdef my_Topology
 
 /* TODO CHANGE
@@ -179,6 +178,6 @@ get_num_numa_regions(void)
 int
 get_numa_node_of_address(void * ptr)
 {
-    int numa_node = 0;
+    int numa_node = 1;
     return numa_node;
 }

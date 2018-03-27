@@ -18,7 +18,7 @@
 
 /** number of passes in multipass partitioning, currently fixed at 2. */
 #ifndef NUM_PASSES
-#define NUM_PASSES 2
+#define NUM_PASSES 1
 #endif
 
 /** number of probe items for prefetching: must be a power of 2 */
