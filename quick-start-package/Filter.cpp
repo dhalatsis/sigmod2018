@@ -1,5 +1,6 @@
 #include "Joiner.hpp"
 
+#include <vector>
 #include "tbb/tbb.h"
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
@@ -218,6 +219,73 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
     return;
 }
 
+
+/* Its better hot to use it TODO change it */
+void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
+    /* Get the relation and the columns of the relation */
+    Relation &rel = getRelation(filterPtrs[0]->filterColumn.relId);
+    vector<uint64_t*> & columns = rel.columns;
+    unsigned size = rel.size;
+
+    unsigned * old_row_ids = table->row_ids;
+    unsigned * new_row_ids = (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+
+    /* Loop for the relation size */
+    unsigned index = 0;
+    for (unsigned i = 0; i < size; i++) {
+
+        /* Loop for all the predicates */
+        bool pass = false;
+        for (auto filter : filterPtrs) {
+
+            unsigned col_id = (*filter).filterColumn.colId;
+            uint64_t filter_const = (*filter).constant;
+
+            /* If it passes all the filter */
+            if ((*filter).comparison == FilterInfo::Comparison::Less) {
+                if (columns[col_id][i] < filter_const)
+                    pass = true;
+            } else if ((*filter).comparison == FilterInfo::Comparison::Greater) {
+                if (columns[col_id][i] > filter_const)
+                    pass = true;
+            } else if ((*filter).comparison == FilterInfo::Comparison::Equal) {
+                if (columns[col_id][i] == filter_const)
+                    pass = true;
+
+            }
+
+            /* Did we pass the filter */
+            if(pass) continue;
+            else     break;
+        }
+
+        /* Add it if pass == true */
+        if (pass) {
+            new_row_ids[index] = i;
+            index++;
+        }
+    }
+
+    /* Swap the old vector with the new one */
+    (table->intermediate_res) ? (free(old_row_ids)) : ((void)0);
+    table->row_ids = new_row_ids;
+    table->tups_num = index;
+    table->intermediate_res = true;
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeSelectFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+}
+
+
 /* Its better hot to use it TODO change it */
 void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 
@@ -244,7 +312,6 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table) {
     gettimeofday(&end, NULL);
     timeSelectFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
-
 }
 
 void Joiner::SelectEqual(table_t *table, int filter) {

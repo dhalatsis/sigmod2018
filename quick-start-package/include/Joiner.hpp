@@ -63,6 +63,7 @@ class Joiner {
     void construct(table_t *table);
 
     // The select functions
+    void SelectAll(std::vector<FilterInfo*> & filterPtrs, table_t* table);
     void Select(FilterInfo &sel_info, table_t *table);
     void SelectEqual(table_t *table, int filter);
     void SelectGreater(table_t *table, int filter);
