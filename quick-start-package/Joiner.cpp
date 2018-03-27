@@ -39,10 +39,21 @@ double timeCheckSum = 0;
 double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
 double timeCreateTableT = 0;
+double timeCTPrepear =0;
+double timeCT1bucket = 0;
+double timeCTMoreBuckets = 0;
 double timeExecute = 0;
 double timePreparation = 0;
+double timeCleanQuery = 0;
+
 
 int cleanQuery(QueryInfo &info) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     /* Remove weak filters */
     int changed = 0;
 
@@ -109,6 +120,12 @@ int cleanQuery(QueryInfo &info) {
     for (auto pred: pred_set) {
         info.predicates.push_back(pred);
     }
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCleanQuery += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
     return 0;
 }
@@ -193,6 +210,11 @@ int compare(const void * a, const void * b)
 
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
 
     /* Cut the unused relations */
     unordered_map<unsigned, unsigned>::iterator itr;
@@ -308,11 +330,11 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     const unsigned old_relnum_r = table_r->rels_num;
     const unsigned old_relnum_s = table_s->rels_num;
 
-
-    #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-    #endif
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
     uint32_t idx = 0;  // POints to the right index on the res
     uint32_t tup_i;
@@ -324,6 +346,10 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         tuplebuffer_t * tb = cb->buf;
         uint32_t numbufs = cb->numbufs;
         uint32_t row_i;
+
+#ifdef time
+        gettimeofday(&start, NULL);
+#endif
 
         /* Depending on tables choose what to pass */
         if (table_r->intermediate_res && table_s->intermediate_res) {
@@ -367,6 +393,11 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
         }
 
+#ifdef time
+        gettimeofday(&end, NULL);
+        timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        gettimeofday(&start, NULL);
+#endif
 
         /* --------------------------------------------------------------------------------------
         The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
@@ -422,15 +453,14 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             tb = tb->next;
         }
 
+#ifdef time
+        gettimeofday(&end, NULL);
+        timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
         /* Free cb */
         chainedtuplebuffer_free(cb);
     }
-
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
 
     return new_table;
 }
@@ -554,18 +584,15 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     }
 #endif
 
-#ifdef TIME_DETAILS
+#ifdef time
     gettimeofday(&start, NULL);
 #endif
     table_t *temp = CreateTableT(res, table_r, table_s, cmap);
-#ifdef TIME_DETAILS
+#ifdef time
     gettimeofday(&end, NULL);
-    dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    if(!done_testing) {
-        cerr << "CreateTableT: " << dt << "sec for " << res->totalresults << " results" << endl;
-        flush(cerr);
-    }
+    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
+
 
     /* Free the tables */
     free(table_r->row_ids);
@@ -821,8 +848,12 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
     std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
+    std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;
+    std::cerr << "--timeCT1bucket:     " << (long)(timeCT1bucket * 1000) << endl;
+    std::cerr << "--timeCTMoreBuckets: " << (long)(timeCTMoreBuckets * 1000) << endl;
     std::cerr << "timeRadixJoin:       " << (long)(timeRadixJoin * 1000) << endl;
     std::cerr << "timeCheckSum:        " << (long)(timeCheckSum * 1000) << endl;
+    std::cerr << "timeCleanQuery:      " << (long)(timeCleanQuery * 1000) << endl;
     std::cerr << "timeExecute:         " << (long)(timeExecute * 1000) << endl;
     flush(std::cerr);
 #endif
