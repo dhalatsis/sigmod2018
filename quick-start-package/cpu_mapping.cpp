@@ -11,6 +11,8 @@
  * @{
  */
 //#define my_Topology
+#define NUMA_NODE 1
+
 #define MAX_NODES 512
 
 static int inited = 0;
@@ -178,6 +180,6 @@ get_num_numa_regions(void)
 int
 get_numa_node_of_address(void * ptr)
 {
-    int numa_node = 0;
+    int numa_node = NUMA_NODE;
     return numa_node;
 }
