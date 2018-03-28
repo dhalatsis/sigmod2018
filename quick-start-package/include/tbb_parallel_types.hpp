@@ -3,11 +3,17 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/partitioner.h"
 
-#define THREAD_NUM 20
+
+#define THREAD_NUM 4
 #define GRAINSIZE  100
 
 using namespace tbb;
+
+
+/* Some more types */
+#include "tbb_ontheflyChecksums_types.hpp"
 
 /* Struct for praralle check sum */
 struct CheckSumT {
