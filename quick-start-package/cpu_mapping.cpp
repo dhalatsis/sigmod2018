@@ -13,8 +13,8 @@
 /** \internal
  * @{
  */
-//#define my_Topology
-#define NUMA_NODE 1
+#define my_Topology
+#define NUMA_NODE 0
 
 #define MAX_NODES 512
 
