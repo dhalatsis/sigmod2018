@@ -15,7 +15,7 @@ add_compile_options(-Ofast -march=native)
 include_directories(include ~/tbb/tbb2018_20171205oss/include)
 
 
-add_library(database QueryPlan.cpp Relation.cpp Filter.cpp sys.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Parser.cpp Utils.cpp)
+add_library(database QueryPlan.cpp Relation.cpp Filter.cpp sys.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -26,7 +26,7 @@ if (CMAKE_BUILD_TYPE MATCHES "[Dd][Ee][Bb][Uu][Gg]" OR FORCE_TESTS)
     add_subdirectory(test)
 endif()
 
-set(SOURCE_FILES QueryPlan.cpp treegen.cpp sys.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp genzipf.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
+set(SOURCE_FILES QueryPlan.cpp treegen.cpp sys.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES})
 target_link_libraries(Joiner tbb database)
 
