@@ -25,14 +25,11 @@
 #define pthread_barrier_destroy(b)  barrier_destroy(b)
 #define pthread_barrier_wait(b)     barrier_wait(b)
 
-#define PTHREAD_BARRIER_SERIAL_THREAD 1
-/** barrier wait macro */
-#define BARRIER_ARRIVE(B,RV)                            \
-    RV = pthread_barrier_wait(B);                       \
-    if(RV !=0 && RV != PTHREAD_BARRIER_SERIAL_THREAD){  \
-        printf("Couldn't wait on barrier\n");           \
-        exit(EXIT_FAILURE);                             \
-    }
+#ifdef __GNUC__
+#define UNUSED __attribute__ ((unused))
+#else
+#define UNUSED
+#endif
 
 typedef struct {
     int             needed;
@@ -45,7 +42,7 @@ static int barrier_init(barrier_t *barrier,int needed);
 static int barrier_destroy(barrier_t *barrier);
 static int barrier_wait(barrier_t *barrier);
 
-int
+UNUSED int
 barrier_init(barrier_t *barrier,int needed)
 {
     barrier->needed = needed;
@@ -56,7 +53,7 @@ barrier_init(barrier_t *barrier,int needed)
     return 0;
 }
 
-int
+UNUSED int
 barrier_destroy(barrier_t *barrier)
 {
     pthread_mutex_destroy(&barrier->mutex);
@@ -65,7 +62,7 @@ barrier_destroy(barrier_t *barrier)
     return 0;
 }
 
-int
+UNUSED int
 barrier_wait(barrier_t *barrier)
 {
     pthread_mutex_lock(&barrier->mutex);
@@ -82,7 +79,6 @@ barrier_wait(barrier_t *barrier)
 
     return 0;
 }
-
 #endif
 
 #endif /* BARRIER_H */

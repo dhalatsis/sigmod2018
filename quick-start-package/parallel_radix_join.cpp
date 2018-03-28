@@ -26,10 +26,6 @@
 #include "cpu_mapping.h"        /* get_cpu_id */
 #include "rdtsc.h"              /* startTimer, stopTimer */
 
-#ifdef PERF_COUNTERS
-#include "perf_counters.h"      /* PCM_x */
-#endif
-
 #include "barrier.h"            /* pthread_barrier_* */
 #include "affinity.h"           /* pthread_attr_setaffinity_np */
 #include "generator.h"          /* numa_localize() */
@@ -832,7 +828,7 @@ store_nontemp_64B(void * dst, void * src)
     _mm_stream_si128 (d3, s3);
     _mm_stream_si128 (d4, s4);
 
-#else*/
+#else
     /* just copy with assignment */
     *(cacheline_t *)dst = *(cacheline_t *)src;
 
@@ -981,7 +977,7 @@ prj_thread(void * param)
 
     int64_t * outputR = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
     int64_t * outputS = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
-    MALLOC_CHECK((outputR && outputS));
+    //MALLOC_CHECK((outputR && outputS));
 
     int numaid = get_numa_id(my_tid);
     part_queue = args->part_queue[numaid];
@@ -998,28 +994,11 @@ prj_thread(void * param)
 
     args->parts_processed = 0;
 
-#ifdef PERF_COUNTERS
-    if(my_tid == 0){
-        PCM_initPerformanceMonitor(NULL, NULL);
-        PCM_start();
-    }
-#endif
-
     /* wait at a barrier until each thread starts and then start the timer */
     BARRIER_ARRIVE(args->barrier, rv);
 
     /* if monitoring synchronization stats */
     SYNC_TIMERS_START(args, my_tid);
-
-#ifndef NO_TIMING
-    if(my_tid == 0){
-        /* thread-0 checkpoints the time */
-        gettimeofday(&args->start, NULL);
-        startTimer(&args->timer1);
-        startTimer(&args->timer2);
-        startTimer(&args->timer3);
-    }
-#endif
 
     /********** 1st pass of multi-pass partitioning ************/
     part.R       = 0;
@@ -1312,22 +1291,7 @@ prj_thread(void * param)
     /* global barrier sync point-4 */
     SYNC_GLOBAL_STOP(&args->globaltimer->sync4, my_tid);
 
-#ifndef NO_TIMING
-    if(my_tid == 0) stopTimer(&args->timer3);/* partitioning finished */
-#endif
-
     DEBUGMSG((my_tid == 0), "Number of join tasks = %d\n", join_queue->count);
-
-#ifdef PERF_COUNTERS
-    if(my_tid == 0){
-        PCM_stop();
-        PCM_log("======= Partitioning phase profiling results ======\n");
-        PCM_printResults();
-        PCM_start();
-    }
-    /* Just to make sure we get consistent performance numbers */
-    BARRIER_ARRIVE(args->barrier, rv);
-#endif
 
 #ifdef JOIN_RESULT_MATERIALIZE
     chainedtuplebuffer_t * chainedbuf = chainedtuplebuffer_init();
@@ -1355,58 +1319,11 @@ prj_thread(void * param)
     /* this thread is finished */
     SYNC_TIMER_STOP(&args->localtimer.finish_time);
 
-#ifndef NO_TIMING
-    /* this is for just reliable timing of finish time */
-    BARRIER_ARRIVE(args->barrier, rv);
-    if(my_tid == 0) {
-        /* Actually with this setup we're not timing build */
-        stopTimer(&args->timer2);/* build finished */
-        stopTimer(&args->timer1);/* probe finished */
-        gettimeofday(&args->end, NULL);
-    }
-#endif
-
     /* global finish time */
     SYNC_GLOBAL_STOP(&args->globaltimer->finish_time, my_tid);
 
-#ifdef PERF_COUNTERS
-    if(my_tid == 0) {
-        PCM_stop();
-        PCM_log("=========== Build+Probe profiling results =========\n");
-        PCM_printResults();
-        PCM_log("===================================================\n");
-        PCM_cleanup();
-    }
-    /* Just to make sure we get consistent performance numbers */
-    BARRIER_ARRIVE(args->barrier, rv);
-#endif
-
     return 0;
 }
-
-/** print out the execution time statistics of the join */
-static void
-print_timing(uint64_t total, uint64_t build, uint64_t part,
-             uint64_t numtuples, int64_t result,
-             struct timeval * start, struct timeval * end)
-{
-    double diff_usec = (((*end).tv_sec*1000000L + (*end).tv_usec)
-                        - ((*start).tv_sec*1000000L+(*start).tv_usec));
-    double cyclestuple = total;
-    cyclestuple /= numtuples;
-    fprintf(stdout, "RUNTIME TOTAL, BUILD, PART (cycles): \n");
-    fprintf(stderr, "%llu \t %llu \t %llu ",
-            total, build, part);
-    fprintf(stdout, "\n");
-    fprintf(stdout, "TOTAL-TIME-USECS, TOTAL-TUPLES, CYCLES-PER-TUPLE: \n");
-    fprintf(stdout, "%.4lf \t %llu \t ", diff_usec, result);
-    fflush(stdout);
-    fprintf(stderr, "%.4lf ", cyclestuple);
-    fflush(stderr);
-    fprintf(stdout, "\n");
-
-}
-
 
 /**
  * The template function for different joins: Basically each parallel radix join
@@ -1463,7 +1380,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
                                        RELATION_PADDING);
     tmpRelS = (tuple_t*) alloc_aligned(relS->num_tuples * sizeof(tuple_t) +
                                        RELATION_PADDING);
-    MALLOC_CHECK((tmpRelR && tmpRelS));
+    //MALLOC_CHECK((tmpRelR && tmpRelS));
     /** Not an elegant way of passing whether we will numa-localize, but this
         feature is experimental anyway. */
     if(numalocalize) {
@@ -1482,7 +1399,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     /* allocate histograms arrays, actual allocation is local to threads */
     histR = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
     histS = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
-    MALLOC_CHECK((histR && histS));
+    //MALLOC_CHECK((histR && histS));
 
     rv = pthread_barrier_init(&barrier, NULL, nthreads);
     if(rv != 0){
@@ -1573,13 +1490,6 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
                 local->finish_time - glob->sync4,
                 glob->finish_time - local->finish_time);
     }
-#endif
-
-#ifndef NO_TIMING
-    /* now print the timing results: */
-    print_timing(args[0].timer1, args[0].timer2, args[0].timer3,
-                relS->num_tuples, result,
-                &args[0].start, &args[0].end);
 #endif
 
     /* clean up */
