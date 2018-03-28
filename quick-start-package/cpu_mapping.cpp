@@ -10,6 +10,8 @@
 /** \internal
  * @{
  */
+//#define my_Topology
+#define NUMA_NODE 1
 
 #define MAX_NODES 512
 
@@ -91,7 +93,7 @@ get_cpu_id(int thread_id)
 */
 #define INTEL_E5 1
 
-//#define my_Topology
+
 #ifdef my_Topology
 
 /* TODO CHANGE
@@ -178,6 +180,6 @@ get_num_numa_regions(void)
 int
 get_numa_node_of_address(void * ptr)
 {
-    int numa_node = 1;
+    int numa_node = NUMA_NODE;
     return numa_node;
 }

@@ -812,6 +812,15 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             std::cerr << "-------" << '\n';
             #endif
         }
+
+        // if (!joinTreeNodePtr->filterPtrs.empty()) {
+        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
+        //     #ifdef prints
+        //     std::cerr << "----Filter Predicates: " <<  '\n';
+        //     std::cerr << "Intermediate rows: " << res->tups_num << '\n';
+        //     std::cerr << "-------" << '\n';
+        //     #endif
+        // }
         return res;
     }
 
