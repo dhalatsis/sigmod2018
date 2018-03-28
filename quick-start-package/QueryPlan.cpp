@@ -7,7 +7,7 @@
 using namespace std;
 using namespace tbb;
 
-#define prints
+//#define prints
 
 void ColumnInfo::print() {
     cerr << "min:      " << this->min << endl;
@@ -840,14 +840,14 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         #endif
 
         if (joinTreeNodePtr->parent == NULL) {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true);
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true, queryInfo.selections);
         }
         else {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false);
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false, queryInfo.selections);
         }
 
         #ifdef prints
-        std::cerr << "Intermediate rows: " << res->tups_num << '\n';
+        //std::cerr << "Intermediate rows: " << res->tups_num << '\n';
         std::cerr << "-------" << '\n';
         #endif
         return res;

@@ -8,6 +8,7 @@
 struct checksumST {
     unsigned colId;
     unsigned index;
+    unsigned binding;
     uint64_t * values;
 };
 
