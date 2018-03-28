@@ -70,7 +70,7 @@ class Joiner {
 
     // Joins a given set of relations
     void join(QueryInfo& i);
-    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap);
+    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot);
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);

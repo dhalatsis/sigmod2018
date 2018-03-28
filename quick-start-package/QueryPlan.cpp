@@ -788,7 +788,7 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
 
 //#define prints
 
-// execute the plan described by a Plan Tree
+// Execute the plan described by a JoinTree
 table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo) {
     JoinTreeNode *left  = joinTreeNodePtr->left;
     JoinTreeNode *right = joinTreeNodePtr->right;
@@ -800,8 +800,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     if (left == NULL && right == NULL) {
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
-        // Apply the filter
-        // Apply the filter
+        // Apply the filters
         for (auto filter : joinTreeNodePtr->filterPtrs) {
             joiner.AddColumnToTableT(filter->filterColumn, res);
             joiner.Select(*filter, res);
@@ -830,7 +829,14 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         std::cerr << "Left: "  << joinTreeNodePtr->predicatePtr->left.relId << "." << joinTreeNodePtr->predicatePtr->left.colId << " Size " << table_l->tups_num << '\n';
         std::cerr << "Right: " << joinTreeNodePtr->predicatePtr->right.relId << "." << joinTreeNodePtr->predicatePtr->right.colId << " Size " << table_r->tups_num << '\n';
         #endif
-        res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        
+        if (joinTreeNodePtr->parent == NULL) {
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true);
+        }
+        else {
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false);
+        }
+        
         #ifdef prints
         std::cerr << "Intermediate rows: " << res->tups_num << '\n';
         std::cerr << "-------" << '\n';
@@ -856,24 +862,6 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 // Estimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
     this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;
-/*
-    unsigned joinRowIndex = (this->left->usedColumnInfos[predicateInfo.left].size + 1000) / 10000;
-    unsigned joinColIndex = (this->right->usedColumnInfos[predicateInfo.right].size + 1000) / 10000;
-
-    unsigned constructIndex;
-    if (this->usedColumnInfos[predicateInfo.left].size < 10000) constructIndex = 0;
-    else if (this->usedColumnInfos[predicateInfo.left].size < 100000) constructIndex = 1;
-    else if (this->usedColumnInfos[predicateInfo.left].size < 1000000) constructIndex = 2;
-    else constructIndex = 3;
-
-    fprintf(stderr, "left size       = %lu\n", this->left->usedColumnInfos[predicateInfo.left].size);
-    fprintf(stderr, "right size      = %lu\n", this->right->usedColumnInfos[predicateInfo.right].size);
-    fprintf(stderr, "join row index  = %d\n", joinRowIndex);
-    fprintf(stderr, "join col index  = %d\n", joinColIndex);
-    fprintf(stderr, "result size     = %lu\n", this->usedColumnInfos[predicateInfo.left].size);
-    fprintf(stderr, "construct index = %d\n\n", constructIndex);
-*/
-    //this->treeCost = this->left->treeCost + joinCost + constructCost;
 }
 
 // Returns the cost of a given JoinTree
