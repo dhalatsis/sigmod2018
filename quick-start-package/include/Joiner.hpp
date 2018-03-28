@@ -56,11 +56,10 @@ class Joiner {
     // Get the total number of relations
     int getRelationsCount();
 
-    table_t* CreateTableTFromId(unsigned rel_id, unsigned rel_binding);
+    table_t*     CreateTableTFromId(unsigned rel_id, unsigned rel_binding);
     relation_t * CreateRelationT(table_t * table, SelectInfo &sel_info);
-    table_t * CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
-    void AddColumnToTableT(SelectInfo &sel_info, table_t *table);
-    void construct(table_t *table);
+    table_t *    CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
+    void         AddColumnToTableT(SelectInfo &sel_info, table_t *table);
 
     // The select functions
     void SelectAll(std::vector<FilterInfo*> & filterPtrs, table_t* table);
@@ -70,19 +69,10 @@ class Joiner {
     void SelectLess(table_t *table, int filter);
 
     // Joins a given set of relations
-    void join(QueryInfo& i);
     table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap);
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
-
-    // nested loops joins
-    std::vector<table_t*> getTablesFromTree(JTree* jTreePtr);
-    void for_join(JTree* jTreePtr, std::vector<SelectInfo> selections);
-    void for_2(table_t* table_a, table_t* table_b, std::vector< std::vector<SelectInfo> > columns);
-    void for_3(table_t* table_a, table_t* table_b, table_t* table_c, std::vector< std::vector<SelectInfo> > columns);
-    void for_4(table_t* table_a, table_t* table_b, table_t* table_c, table_t* table_d, std::vector< std::vector<SelectInfo> > columns);
-
 };
 
 #include "QueryPlan.hpp"
