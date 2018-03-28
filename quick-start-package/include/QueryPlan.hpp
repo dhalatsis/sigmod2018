@@ -105,8 +105,6 @@ struct JoinTreeNode {
 
     PredicateInfo* predicatePtr;
     vector<FilterInfo*> filterPtrs;
-    ColumnInfo columnInfo;
-
     columnInfoMap usedColumnInfos; // Keeps track of all the columns of every relation to be used in the query
 
     // Estimates the new info of a node's column

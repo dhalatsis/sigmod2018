@@ -3,11 +3,17 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/partitioner.h"
 
-#define THREAD_NUM 20
+
+#define THREAD_NUM 4
 #define GRAINSIZE  100
 
 using namespace tbb;
+
+
+/* Some more types */
+#include "tbb_ontheflyChecksums_types.hpp"
 
 /* Struct for praralle check sum */
 struct CheckSumT {
@@ -278,4 +284,52 @@ private:
     unsigned * rids;
     unsigned   relations_num;
     unsigned   table_index;
+};
+
+/* Create Relation T parallel ctruct */
+struct ParallelVictimizeT {
+    table_t *tablePtr;
+    columnInfoMap& cmap;
+    vector<unsigned> help_v;
+    vector<unordered_map<unsigned, unsigned>::iterator> victimized;
+    bool victimize;
+    int index;
+    int removed;
+
+    /* Initial constructor */
+    ParallelVictimizeT ( table_t* tablePtr, columnInfoMap & cmap )
+    : tablePtr(tablePtr), cmap(cmap), victimize(true), index(-1), removed(0)
+    {}
+
+    /* Slpitting constructor */
+    ParallelVictimizeT(ParallelVictimizeT & x, split)
+    : tablePtr(tablePtr), cmap(cmap), victimize(true), index(-1), removed(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+
+        for (unordered_map<unsigned, unsigned>::iterator itr = tablePtr->relations_bindings.begin(); itr != tablePtr->relations_bindings.end(); itr++) {
+            victimize = true;
+            for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+                if (it->first.binding == itr->first) {
+                    victimize = false;
+                    help_v.push_back(itr->second);
+                    break;
+                }
+            }
+            if (victimize) {
+                victimized.push_back(itr);
+                removed++;
+            }
+        }
+
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelVictimizeT& rhs ) {
+        victimized.insert( victimized.end(), rhs.victimized.begin(), rhs.victimized.end() );
+        help_v.insert( help_v.end(), rhs.help_v.begin(), rhs.help_v.end() );
+        removed += rhs.removed;
+    }
 };

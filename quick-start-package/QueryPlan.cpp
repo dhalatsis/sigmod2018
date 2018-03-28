@@ -675,6 +675,11 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         joinTreeNodePtr->parent = temp;
     }
 
+    // Restore the initial column infos of the left child
+    for (columnInfoMap::iterator it=joinTreeNodePtr->left->usedColumnInfos.begin(); it != joinTreeNodePtr->left->usedColumnInfos.end(); it++) {
+        it->second = columnInfos[it->first.relId][it->first.colId];
+    }
+
     // Go bottom-up and save the corresponding predicates
     joinedNodes.insert(joinTreeNodePtr->left->nodeId);
 
@@ -683,7 +688,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
         for (auto predicate : predicatesSet) {
             // If the right relation is found on the right hand side of a predicate
             if (predicate->right.binding == joinTreeNodePtr->right->nodeId) {
-
                 for (auto n : joinedNodes) {
                     if (predicate->left.binding == n) {
                         joinTreeNodePtr->predicatePtr = predicate;
@@ -696,6 +700,11 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
             }
 
             if (predicateFound == true) break;
+        }
+
+        // Restore the initial column infos of the right child
+        for (columnInfoMap::iterator it=joinTreeNodePtr->right->usedColumnInfos.begin(); it != joinTreeNodePtr->right->usedColumnInfos.end(); it++) {
+            it->second = columnInfos[it->first.relId][it->first.colId];
         }
 
         // Go to parent
@@ -739,10 +748,6 @@ JoinTree* JoinTree::CreateJoinTree(JoinTree* leftTree, JoinTree* rightTree, Pred
 
     // Initialise the new JoinTree
     joinTreePtr->root = joinTreeNodePtr;
-
-    // Update the parent pointers of the merged trees
-    //leftTree->root->parent = joinTreePtr->root;
-    //rightTree->root->parent = joinTreePtr->root;
 
     return joinTreePtr;
 }
@@ -804,23 +809,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         for (auto filter : joinTreeNodePtr->filterPtrs) {
             joiner.AddColumnToTableT(filter->filterColumn, res);
             joiner.Select(*filter, res);
-            #ifdef prints
-            std::cerr << "----Filter Predicates: " <<  '\n';
-            std::cerr << "Relation.column: "  << filter->filterColumn.relId << "." << filter->filterColumn.colId << '\n';
-            std::cerr << "Constant: " << filter->constant << '\n';
-            std::cerr << "Intermediate rows: " << res->tups_num << '\n';
-            std::cerr << "-------" << '\n';
-            #endif
         }
-
-        // if (!joinTreeNodePtr->filterPtrs.empty()) {
-        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
-        //     #ifdef prints
-        //     std::cerr << "----Filter Predicates: " <<  '\n';
-        //     std::cerr << "Intermediate rows: " << res->tups_num << '\n';
-        //     std::cerr << "-------" << '\n';
-        //     #endif
-        // }
         return res;
     }
 
@@ -830,40 +819,18 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     // This is an intermediate node (join)
     if (right != NULL) {
         table_r = joinTreeNodePtr->execute(right, joiner, queryInfo);
-        joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->left, table_l);
-        joiner.AddColumnToTableT(joinTreeNodePtr->predicatePtr->right, table_r);
 
-        #ifdef prints
-        std::cerr << "++++JOIN Predicates: " <<  '\n';
-        std::cerr << "Left: "  << joinTreeNodePtr->predicatePtr->left.relId << "." << joinTreeNodePtr->predicatePtr->left.colId << " Size " << table_l->tups_num << '\n';
-        std::cerr << "Right: " << joinTreeNodePtr->predicatePtr->right.relId << "." << joinTreeNodePtr->predicatePtr->right.colId << " Size " << table_r->tups_num << '\n';
-        #endif
-        
         if (joinTreeNodePtr->parent == NULL) {
             res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true);
         }
         else {
             res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false);
         }
-        
-        #ifdef prints
-        std::cerr << "Intermediate rows: " << res->tups_num << '\n';
-        std::cerr << "-------" << '\n';
-        #endif
-        return res;
 
+        return res;
     }
     else {
-        #ifdef prints
-        std::cerr << "======SELF Predicates: " <<  '\n';
-        std::cerr << "Left: "  << joinTreeNodePtr->predicatePtr->left.relId << "." << joinTreeNodePtr->predicatePtr->left.colId << " Size " << table_l->tups_num << '\n';
-        std::cerr << "Right: " << joinTreeNodePtr->predicatePtr->right.relId << "." << joinTreeNodePtr->predicatePtr->right.colId << " Size " << table_l->tups_num << '\n';
-        #endif
         res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
-        #ifdef prints
-        std::cerr << "Intermediate rows: " << res->tups_num << '\n';
-        std::cerr << "-------" << '\n';
-        #endif
         return res;
     }
 }

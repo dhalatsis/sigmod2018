@@ -283,7 +283,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     /* Intermediate result */
     if (inter_res) {
         ParallelItermediateEqualFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
@@ -295,7 +295,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     }
     else {
         ParallelNonItermediateEqualFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
@@ -329,7 +329,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
     unsigned new_tbi = 0;
     if (inter_res) {
         ParallelItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
@@ -341,7 +341,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
     }
     else {
         ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
@@ -374,7 +374,7 @@ void Joiner::SelectLess(table_t *table, int filter){
     unsigned new_tbi = 0;
     if (inter_res) {
         ParallelItermediateLessFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
@@ -386,7 +386,7 @@ void Joiner::SelectLess(table_t *table, int filter){
     }
     else {
         ParallelNonItermediateLessFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
+        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
