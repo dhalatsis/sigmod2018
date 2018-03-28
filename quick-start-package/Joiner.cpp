@@ -15,7 +15,9 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-#define prints
+//#define prints
+
+bool DoCheckSums = true;
 
 using namespace tbb;
 using namespace std;
@@ -36,13 +38,13 @@ double timeCheckSum = 0;
 double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
 double timeCreateTableT = 0;
+double timeCheckSumsOnTheFly = 0;
 double timeCTPrepear =0;
 double timeCT1bucket = 0;
 double timeCTMoreBuckets = 0;
 double timeExecute = 0;
 double timePreparation = 0;
 double timeCleanQuery = 0;
-
 double timeToLoop = 0;
 
 
@@ -164,32 +166,14 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         /* Initialize relation */
         uint32_t size    = table->tups_num;
         uint32_t rel_num = table->rels_num;
-        //tuple_t * tuples = new_relation->tuples;
-
-        // /* Initialize the tuple array */
-        // for (uint32_t i = 0; i < size; i++) {
-        //     tuples[i].key     = values[row_ids[i*rel_num + table_index]];
-        //     tuples[i].payload = i;
-        // }
-
         RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
         parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
     }
     else {
         /* Initialize relation */
         uint32_t size = table->tups_num;
-
-        // tuple_t * tuples = new_relation->tuples;
-        //
-        // /* Initialize the tuple array */
-        // for (uint32_t i = 0; i < size; i++) {
-        //     tuples[i].key     = values[i];
-        //     tuples[i].payload = i;
-        // }
-
         RelationNonIntermediateCT rct( new_relation->tuples, values );
         parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
-
     }
 
 #ifdef time
@@ -201,11 +185,11 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
-std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
-    #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-    #endif
+std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections) {
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
 
         /* Crete a vector for the pairs Column, Index in relationR/S */
         vector<struct checksumST> distinctPairs_in_R;
@@ -220,6 +204,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
             itr = table_r->relations_bindings.find(it->first.binding);
             if (itr != table_r->relations_bindings.end() ) {
                 st.colId = it->first.colId;
+                st.binding = it->first.binding;
                 st.index = itr->second;
                 st.values = getRelation(it->first.relId).columns[st.colId];
                 distinctPairs_in_R.push_back(st);
@@ -228,6 +213,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 itr = table_s->relations_bindings.find(it->first.binding);
                 (itr != table_s->relations_bindings.end()) ? (index = itr->second) : (index = -1);
                 st.colId = it->first.colId;
+                st.binding = it->first.binding;
                 st.index = itr->second;
                 st.values = getRelation(it->first.relId).columns[st.colId];
                 distinctPairs_in_S.push_back(st);
@@ -235,16 +221,16 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
         }
 
-        std::cerr << "Pairs in R (" << distinctPairs_in_R.empty() << "):";
-        for (size_t i = 0; i < distinctPairs_in_R.size(); i++) {
-            std::cerr << distinctPairs_in_R[i].colId << "." << distinctPairs_in_R[i].index << ' ';
-        }
-        std::cerr << '\n';
-        std::cerr << "Pairs in S (" << distinctPairs_in_S.empty() << ") :";
-        for (size_t i = 0; i < distinctPairs_in_S.size(); i++) {
-            std::cerr << distinctPairs_in_S[i].colId << "." << distinctPairs_in_S[i].index << ' ';
-        }
-        std::cerr << '\n';
+        // std::cerr << "Pairs in R (" << distinctPairs_in_R.empty() << "):";
+        // for (size_t i = 0; i < distinctPairs_in_R.size(); i++) {
+        //     std::cerr << distinctPairs_in_R[i].colId << "." << distinctPairs_in_R[i].index << ' ';
+        // }
+        // std::cerr << '\n';
+        // std::cerr << "Pairs in S (" << distinctPairs_in_S.empty() << ") :";
+        // for (size_t i = 0; i < distinctPairs_in_S.size(); i++) {
+        //     std::cerr << distinctPairs_in_S[i].colId << "." << distinctPairs_in_S[i].index << ' ';
+        // }
+        // std::cerr << '\n';
 
         vector<uint64_t> sum(distinctPairs_in_R.size() + distinctPairs_in_S.size(), 0);
         if (table_r->intermediate_res && table_s->intermediate_res) {
@@ -308,7 +294,6 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
             }
         }
         else if (table_r->intermediate_res) {
-            std::cerr << "HERE" << '\n';
             for (int th = 0; th < THREAD_NUM; th++) {
                 chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
@@ -487,13 +472,54 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
             }
         }
 
-        std::cerr << "R Cheks sums ";
-        for (size_t i = 0; i < sum.size(); i++) {
-            std::cerr << sum[i] << " ";
-        }
-        std::cerr << '\n';
+        /* Construct the checksums in the right way */
+        bool found = false;
+        string result_str;
 
-        return "NULL";
+        for (size_t i = 0; i < selections.size(); i++) {
+
+            // Check if checksum is cached
+            for (size_t j = 0; j < distinctPairs_in_R.size(); j++) {
+                if (selections[i].colId == distinctPairs_in_R[j].colId
+                    && selections[i].binding == distinctPairs_in_R[j].binding)
+                {
+                    (sum[j] == 0) ? result_str += "NULL" : result_str += to_string(sum[j]);
+                    found = true;
+                    break;
+                }
+            }
+
+            /* Search in the other */
+            for (size_t j = 0; j < distinctPairs_in_S.size() && found != true; j++) {
+                if (selections[i].colId == distinctPairs_in_S[j].colId
+                    && selections[i].binding == distinctPairs_in_S[j].binding)
+                {
+                    (sum[j] == 0) ? result_str += "NULL" : result_str += to_string(sum[j +  distinctPairs_in_R.size()]);
+                    break;
+                }
+            }
+
+            /* Flag for the next loop */
+            found = false;
+
+            // Create the write check sum
+            if (i != selections.size() - 1) {
+                result_str +=  " ";
+            }
+        }
+
+        //std::cerr << "The string " << result_str << '\n';
+        DoCheckSums = false;
+        std::cout << result_str << '\n';
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeCheckSumsOnTheFly += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
+
+        return result_str;
 }
 
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
@@ -982,25 +1008,10 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot) {
-
-    #ifdef prints
-    std::cerr << "Before creating Rels" << '\n';
-    flush(cerr);
-    #endif
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections) {
 
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
-
-    #ifdef prints
-    std::cerr << "Created Rels" << '\n';
-    flush(cerr);
-    #endif
-
-#ifdef TIME_DETAILS
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-#endif
 
 #ifdef time
     struct timeval start;
@@ -1009,37 +1020,23 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 
     result_t * res  = PRO(r1, r2, THREAD_NUM);
 
-    #ifdef prints
-    std::cerr << "After PRO" << '\n';
-    flush(cerr);
-    #endif
-
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
-#ifdef TIME_DETAILS
-    gettimeofday(&end, NULL);
-    double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    // std::ostringstream strs;
-    if(!done_testing) {
-        cerr << "RJ: " << dt << " sec" << endl;
-        flush(cerr);
-        // timeDetStr.append(strs.str());
-    }
-#endif
 
 #ifdef time
     gettimeofday(&start, NULL);
 #endif
 
     table_t *temp = NULL;
-    if (isRoot)
-        CheckSumOnTheFly(res, table_r, table_s, cmap);
-
-    temp = CreateTableT(res, table_r, table_s, cmap);
+    if (isRoot) {
+        CheckSumOnTheFly(res, table_r, table_s, cmap, selections);
+    } else {
+        temp = CreateTableT(res, table_r, table_s, cmap);
+    }
 
 #ifdef time
     gettimeofday(&end, NULL);
@@ -1259,39 +1256,43 @@ int main(int argc, char* argv[]) {
         gettimeofday(&start, NULL);
         #endif
 
-        // Compute the selection predicates
-        string result_str;
-        uint64_t checksum = 0;
-        unordered_map<string, string> cached_sums;
-        vector<SelectInfo> &selections = i.selections;
-        for (size_t i = 0; i < selections.size(); i++) {
+        if (DoCheckSums) {
+            //Compute the selection predicates
+            string result_str;
+            uint64_t checksum = 0;
+            unordered_map<string, string> cached_sums;
+            vector<SelectInfo> &selections = i.selections;
+            for (size_t i = 0; i < selections.size(); i++) {
 
-            // Check if checksum is cached
-            string key = to_string(selections[i].binding) + to_string(selections[i].colId);
-            unordered_map<string, string>::const_iterator got = cached_sums.find(key);
-            if (got != cached_sums.end()) {
-                result_str += got->second;
-            } else {
-                //string str = joiner.check_sum(selections[i], result, pool, futures);
-                string str = joiner.check_sum(selections[i], result);
-                cached_sums.insert(make_pair(key, str));
-                result_str += str;
+                // Check if checksum is cached
+                string key = to_string(selections[i].binding) + to_string(selections[i].colId);
+                unordered_map<string, string>::const_iterator got = cached_sums.find(key);
+                if (got != cached_sums.end()) {
+                    result_str += got->second;
+                } else {
+                    //string str = joiner.check_sum(selections[i], result, pool, futures);
+                    string str = joiner.check_sum(selections[i], result);
+                    cached_sums.insert(make_pair(key, str));
+                    result_str += str;
+                }
+
+                // Create the write check sum
+                if (i != selections.size() - 1) {
+                    result_str +=  " ";
+                }
             }
 
-            // Create the write check sum
-            if (i != selections.size() - 1) {
-                result_str +=  " ";
-            }
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            #endif
+
+            // Print the result
+            std::cout << result_str << endl;
         }
 
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-
-        // Print the result
-        std::cout << result_str << endl;
-        std::cerr << "Results for Q " << q_counter << ":" << result_str << '\n';
+        /* true do check sums */
+        DoCheckSums = true;
     }
 
 #ifdef time
@@ -1302,6 +1303,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
     std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
+    std::cerr << "--timeCSsOnTheFly:   " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
     std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;
     std::cerr << "--timeCT1bucket:     " << (long)(timeCT1bucket * 1000) << endl;
     std::cerr << "--timeCTMoreBuckets: " << (long)(timeCTMoreBuckets * 1000) << endl;
