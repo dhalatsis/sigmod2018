@@ -240,12 +240,12 @@ static int ** numa;
 static char ** numaactive;
 static int * numaactivecount;
 
-/** 
+/**
  * Initializes the cpu mapping from the file defined by CUSTOM_CPU_MAPPING.
  * NUMBER-OF-THREADS(NTHR) and mapping of PHYSICAL-THR-ID for each LOGICAL-THR-ID from
  * 0 to NTHR and optionally number of NUMA-nodes (overridden by libNUMA value if
- * exists). 
- * The mapping used for our machine Intel E5-4640 is = 
+ * exists).
+ * The mapping used for our machine Intel E5-4640 is =
  * "64 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53  54 55 56 57 58 59 60 61 62 63 4".
  */
 static int
@@ -284,7 +284,7 @@ init_mappings_from_file()
     return 0;
 }
 
-/** 
+/**
  * Initialize NUMA-topology with libnuma.
  */
 static void
@@ -301,12 +301,12 @@ numa_default_init()
         for(int i = 0; i < max_cpus; i++){
             if(max_cpus == max_threads)
                 numa[0][i] = cpumapping[i];
-            else 
+            else
                 numa[0][i] = i;
         }
 }
 
-static void 
+static void
 numa_init()
 {
 #ifdef HAVE_NUMA
@@ -337,8 +337,8 @@ numa_init()
     int nm = 0;
     for (i = 0; i < numnodes ; i++) {
         if (numa_node_to_cpus(i, cpus) < 0) {
-            printf("node %d failed to convert\n",i); 
-        }       
+            printf("node %d failed to convert\n",i);
+        }
         //printf("Node-%d: ", i);
         j = 0;
         for (k = 0; k < ncpus; k++){
@@ -376,9 +376,9 @@ cpu_mapping_cleanup()
 
 /** @} */
 
-/** 
+/**
  *  Try custom cpu mapping file first, if does not exist then round-robin
- *  initialization among available CPUs reported by the system. 
+ *  initialization among available CPUs reported by the system.
  */
 void
 cpu_mapping_init()
@@ -386,7 +386,7 @@ cpu_mapping_init()
     max_cpus  = sysconf(_SC_NPROCESSORS_ONLN);
     if( init_mappings_from_file() == 0 ) {
         int i;
-    
+
         max_threads = max_cpus;
         for(i = 0; i < max_cpus; i++){
             cpumapping[i] = i;
@@ -431,9 +431,9 @@ numa_thread_mark_active(int phytid)
 }
 
 /**
- * Returns SMT aware logical to physical CPU mapping for a given logical thr-id. 
+ * Returns SMT aware logical to physical CPU mapping for a given logical thr-id.
  */
-int 
+int
 get_cpu_id(int thread_id)
 {
     if(!inited){
@@ -494,7 +494,7 @@ is_first_thread_in_numa_region(int logicaltid)
     return ret;
 }
 
-int 
+int
 get_thread_index_in_numa(int logicaltid)
 {
     int ret = -1;
@@ -562,7 +562,7 @@ get_numa_index_of_logical_thread(int logicaltid)
 #endif
 }
 
-int 
+int
 get_logical_thread_at_numa_index(int numaidx)
 {
 #ifdef HAVE_NUMA

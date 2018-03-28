@@ -15,7 +15,100 @@ unsigned new_tbi;
 spin_mutex FilterMutex;
 
 /*----------- Struct to parallelize filter  ----------------*/
-/* Create Relation T parallel ctruct */
+struct ParalleNonItermediateSizeFindEqualFilterT {
+    uint64_t size;
+
+    /* Initial constructor */
+    ParalleNonItermediateSizeFindEqualFilterT ( uint64_t * values, int filter )
+    : values{values}, filter{filter}, size(0)
+    {}
+
+    /* Slpitting constructor */
+    ParalleNonItermediateSizeFindEqualFilterT(ParalleNonItermediateSizeFindEqualFilterT & x, split)
+    : values{x.values}, filter{x.filter}, size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        /* Do the write */
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            if (values[i] == filter) {
+                size++;
+            }
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParalleNonItermediateSizeFindEqualFilterT& y ) {size += y.size;}
+
+private:
+    uint64_t * values;
+    int filter;
+};
+struct ParalleNonItermediateSizeFindLessFilterT {
+    uint64_t size;
+
+    /* Initial constructor */
+    ParalleNonItermediateSizeFindLessFilterT ( uint64_t * values, int filter )
+    : values{values}, filter{filter}, size(0)
+    {}
+
+    /* Slpitting constructor */
+    ParalleNonItermediateSizeFindLessFilterT(ParalleNonItermediateSizeFindLessFilterT & x, split)
+    : values{x.values}, filter{x.filter}, size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        /* Do the write */
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            if (values[i] < filter) {
+                size++;
+            }
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParalleNonItermediateSizeFindLessFilterT& y ) {size += y.size;}
+
+private:
+    uint64_t * values;
+    int filter;
+};
+struct ParalleNonItermediateSizeFindGreaterFilterT {
+    uint64_t size;
+
+    /* Initial constructor */
+    ParalleNonItermediateSizeFindGreaterFilterT ( uint64_t * values, int filter )
+    : values{values}, filter{filter}, size(0)
+    {}
+
+    /* Slpitting constructor */
+    ParalleNonItermediateSizeFindGreaterFilterT(ParalleNonItermediateSizeFindGreaterFilterT & x, split)
+    : values{x.values}, filter{x.filter}, size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        /* Do the write */
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            if (values[i] > filter) {
+                size++;
+            }
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParalleNonItermediateSizeFindGreaterFilterT& y ) {size += y.size;}
+
+private:
+    uint64_t * values;
+    int filter;
+};
+
+
+
+
 struct ParallelItermediateEqualFilterT {
     uint64_t * values;
     unsigned * old_rids;

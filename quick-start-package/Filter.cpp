@@ -2,6 +2,11 @@
 
 double timeSelfJoin = 0;
 double timeSelectFilter = 0;
+double timeIntermediateFilters = 0;
+double timeNonIntermediateFilters = 0;
+double timeEqualFilter = 0;
+double timeLessFilter  = 0;
+double timeGreaterFilter = 0;
 
 /* The self Join Function */
 table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap) {
@@ -186,7 +191,7 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
     unsigned size = rel.size;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
 
     /* Loop for the relation size */
     unsigned index = 0;
@@ -242,8 +247,8 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
 void Joiner::Select(FilterInfo &fil_info, table_t* table) {
 
 #ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
+    struct timeval start1;
+    gettimeofday(&start1, NULL);
 #endif
 
     /* Construct table  - Initialize variable */
@@ -252,17 +257,52 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table) {
     uint64_t filter = fil_info.constant;
 
     if (fil_info.comparison == FilterInfo::Comparison::Less) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         SelectLess(table, filter);
-    } else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeLessFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+    }
+    else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         SelectGreater(table, filter);
-    } else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeGreaterFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+    }
+    else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         SelectEqual(table, filter);
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeEqualFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
     }
 
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeSelectFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeSelectFilter += (end.tv_sec - start1.tv_sec) + (end.tv_usec - start1.tv_usec) / 1000000.0;
 #endif
 }
 
@@ -274,7 +314,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;
+    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
@@ -282,10 +322,23 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
     /* Intermediate result */
     if (inter_res) {
+
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelItermediateEqualFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] == filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -294,15 +347,31 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         // }
     }
     else {
+        // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // for (size_t index = 0; index < size; index++) {
         //     if (values[index] == filter) {
         //         new_row_ids[new_tbi] = index;
         //         new_tbi++;
         //     }
+        // }
     }
 
     /* Swap the old vector with the new one */
@@ -321,16 +390,27 @@ void Joiner::SelectGreater(table_t *table, int filter){
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;
+    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
     if (inter_res) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelItermediateGreaterFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] > filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -339,10 +419,24 @@ void Joiner::SelectGreater(table_t *table, int filter){
         // }
     }
     else {
+        // ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // for (size_t index = 0; index < size; index++) {
         //     if (values[index] > filter) {
         //         new_row_ids[new_tbi] = index;
@@ -366,16 +460,28 @@ void Joiner::SelectLess(table_t *table, int filter){
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;
+    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
     if (inter_res) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelItermediateLessFilterT pft( values, old_row_ids, rel_num, table_index, filter );
-        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
+        parallel_reduce(blocked_range<size_t>(0,size), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] < filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -384,10 +490,24 @@ void Joiner::SelectLess(table_t *table, int filter){
         // }
     }
     else {
+        // ParalleNonItermediateSizeFindLessFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
+
         ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // for (size_t index = 0; index < size; index++) {
         //     if (values[index] < filter) {
         //         new_row_ids[new_tbi] = index;

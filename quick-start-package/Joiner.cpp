@@ -31,6 +31,12 @@ bool done_testing = false;
 /* Timing variables */
 extern double timeSelfJoin;
 extern double timeSelectFilter;
+extern double timeEqualFilter;
+extern double timeLessFilter;
+extern double timeGreaterFilter;
+extern double timeIntermediateFilters;
+extern double timeNonIntermediateFilters;
+
 double timeAddColumn = 0;
 double timeCreateTable = 0;
 double timeTreegen = 0;
@@ -168,7 +174,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         uint32_t size    = table->tups_num;
         uint32_t rel_num = table->rels_num;
         RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
-        parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
+        parallel_for(blocked_range<size_t>(0,size), rct);
 
         #ifdef time
         struct timeval end;
@@ -185,7 +191,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         /* Initialize relation */
         uint32_t size = table->tups_num;
         RelationNonIntermediateCT rct( new_relation->tuples, values );
-        parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
+        parallel_for(blocked_range<size_t>(0,size), rct);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -303,6 +309,12 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 /* Free cb */
                 //chainedtuplebuffer_free(cb);
             }
+
+            // ThreadsParallelT tt(result->resultlist, table_r, table_s, &distinctPairs_in_R, &distinctPairs_in_S);
+            // parallel_reduce(blocked_range<size_t>(0, THREAD_NUM), tt);
+            // for (size_t i = 0; i < sum.size(); i++) {
+            //     sum[i] = tt.checksums[i];
+            // }
         }
         else if (table_r->intermediate_res) {
             // std::cerr << "HERE" << '\n';
@@ -1069,6 +1081,8 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     delete table_r;
     free(table_s->row_ids);
     delete table_s;
+    free(res->resultlist);
+    free(res);
 
     return temp;
 }
@@ -1092,13 +1106,13 @@ std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
     if (size == 0) {
         return "NULL";
     }
-    else if (size < GRAINSIZE) {
-        for (uint64_t i = 0 ; i < size; i++) {
-            sum += col[row_ids[i*rels_num + tbi]];
-        }
-
-        return to_string(sum);
-    }
+    // else if (size < GRAINSIZE) {
+    //     for (uint64_t i = 0 ; i < size; i++) {
+    //         sum += col[row_ids[i*rels_num + tbi]];
+    //     }
+    //
+    //     return to_string(sum);
+    // }
     else {
         /* Create the Sum obj */
         CheckSumT cs( col, row_ids, rels_num, tbi );
@@ -1302,6 +1316,9 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            free(result->row_ids);
+            delete result;
+
             #ifdef time
             gettimeofday(&end, NULL);
             timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -1319,6 +1336,11 @@ int main(int argc, char* argv[]) {
     std::cerr << "timePreparation:     " << (long)(timePreparation * 1000) << endl;
     std::cerr << "timeTreegen:         " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeSelectFilter:    " << (long)(timeSelectFilter * 1000) << endl;
+    std::cerr << "(a)timeNonIntFilters:" << (long)(timeNonIntermediateFilters * 1000) << endl;
+    std::cerr << "(b)timeIntFilters:   " << (long)(timeIntermediateFilters * 1000) << endl;
+    std::cerr << "--timeGreaterFilter: " << (long)(timeGreaterFilter * 1000) << endl;
+    std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
+    std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
     std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
