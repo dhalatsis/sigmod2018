@@ -59,6 +59,7 @@ class Joiner {
     table_t*     CreateTableTFromId(unsigned rel_id, unsigned rel_binding);
     relation_t * CreateRelationT(table_t * table, SelectInfo &sel_info);
     table_t *    CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
+    std::string  CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
     void         AddColumnToTableT(SelectInfo &sel_info, table_t *table);
 
     // The select functions

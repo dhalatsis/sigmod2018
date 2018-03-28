@@ -15,7 +15,7 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-//#define prints
+#define prints
 
 using namespace tbb;
 using namespace std;
@@ -201,14 +201,302 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
-int compare(const void * a, const void * b)
-{
-    return ( ((tuple_t*)a)->key - ((tuple_t*)b)->key );
+std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
+    #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+    #endif
+
+        /* Crete a vector for the pairs Column, Index in relationR/S */
+        vector<struct checksumST> distinctPairs_in_R;
+        vector<struct checksumST> distinctPairs_in_S;
+        struct checksumST st;
+
+        /* take the distinct columns in a vector */
+        unordered_map<unsigned, unsigned>::iterator itr;
+        unsigned index = 0;
+        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+            index = -1;
+            itr = table_r->relations_bindings.find(it->first.binding);
+            if (itr != table_r->relations_bindings.end() ) {
+                st.colId = it->first.colId;
+                st.index = itr->second;
+                st.values = getRelation(it->first.relId).columns[st.colId];
+                distinctPairs_in_R.push_back(st);
+            }
+            else {
+                itr = table_s->relations_bindings.find(it->first.binding);
+                (itr != table_s->relations_bindings.end()) ? (index = itr->second) : (index = -1);
+                st.colId = it->first.colId;
+                st.index = itr->second;
+                st.values = getRelation(it->first.relId).columns[st.colId];
+                distinctPairs_in_S.push_back(st);
+            }
+
+        }
+
+        std::cerr << "Pairs in R (" << distinctPairs_in_R.empty() << "):";
+        for (size_t i = 0; i < distinctPairs_in_R.size(); i++) {
+            std::cerr << distinctPairs_in_R[i].colId << "." << distinctPairs_in_R[i].index << ' ';
+        }
+        std::cerr << '\n';
+        std::cerr << "Pairs in S (" << distinctPairs_in_S.empty() << ") :";
+        for (size_t i = 0; i < distinctPairs_in_S.size(); i++) {
+            std::cerr << distinctPairs_in_S[i].colId << "." << distinctPairs_in_S[i].index << ' ';
+        }
+        std::cerr << '\n';
+
+        vector<uint64_t> sum(distinctPairs_in_R.size() + distinctPairs_in_S.size(), 0);
+        if (table_r->intermediate_res && table_s->intermediate_res) {
+            for (int th = 0; th < THREAD_NUM; th++) {
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+                /* Get the touples form the results */
+                tuplebuffer_t * tb = cb->buf;
+                uint32_t numbufs = cb->numbufs;
+
+                /* Parallelize first buffer */
+                if (!distinctPairs_in_R.empty()) {
+                    CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i] += crt.checksums[i];
+                    }
+                }
+
+                if (!distinctPairs_in_S.empty()) {
+                    CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                    }
+                }
+
+                /* Run the other buffers */
+                tb = tb->next;
+                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+                    if (!distinctPairs_in_R.empty()) {
+                        CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i] += crt.checksums[i];
+                        }
+                    }
+
+                    if (!distinctPairs_in_S.empty()) {
+                        CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                        }
+                    }
+
+                    /* Go the the next buffer */
+                    tb = tb->next;
+                }
+                /* Free cb */
+                //chainedtuplebuffer_free(cb);
+            }
+        }
+        else if (table_r->intermediate_res) {
+            std::cerr << "HERE" << '\n';
+            for (int th = 0; th < THREAD_NUM; th++) {
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+                /* Get the touples form the results */
+                tuplebuffer_t * tb = cb->buf;
+                uint32_t numbufs = cb->numbufs;
+
+                /* Parallelize first buffer */
+                if (!distinctPairs_in_R.empty()) {
+                    CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i] += crt.checksums[i];
+                    }
+                }
+
+                if (!distinctPairs_in_S.empty()) {
+                    CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                    }
+                }
+
+                /* Run the other buffers */
+                tb = tb->next;
+                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+                    if (!distinctPairs_in_R.empty()) {
+                        CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i] += crt.checksums[i];
+                        }
+                    }
+
+                    if (!distinctPairs_in_S.empty()) {
+                        CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                        }
+                    }
+
+                    /* Go the the next buffer */
+                    tb = tb->next;
+                }
+                /* Free cb */
+                //chainedtuplebuffer_free(cb);
+            }
+        }
+        else if (table_s->intermediate_res) {
+            for (int th = 0; th < THREAD_NUM; th++) {
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+                /* Get the touples form the results */
+                tuplebuffer_t * tb = cb->buf;
+                uint32_t numbufs = cb->numbufs;
+
+                /* Parallelize first buffer */
+                if (!distinctPairs_in_R.empty()) {
+                    CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i] += crt.checksums[i];
+                    }
+                }
+
+                if (!distinctPairs_in_S.empty()) {
+                    CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                    }
+                }
+
+                /* Run the other buffers */
+                tb = tb->next;
+                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+                    if (!distinctPairs_in_R.empty()) {
+                        CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* keep track of the sum */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i] += crt.checksums[i];
+                        }
+                    }
+
+                    if (!distinctPairs_in_S.empty()) {
+                        CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                        }
+                    }
+
+                    /* Go the the next buffer */
+                    tb = tb->next;
+                }
+                /* Free cb */
+                //chainedtuplebuffer_free(cb);
+            }
+        }
+        else {
+            for (int th = 0; th < THREAD_NUM; th++) {
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+                /* Get the touples form the results */
+                tuplebuffer_t * tb = cb->buf;
+                uint32_t numbufs = cb->numbufs;
+
+                /* Parallelize first buffer */
+                if (!distinctPairs_in_R.empty()) {
+                    CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i] += crt.checksums[i];
+                    }
+                }
+
+                if (!distinctPairs_in_S.empty()) {
+                    CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
+                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                    }
+                }
+
+                /* Run the other buffers */
+                tb = tb->next;
+                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+                    if (!distinctPairs_in_R.empty()) {
+                        CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i] += crt.checksums[i];
+                        }
+                    }
+
+                    if (!distinctPairs_in_S.empty()) {
+                        CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                        /* Keep track of the checsums */
+                        for (size_t i = 0; i < crt.checksums.size(); i++) {
+                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
+                        }
+                    }
+
+                    /* Go the the next buffer */
+                    tb = tb->next;
+                }
+                /* Free cb */
+                //chainedtuplebuffer_free(cb);
+            }
+        }
+
+        std::cerr << "R Cheks sums ";
+        for (size_t i = 0; i < sum.size(); i++) {
+            std::cerr << sum[i] << " ";
+        }
+        std::cerr << '\n';
+
+        return "NULL";
 }
 
-
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
-
 
 #ifdef time
     struct timeval start;
@@ -265,9 +553,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     /* sort the un-victimized helping arrays */
     std::sort(help_v_r.begin(), help_v_r.end());
     std::sort(help_v_s.begin(), help_v_s.end());
-
-    std::cerr << "Num victimized " << left_removed + right_removed << '\n';
-
 
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
@@ -710,7 +995,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     result_t * res  = PRO(r1, r2, THREAD_NUM);
 
     #ifdef prints
-    std::cerr << "After RJ" << '\n';
+    std::cerr << "After PRO" << '\n';
     flush(cerr);
     #endif
 
@@ -734,7 +1019,13 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 #ifdef time
     gettimeofday(&start, NULL);
 #endif
-    table_t *temp = CreateTableT(res, table_r, table_s, cmap);
+
+    table_t *temp = NULL;
+    if (isRoot)
+        CheckSumOnTheFly(res, table_r, table_s, cmap);
+
+    temp = CreateTableT(res, table_r, table_s, cmap);
+
 #ifdef time
     gettimeofday(&end, NULL);
     timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -985,6 +1276,7 @@ int main(int argc, char* argv[]) {
 
         // Print the result
         std::cout << result_str << endl;
+        std::cerr << "Results for Q " << q_counter << ":" << result_str << '\n';
     }
 
 #ifdef time
