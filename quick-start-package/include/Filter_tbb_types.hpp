@@ -347,47 +347,53 @@ struct ParallelNonItermediateLessFilterT {
 
 // TODO
 /* Create Relation T parallel ctruct */
-// struct ParallelSelfJoinT {
-//
-//     /* Initial constructor */
-//     ParallelSelfJoinT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
-//     : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
-//     {}
-//
-//     /* Slpitting constructor */
-//     ParallelSelfJoinT(ParallelSelfJoinT & x, split)
-//     : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
-//     {}
-//
-//     /* The function call overloaded operator */
-//     void operator()(const tbb::blocked_range<size_t>& range) {
-//         /* Do the write */
-//         // spin_mutex::scoped_lock lock;
-//         for (size_t i = range.begin(); i < range.end(); ++i) {
-//             if (values[i] < filter) {
-//                 // lock.acquire(FilterMutex);
-//                 if (new_tbi == size) {
-//                     size += 1000;
-//                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
-//                 }
-//                 rids[new_tbi] = i;
-//                 new_tbi++;
-//                 // lock.release();
-//             }
-//         }
-//     }
-//
-//     /* The function to call on thread join */
-//     void join( ParallelSelfJoinT& rhs ) {
-//         if (rhs.new_tbi) {
-//             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-//             unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-//             copy(rids, rids + new_tbi, result);
-//             free (rids); // we copied them, we are done with them
-//             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-//             size += rhs.size;
-//             rids = result;
-//             new_tbi += rhs.new_tbi;
-//         }
-//     }
-// };
+struct ParallelSelfJoinT {
+    unsigned * row_ids_matrix;
+    unsigned * new_row_ids_matrix;
+    uint64_t *column_values_l;
+    uint64_t *column_values_r;
+    int index_l;
+    int index_r;
+    unsigned rows_number;
+    unsigned rels_number;
+    unsigned new_tbi;
+    uint64_t size;
+
+    /* Initial constructor */
+    ParallelSelfJoinT ( unsigned* row_ids_matrix, uint64_t* column_values_l, uint64_t* column_values_r, int index_l, int index_r, unsigned rows_number, unsigned rels_number )
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(column_values_l), column_values_r(column_values_r), index_l(index_l), index_r(index_r), rows_number(rows_number), rels_number(rels_number), new_tbi(0), size(0)
+    {}
+
+    /* Slpitting constructor */
+    ParallelSelfJoinT(ParallelSelfJoinT & x, split)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(x.column_values_l), column_values_r(x.column_values_r), index_l(x.index_l), index_r(x.index_r), rows_number(x.rows_number), rels_number(x.rels_number), new_tbi(0), size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            // /* Apply the predicate: In case of success add to new table */
+            // if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+            //     /* Add this row_id to all the relations */
+            //     for (ssize_t relation = 0; relation < rels_number; relation++) {
+            //         new_row_ids_matrix[new_tbi*rels_number  + relation] = row_ids_matrix[i*rels_number  + relation];
+            //     }
+            //     new_tbi++;
+            // }
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelSelfJoinT& rhs ) {
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(new_row_ids_matrix, new_row_ids_matrix + new_tbi, result);
+            free (new_row_ids_matrix); // we copied them, we are done with them
+            copy(rhs.new_row_ids_matrix, rhs.new_row_ids_matrix + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            new_row_ids_matrix = result;
+            new_tbi += rhs.new_tbi;
+        }
+    }
+};
