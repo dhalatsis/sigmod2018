@@ -790,160 +790,7 @@ typedef union {
 
 #define TUPLESPERCACHELINE (CACHE_LINE_SIZE/sizeof(tuple_t))
 
-/**
- * Makes a non-temporal write of 64 bytes from src to dst.
- * Uses vectorized non-temporal stores if available, falls
- * back to assignment copy.
- *
- * @param dst
- * @param src
- *
- * @return
- */
-static inline void
-store_nontemp_64B(void * dst, void * src)
-{/*
-#ifdef __AVX__
-    register __m256i * d1 = (__m256i*) dst;
-    register __m256i s1 = *((__m256i*) src);
-    register __m256i * d2 = d1+1;
-    register __m256i s2 = *(((__m256i*) src)+1);
-
-    _mm256_stream_si256(d1, s1);
-    _mm256_stream_si256(d2, s2);
-
-#elif defined(__SSE2__)
-
-    register __m128i * d1 = (__m128i*) dst;
-    register __m128i * d2 = d1+1;
-    register __m128i * d3 = d1+2;
-    register __m128i * d4 = d1+3;
-    register __m128i s1 = *(__m128i*) src;
-    register __m128i s2 = *((__m128i*)src + 1);
-    register __m128i s3 = *((__m128i*)src + 2);
-    register __m128i s4 = *((__m128i*)src + 3);
-
-    _mm_stream_si128 (d1, s1);
-    _mm_stream_si128 (d2, s2);
-    _mm_stream_si128 (d3, s3);
-    _mm_stream_si128 (d4, s4);
-
-#else
-    /* just copy with assignment */
-    *(cacheline_t *)dst = *(cacheline_t *)src;
-
-//#endif
-
-}
-
-/**
- * This function implements the parallel radix partitioning of a given input
- * relation. Parallel partitioning is done by histogram-based relation
- * re-ordering as described by Kim et al. Parallel partitioning method is
- * commonly used by all parallel radix join algorithms. However this
- * implementation is further optimized to benefit from write-combining and
- * non-temporal writes.
- *
- * @param part description of the relation to be partitioned
- */
-void
-parallel_radix_partition_optimized(part_t * const part)
-{
-    const tuple_t * restrict rel    = part->rel;
-    int32_t **               hist   = part->hist;
-    int64_t *       restrict output = part->output;
-
-    const uint32_t my_tid     = part->thrargs->my_tid;
-    const uint32_t nthreads   = part->thrargs->nthreads;
-    const uint32_t num_tuples = part->num_tuples;
-
-    const int32_t  R       = part->R;
-    const int32_t  D       = part->D;
-    const uint32_t fanOut  = 1 << D;
-    const uint32_t MASK    = (fanOut - 1) << R;
-    const uint32_t padding = part->padding;
-
-    int64_t sum = 0;
-    uint32_t i, j;
-    int rv;
-
-    /* compute local histogram for the assigned region of rel */
-    /* compute histogram */
-    int32_t * my_hist = hist[my_tid];
-
-    for(i = 0; i < num_tuples; i++) {
-        uint32_t idx = HASH_BIT_MODULO(rel[i].key, MASK, R);
-        my_hist[idx] ++;
-    }
-
-    /* compute local prefix sum on hist */
-    for(i = 0; i < fanOut; i++){
-        sum += my_hist[i];
-        my_hist[i] = sum;
-    }
-
-    SYNC_TIMER_STOP(&part->thrargs->localtimer.sync1[part->relidx]);
-    /* wait at a barrier until each thread complete histograms */
-    BARRIER_ARRIVE(part->thrargs->barrier, rv);
-    /* barrier global sync point-1 */
-    SYNC_GLOBAL_STOP(&part->thrargs->globaltimer->sync1[part->relidx], my_tid);
-
-    /* determine the start and end of each cluster */
-    for(i = 0; i < my_tid; i++) {
-        for(j = 0; j < fanOut; j++)
-            output[j] += hist[i][j];
-    }
-    for(i = my_tid; i < nthreads; i++) {
-        for(j = 1; j < fanOut; j++)
-            output[j] += hist[i][j-1];
-    }
-
-    /* uint32_t pre; /\* nr of tuples to cache-alignment *\/ */
-    tuple_t * restrict tmp = part->tmp;
-    /* software write-combining buffer */
-    cacheline_t buffer[fanOut] __attribute__((aligned(CACHE_LINE_SIZE)));
-
-    for(i = 0; i < fanOut; i++ ) {
-        uint64_t off = output[i] + i * padding;
-        /* pre        = (off + TUPLESPERCACHELINE) & ~(TUPLESPERCACHELINE-1); */
-        /* pre       -= off; */
-        output[i]  = off;
-        buffer[i].data.slot = off;
-    }
-    output[fanOut] = part->total_tuples + fanOut * padding;
-
-    /* Copy tuples to their corresponding clusters */
-    for(i = 0; i < num_tuples; i++ ){
-        uint32_t  idx     = HASH_BIT_MODULO(rel[i].key, MASK, R);
-        uint64_t  slot    = buffer[idx].data.slot;
-        tuple_t * tup     = (tuple_t *)(buffer + idx);
-        uint32_t  slotMod = (slot) & (TUPLESPERCACHELINE - 1);
-        tup[slotMod]      = rel[i];
-
-        if(slotMod == (TUPLESPERCACHELINE-1)){
-            /* write out 64-Bytes with non-temporal store */
-            store_nontemp_64B((tmp+slot-(TUPLESPERCACHELINE-1)), (buffer+idx));
-            /* writes += TUPLESPERCACHELINE; */
-        }
-
-        buffer[idx].data.slot = slot+1;
-    }
-    /* _mm_sfence (); */
-
-    /* write out the remainders in the buffer */
-    for(i = 0; i < fanOut; i++ ) {
-        uint64_t slot  = buffer[i].data.slot;
-        uint32_t sz    = (slot) & (TUPLESPERCACHELINE - 1);
-        slot          -= sz;
-        for(uint32_t j = 0; j < sz; j++) {
-            tmp[slot]  = buffer[i].data.tuples[j];
-            slot ++;
-        }
-    }
-}
-
 /** @} */
-
 /**
  * The main thread of parallel radix join. It does partitioning in parallel with
  * other threads and during the join phase, picks up join tasks from the task
@@ -1015,11 +862,7 @@ prj_thread(void * param)
     part.total_tuples = args->totalR;
     part.relidx       = 0;
 
-#ifdef USE_SWWC_OPTIMIZED_PART
-    parallel_radix_partition_optimized(&part);
-#else
     parallel_radix_partition(&part);
-#endif
 
     /* 2. partitioning for relation S */
     part.rel          = args->relS;
@@ -1030,18 +873,12 @@ prj_thread(void * param)
     part.total_tuples = args->totalS;
     part.relidx       = 1;
 
-#ifdef USE_SWWC_OPTIMIZED_PART
-    parallel_radix_partition_optimized(&part);
-#else
     parallel_radix_partition(&part);
-#endif
-
 
     /* wait at a barrier until each thread copies out */
     BARRIER_ARRIVE(args->barrier, rv);
 
     /********** end of 1st partitioning phase ******************/
-
 #ifdef SKEW_HANDLING
     /* experimental skew threshold */
     /* const int thresh1 = MAX((1<<D), (1<<R)) * THRESHOLD1(args->nthreads); */
