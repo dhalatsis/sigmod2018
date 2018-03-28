@@ -274,11 +274,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-<<<<<<< HEAD
-    unsigned * new_row_ids =  (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
-=======
     unsigned * new_row_ids = NULL;
->>>>>>> cb3a7ff49aa058d199341a4d47297cddfb55b94b
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
