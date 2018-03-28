@@ -15,9 +15,6 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-
-#define THREAD_NUM 20
-#define GRAINSIZE  100
 //#define prints
 
 using namespace tbb;

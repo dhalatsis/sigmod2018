@@ -4,6 +4,8 @@
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
 
+#define THREAD_NUM 20
+#define GRAINSIZE  100
 
 using namespace tbb;
 
