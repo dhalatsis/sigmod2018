@@ -37,6 +37,8 @@ double timeTreegen = 0;
 double timeCheckSum = 0;
 double timeRadixJoin = 0;
 double timeCreateRelationT = 0;
+double timeCreateRelI = 0;
+double timeCreateRelNonI = 0;
 double timeCreateTableT = 0;
 double timeCheckSumsOnTheFly = 0;
 double timeCTPrepear =0;
@@ -136,11 +138,6 @@ int cleanQuery(QueryInfo &info) {
 /* ================================ */
 relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
 
-#ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-#endif
-
     /* Create a new column_t for table */
     unsigned * row_ids = table->row_ids;
 
@@ -152,6 +149,10 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     relation_t * new_relation = gen_rel(table->tups_num);
 
     if (table->intermediate_res) {
+        #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif
 
         unsigned table_index = -1;
         unsigned relation_binding = sel_info.binding;
@@ -168,19 +169,29 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
         uint32_t rel_num = table->rels_num;
         RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
         parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
+
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeCreateRelI += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
     }
     else {
+        #ifdef time
+        struct timeval start, end;
+        gettimeofday(&start, NULL);
+        #endif
+
         /* Initialize relation */
         uint32_t size = table->tups_num;
         RelationNonIntermediateCT rct( new_relation->tuples, values );
         parallel_for(blocked_range<size_t>(0,size, GRAINSIZE), rct);
-    }
 
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeCreateRelNonI += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+    }
 
     return new_relation;
 }
@@ -1011,18 +1022,27 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections) {
 
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
     relation_t * r1 = CreateRelationT(table_r, pred_info.left);
     relation_t * r2 = CreateRelationT(table_s, pred_info.right);
 
 #ifdef time
-    struct timeval start;
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
+#ifdef time
     gettimeofday(&start, NULL);
 #endif
 
     result_t * res  = PRO(r1, r2, THREAD_NUM);
 
 #ifdef time
-    struct timeval end;
     gettimeofday(&end, NULL);
     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
@@ -1043,7 +1063,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&end, NULL);
     timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
-
 
     /* Free the tables */
     free(table_r->row_ids);
@@ -1303,6 +1322,8 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    std::cerr << "--timeCreateRelI:    " << (long)(timeCreateRelI * 1000) << endl;
+    std::cerr << "--timeCreateRelNonI: " << (long)(timeCreateRelNonI * 1000) << endl;
     std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
     std::cerr << "--timeCSsOnTheFly:   " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
     std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;

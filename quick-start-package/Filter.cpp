@@ -286,12 +286,23 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[old_row_ids[index*rel_num + table_index]] == filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
+        //         new_tbi++;
+        //     }
+        // }
     }
     else {
         ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[index] == filter) {
+        //         new_row_ids[new_tbi] = index;
+        //         new_tbi++;
+        //     }
     }
 
     /* Swap the old vector with the new one */
@@ -320,12 +331,24 @@ void Joiner::SelectGreater(table_t *table, int filter){
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[old_row_ids[index*rel_num + table_index]] > filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
+        //         new_tbi++;
+        //     }
+        // }
     }
     else {
         ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[index] > filter) {
+        //         new_row_ids[new_tbi] = index;
+        //         new_tbi++;
+        //     }
+        // }
     }
 
     /* Swap the old vector with the new one */
@@ -353,12 +376,24 @@ void Joiner::SelectLess(table_t *table, int filter){
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[old_row_ids[index*rel_num + table_index]] < filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
+        //         new_tbi++;
+        //     }
+        // }
     }
     else {
         ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+        // for (size_t index = 0; index < size; index++) {
+        //     if (values[index] < filter) {
+        //         new_row_ids[new_tbi] = index;
+        //         new_tbi++;
+        //     }
+        // }
     }
 
     /* Swap the old vector with the new one */
