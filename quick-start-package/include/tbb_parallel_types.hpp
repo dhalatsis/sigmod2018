@@ -285,3 +285,51 @@ private:
     unsigned   relations_num;
     unsigned   table_index;
 };
+
+/* Create Relation T parallel ctruct */
+struct ParallelVictimizeT {
+    table_t *tablePtr;
+    columnInfoMap& cmap;
+    vector<unsigned> help_v;
+    vector<unordered_map<unsigned, unsigned>::iterator> victimized;
+    bool victimize;
+    int index;
+    int removed;
+
+    /* Initial constructor */
+    ParallelVictimizeT ( table_t* tablePtr, columnInfoMap & cmap )
+    : tablePtr(tablePtr), cmap(cmap), victimize(true), index(-1), removed(0)
+    {}
+
+    /* Slpitting constructor */
+    ParallelVictimizeT(ParallelVictimizeT & x, split)
+    : tablePtr(tablePtr), cmap(cmap), victimize(true), index(-1), removed(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+
+        for (unordered_map<unsigned, unsigned>::iterator itr = tablePtr->relations_bindings.begin(); itr != tablePtr->relations_bindings.end(); itr++) {
+            victimize = true;
+            for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+                if (it->first.binding == itr->first) {
+                    victimize = false;
+                    help_v.push_back(itr->second);
+                    break;
+                }
+            }
+            if (victimize) {
+                victimized.push_back(itr);
+                removed++;
+            }
+        }
+
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelVictimizeT& rhs ) {
+        victimized.insert( victimized.end(), rhs.victimized.begin(), rhs.victimized.end() );
+        help_v.insert( help_v.end(), rhs.help_v.begin(), rhs.help_v.end() );
+        removed += rhs.removed;
+    }
+};

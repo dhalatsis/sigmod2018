@@ -535,38 +535,53 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     vector<unsigned> help_v_s;
     vector<unordered_map<unsigned, unsigned>::iterator> victimized_r;
     vector<unordered_map<unsigned, unsigned>::iterator> victimized_s;
-    bool victimize = true;
-    int  index     = -1;
+    // bool victimize = true;
+    // int  index     = -1;
     int left_removed = 0, right_removed = 0;
-    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
-        victimize = true;
-        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == itr->first) {
-                victimize = false;
-                help_v_r.push_back(itr->second);
-                break;
-            }
-        }
-        if (victimize) {
-            victimized_r.push_back(itr);
-            left_removed++;
-        }
-    }
 
-    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
-        victimize = true;
-        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == itr->first) {
-                victimize = false;
-                help_v_s.push_back(itr->second);
-                break;
-            }
-        }
-        if (victimize) {
-            victimized_s.push_back(itr);
-            right_removed++;
-        }
-    }
+    // for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
+    //     victimize = true;
+    //     for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+    //         if (it->first.binding == itr->first) {
+    //             victimize = false;
+    //             help_v_r.push_back(itr->second);
+    //             break;
+    //         }
+    //     }
+    //     if (victimize) {
+    //         victimized_r.push_back(itr);
+    //         left_removed++;
+    //     }
+    // }
+
+    const unsigned size1 = table_r->relations_bindings.size();
+    ParallelVictimizeT vic1( table_r, cmap );
+    parallel_reduce(blocked_range<size_t>(0,size1,GRAINSIZE), vic1);
+    help_v_r.insert( help_v_r.end(), vic1.help_v.begin(), vic1.help_v.end() );
+    victimized_r.insert( victimized_r.end(), vic1.victimized.begin(), vic1.victimized.end() );
+    left_removed += vic1.removed;
+
+    // for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
+    //     victimize = true;
+    //     for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+    //         if (it->first.binding == itr->first) {
+    //             victimize = false;
+    //             help_v_s.push_back(itr->second);
+    //             break;
+    //         }
+    //     }
+    //     if (victimize) {
+    //         victimized_s.push_back(itr);
+    //         right_removed++;
+    //     }
+    // }
+
+    const unsigned size2 = table_s->relations_bindings.size();
+    ParallelVictimizeT vic2( table_s, cmap );
+    parallel_reduce(blocked_range<size_t>(0,size2,GRAINSIZE), vic2);
+    help_v_s.insert( help_v_s.end(), vic2.help_v.begin(), vic2.help_v.end() );
+    victimized_s.insert( victimized_s.end(), vic2.victimized.begin(), vic2.victimized.end() );
+    right_removed += vic2.removed;
 
     /* Erase Victimized */
     for (size_t i = 0; i < victimized_r.size(); i++) {
