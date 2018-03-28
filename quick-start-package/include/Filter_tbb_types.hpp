@@ -23,32 +23,41 @@ struct ParallelItermediateEqualFilterT {
     unsigned new_tbi;
     unsigned * rids;
     uint64_t size;
+    unsigned rel_num;
+    unsigned table_index;
 
     /* Initial constructor */
-    ParallelItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+    ParallelItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, unsigned rel_num, unsigned table_index, int filter )
+    : values{values}, old_rids{old_rids}, rids{NULL}, rel_num(rel_num), table_index(table_index), filter{filter}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelItermediateEqualFilterT(ParallelItermediateEqualFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, rel_num(x.rel_num), table_index(x.table_index), filter{x.filter}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
-            if (values[old_rids[i]] == filter) {
-                // lock.acquire(FilterMutex);
+            if (values[old_rids[i*rel_num + table_index]] == filter) {
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
-                rids[new_tbi] = old_rids[i];
+                rids[new_tbi] = old_rids[i*rel_num + table_index];
                 new_tbi++;
-                // lock.release();
             }
+        //     if (values[old_rids[i]] == filter) {
+        //         // lock.acquire(FilterMutex);
+        //         if (new_tbi == size) {
+        //             size += 1000;
+        //             rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
+        //         }
+        //         rids[new_tbi] = old_rids[i];
+        //         new_tbi++;
+        //         // lock.release();
+        //     }
         }
     }
 
@@ -77,7 +86,7 @@ struct ParallelNonItermediateEqualFilterT {
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
+    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, int filter )
     : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
     {}
 
@@ -89,17 +98,14 @@ struct ParallelNonItermediateEqualFilterT {
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
             if (values[i] == filter) {
-                // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
                 new_tbi++;
-                // lock.release();
             }
         }
     }
@@ -127,32 +133,41 @@ struct ParallelItermediateGreaterFilterT {
     unsigned new_tbi;
     unsigned * rids;
     uint64_t size;
+    unsigned rel_num;
+    unsigned table_index;
 
     /* Initial constructor */
-    ParallelItermediateGreaterFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+    ParallelItermediateGreaterFilterT ( uint64_t * values, unsigned * old_rids, unsigned rel_num, unsigned table_index, int filter )
+    : values{values}, old_rids{old_rids}, rids{NULL}, rel_num(rel_num), table_index(table_index), filter{filter}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelItermediateGreaterFilterT(ParallelItermediateGreaterFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, rel_num(x.rel_num), table_index(x.table_index), filter{x.filter}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
-            if (values[old_rids[i]] > filter) {
-                // lock.acquire(FilterMutex);
+            if (values[old_rids[i*rel_num + table_index]] > filter) {
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
-                rids[new_tbi] = old_rids[i];
+                rids[new_tbi] = old_rids[i*rel_num + table_index];
                 new_tbi++;
-                // lock.release();
             }
+            // if (values[old_rids[i]] > filter) {
+            //     // lock.acquire(FilterMutex);
+            //     if (new_tbi == size) {
+            //         size += 1000;
+            //         rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
+            //     }
+            //     rids[new_tbi] = old_rids[i];
+            //     new_tbi++;
+            //     // lock.release();
+            // }
         }
     }
 
@@ -181,7 +196,7 @@ struct ParallelNonItermediateGreaterFilterT {
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateGreaterFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
+    ParallelNonItermediateGreaterFilterT ( uint64_t * values, unsigned * old_rids, int filter )
     : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
     {}
 
@@ -193,17 +208,14 @@ struct ParallelNonItermediateGreaterFilterT {
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
             if (values[i] > filter) {
-                // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
                 new_tbi++;
-                // lock.release();
             }
         }
     }
@@ -231,32 +243,41 @@ struct ParallelItermediateLessFilterT {
     unsigned new_tbi;
     unsigned * rids;
     uint64_t size;
+    unsigned rel_num;
+    unsigned table_index;
 
     /* Initial constructor */
-    ParallelItermediateLessFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+    ParallelItermediateLessFilterT ( uint64_t * values, unsigned * old_rids, unsigned rel_num, unsigned table_index, int filter )
+    : values{values}, old_rids{old_rids}, rids{NULL}, rel_num(rel_num), table_index(table_index), filter{filter}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelItermediateLessFilterT(ParallelItermediateLessFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, rel_num(x.rel_num), table_index(x.table_index), filter{x.filter}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
-            if (values[old_rids[i]] < filter) {
-                // lock.acquire(FilterMutex);
+            if (values[old_rids[i*rel_num + table_index]] < filter) {
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
-                rids[new_tbi] = old_rids[i];
+                rids[new_tbi] = old_rids[i*rel_num + table_index];
                 new_tbi++;
-                // lock.release();
             }
+            // if (values[old_rids[i]] < filter) {
+            //     // lock.acquire(FilterMutex);
+            //     if (new_tbi == size) {
+            //         size += 1000;
+            //         rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
+            //     }
+            //     rids[new_tbi] = old_rids[i];
+            //     new_tbi++;
+            //     // lock.release();
+            // }
         }
     }
 
@@ -285,7 +306,7 @@ struct ParallelNonItermediateLessFilterT {
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateLessFilterT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
+    ParallelNonItermediateLessFilterT ( uint64_t * values, unsigned * old_rids, int filter )
     : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
     {}
 
@@ -297,17 +318,14 @@ struct ParallelNonItermediateLessFilterT {
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         /* Do the write */
-        // spin_mutex::scoped_lock lock;
         for (size_t i = range.begin(); i < range.end(); ++i) {
             if (values[i] < filter) {
-                // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
                     size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
                 new_tbi++;
-                // lock.release();
             }
         }
     }
@@ -326,3 +344,50 @@ struct ParallelNonItermediateLessFilterT {
         }
     }
 };
+
+// TODO
+/* Create Relation T parallel ctruct */
+// struct ParallelSelfJoinT {
+//
+//     /* Initial constructor */
+//     ParallelSelfJoinT ( uint64_t * values, unsigned * old_rids, /*unsigned * rids,*/ int filter )
+//     : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+//     {}
+//
+//     /* Slpitting constructor */
+//     ParallelSelfJoinT(ParallelSelfJoinT & x, split)
+//     : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+//     {}
+//
+//     /* The function call overloaded operator */
+//     void operator()(const tbb::blocked_range<size_t>& range) {
+//         /* Do the write */
+//         // spin_mutex::scoped_lock lock;
+//         for (size_t i = range.begin(); i < range.end(); ++i) {
+//             if (values[i] < filter) {
+//                 // lock.acquire(FilterMutex);
+//                 if (new_tbi == size) {
+//                     size += 1000;
+//                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
+//                 }
+//                 rids[new_tbi] = i;
+//                 new_tbi++;
+//                 // lock.release();
+//             }
+//         }
+//     }
+//
+//     /* The function to call on thread join */
+//     void join( ParallelSelfJoinT& rhs ) {
+//         if (rhs.new_tbi) {
+//             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+//             unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+//             copy(rids, rids + new_tbi, result);
+//             free (rids); // we copied them, we are done with them
+//             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+//             size += rhs.size;
+//             rids = result;
+//             new_tbi += rhs.new_tbi;
+//         }
+//     }
+// };
