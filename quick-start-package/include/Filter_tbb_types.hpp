@@ -42,7 +42,7 @@ struct ParallelItermediateEqualFilterT {
             if (values[old_rids[i]] == filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = old_rids[i];
@@ -54,14 +54,16 @@ struct ParallelItermediateEqualFilterT {
 
     /* The function to call on thread join */
     void join( ParallelItermediateEqualFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
 
@@ -92,7 +94,7 @@ struct ParallelNonItermediateEqualFilterT {
             if (values[i] == filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
@@ -104,14 +106,16 @@ struct ParallelNonItermediateEqualFilterT {
 
     /* The function to call on thread join */
     void join( ParallelNonItermediateEqualFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
 
@@ -142,7 +146,7 @@ struct ParallelItermediateGreaterFilterT {
             if (values[old_rids[i]] > filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = old_rids[i];
@@ -154,14 +158,16 @@ struct ParallelItermediateGreaterFilterT {
 
     /* The function to call on thread join */
     void join( ParallelItermediateGreaterFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
 
@@ -192,7 +198,7 @@ struct ParallelNonItermediateGreaterFilterT {
             if (values[i] > filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
@@ -204,14 +210,16 @@ struct ParallelNonItermediateGreaterFilterT {
 
     /* The function to call on thread join */
     void join( ParallelNonItermediateGreaterFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
 
@@ -242,7 +250,7 @@ struct ParallelItermediateLessFilterT {
             if (values[old_rids[i]] < filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = old_rids[i];
@@ -254,14 +262,16 @@ struct ParallelItermediateLessFilterT {
 
     /* The function to call on thread join */
     void join( ParallelItermediateLessFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
 
@@ -292,7 +302,7 @@ struct ParallelNonItermediateLessFilterT {
             if (values[i] < filter) {
                 // lock.acquire(FilterMutex);
                 if (new_tbi == size) {
-                    size += 100;
+                    size += 1000;
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
@@ -304,13 +314,15 @@ struct ParallelNonItermediateLessFilterT {
 
     /* The function to call on thread join */
     void join( ParallelNonItermediateLessFilterT& rhs ) {
-        unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-        // unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-        copy(rids, rids + new_tbi, result);
-        copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-        size += rhs.size;
-        rids = result;
-        new_tbi += rhs.new_tbi;
-        // cerr << rhs.new_tbi << "->" << new_tbi << ", " << rhs.size << "->" << size << endl;
+        if (rhs.new_tbi) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            copy(rids, rids + new_tbi, result);
+            free (rids); // we copied them, we are done with them
+            copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
+            size += rhs.size;
+            rids = result;
+            new_tbi += rhs.new_tbi;
+        }
     }
 };
