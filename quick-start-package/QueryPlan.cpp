@@ -1078,65 +1078,41 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         }
     }
 }
-/*
-// JoinTree destructor
-void JoinTree::destrJoinTree() {
-    // destruct query-tree in a DFS fassion
-    JoinTreeNode *currNodePtr = this->root;
-    bool from_left = false;
 
-    while(currNodePtr) {
-        // if there are left children
-        if (currNodePtr->left) {
-            currNodePtr = currNodePtr->left;
-            from_left = true;
-        }
-        // if there are right children
-        else if (currNodePtr->right) {
-            currNodePtr = currNodePtr->right;
-            from_left = false;
-        }
-        // if there are no left or right children
-        else {
-            // clean-up node
-            free(currNodePtr->filterPtr);
-            currNodePtr->filterPtr = NULL;
-            free(currNodePtr->predicatePtr);
-            currNodePtr->predicatePtr = NULL;
-            // essentially, not head node
-            if (currNodePtr->parent) {
-                // go to the parent
-                currNodePtr = currNodePtr->parent;
-                // free the correct child's node
-                if (from_left) {
-                    free(currNodePtr->left);
-                    currNodePtr->left = NULL;
-                }
-                else {
-                    free(currNodePtr->right);
-                    currNodePtr->right = NULL;
-                }
-            }
-            // essentially, head node
-            else {
-                free(currNodePtr);
-                currNodePtr = NULL;
-            }
-        }
+// JoinTreeNode destructor
+void JoinTreeNode::destroy() {
+    JoinTreeNode* joinTreeNodePtr = this;
+
+    // Got to leftmost join
+    while (joinTreeNodePtr->nodeId == -1) {
+        joinTreeNodePtr = joinTreeNodePtr->left;
     }
+
+    // Go up and free
+    while (joinTreeNodePtr->parent != NULL) {
+        delete(joinTreeNodePtr->left);
+        delete(joinTreeNodePtr->right);
+        joinTreeNodePtr = joinTreeNodePtr->parent;
+    }
+
+    // Root node
+    delete(joinTreeNodePtr->left);
+    delete(joinTreeNodePtr->right);
+    delete(joinTreeNodePtr);
+}
+
+// JoinTree destructor
+void JoinTree::destroy() {
+    this->root->destroy();
 }
 
 // QueryPlan destructor
-void QueryPlan::destrQueryPlan(Joiner& joiner) {
-    int relationsCount = joiner.getRelationsCount(); // Get the number of relations
-
-    joinTreePtr->destrJoinTree();
-
-    // For every relation get its column statistics
-    for (int rel = 0; rel < relationsCount; rel++)
-        // Allocate memory for the columns
+void QueryPlan::destroy(Joiner& joiner) {
+    int relationsCount = joiner.getRelationsCount();
+    
+    for (int rel = 0; rel < relationsCount; rel++) {
         free(columnInfos[rel]);
-
+    }
     free(columnInfos);
 }
-*/
+

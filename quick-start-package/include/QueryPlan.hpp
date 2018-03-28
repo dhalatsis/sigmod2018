@@ -133,6 +133,9 @@ struct JoinTreeNode {
     // Estimates the cost of a given Plan Tree Node
     void cost(PredicateInfo& predicateInfo);
 
+    // The destructor
+    void destroy();
+
     void print(JoinTreeNode* joinTreeNodePtr);
 };
 
@@ -152,8 +155,8 @@ struct JoinTree {
     // Returns the cost of a given JoinTree
     double getCost();
 
-    // destructor
-    void destrJoinTree();
+    // The destructor
+    void destroy();
 };
 
 // Query Plan data structure
@@ -168,8 +171,8 @@ struct QueryPlan {
     // Build a query plan with the given info
     void build(QueryInfo& queryInfoPtr);
 
-    // destructor
-    void destrQueryPlan(Joiner& joiner);
+    // The destructor
+    void destroy(Joiner& joiner);
 
     // Execute a query plan with the given info
     void execute(QueryInfo& queryInfoPtr);

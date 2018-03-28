@@ -793,7 +793,6 @@ int main(int argc, char* argv[]) {
 
         table_t * result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
 
-
         #ifdef time
         gettimeofday(&end, NULL);
         timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -835,7 +834,13 @@ int main(int argc, char* argv[]) {
 
         // Print the result
         std::cout << result_str << endl;
+
+        // Free the tree
+        optimalJoinTree->destroy();
     }
+
+    // Free the queryPlan memory
+    queryPlan.destroy(joiner);
 
 #ifdef time
     std::cerr << "timePreparation:     " << (long)(timePreparation * 1000) << endl;
