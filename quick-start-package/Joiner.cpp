@@ -46,6 +46,8 @@ double timeExecute = 0;
 double timePreparation = 0;
 double timeCleanQuery = 0;
 
+double timeToLoop = 0;
+
 
 int cleanQuery(QueryInfo &info) {
 
@@ -267,6 +269,8 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     std::sort(help_v_r.begin(), help_v_r.end());
     std::sort(help_v_s.begin(), help_v_s.end());
 
+    std::cerr << "Num victimized " << left_removed + right_removed << '\n';
+
 
     /* The num of relations for the two tables */
     const unsigned relnum_r = table_r->relations_bindings.size();
@@ -336,23 +340,70 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
+
     uint32_t idx = 0;  // POints to the right index on the res
     uint32_t tup_i;
 
-    for (int th = 0; th < THREAD_NUM; th++) {
-        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+    // unsigned * a = new unsigned[1];
+    // for (int th = 0; th < THREAD_NUM; th++) {
+    //     chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+    //
+    //     /* Get the touples form the results */
+    //     tuplebuffer_t * tb = cb->buf;
+    //     uint32_t numbufs = cb->numbufs;
+    //     uint32_t row_i;
+    //
+    //     /* Parallelize first buffer */
+    //     for (size_t i = 0; i < cb->writepos; i++) {
+    //         row_i = tb->tuples[i].key;
+    //         for (size_t j = 0; j < help_v_r.size(); j++) {
+    //             *a = row_i;
+    //         }
+    //
+    //         row_i = tb->tuples[i].payload;
+    //         for (size_t j = 0; j < help_v_s.size(); j++) {
+    //             *a = row_i;
+    //         }
+    //     }
+    //
+    //     /* Run the other buffers */
+    //     tb = tb->next;
+    //     for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+    //         for (size_t i = 0; i < CHAINEDBUFF_NUMTUPLESPERBUF; i++) {
+    //             row_i = tb->tuples[i].key;
+    //             for (size_t j = 0; j < help_v_r.size(); j++) {
+    //                 *a = row_i;
+    //             }
+    //
+    //             row_i = tb->tuples[i].payload;
+    //             for (size_t j = 0; j < help_v_s.size(); j++) {
+    //                 *a = row_i;
+    //             }
+    //         }
+    //         tb = tb->next;
+    //     }
+    // }
+    // #ifdef time
+    //     gettimeofday(&end, NULL);
+    //     timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    // #endif
 
-        /* Get the touples form the results */
-        tuplebuffer_t * tb = cb->buf;
-        uint32_t numbufs = cb->numbufs;
-        uint32_t row_i;
+    /* Depending on tables choose what to pass */
+    if (table_r->intermediate_res && table_s->intermediate_res) {
 
-#ifdef time
-        gettimeofday(&start, NULL);
-#endif
+        for (int th = 0; th < THREAD_NUM; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
-        /* Depending on tables choose what to pass */
-        if (table_r->intermediate_res && table_s->intermediate_res) {
+            /* Get the touples form the results */
+            tuplebuffer_t * tb = cb->buf;
+            uint32_t numbufs = cb->numbufs;
+            uint32_t row_i;
+
+            #ifdef time
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Parallelize first buffer */
             TableAllIntermediateCT tct
             (
                 tb->tuples,
@@ -360,53 +411,18 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 &help_v_r, &help_v_s,
                 idx, old_relnum_r, old_relnum_s, num_relations
             );
-            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
-        }
-        else if (table_r->intermediate_res) {
-            TableRIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
-        }
-        else if (table_s->intermediate_res) {
-            TableSIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
-        }
-        else {
-            TableNoneIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos, GRAINSIZE), tct);
-        }
+            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
 
-#ifdef time
-        gettimeofday(&end, NULL);
-        timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        gettimeofday(&start, NULL);
-#endif
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            gettimeofday(&start, NULL);
+            #endif
 
-        /* --------------------------------------------------------------------------------------
-        The N-1 buffer loops , where the num of tups are CHAINEDBUFF_NUMTUPLESPERBUF
-        ---------------------------------------------------------------------------------------- */
-        tb = tb->next;
-        idx += cb->writepos;
-        for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
-            if (table_r->intermediate_res && table_s->intermediate_res){
+            /* Run the other buffers */
+            tb = tb->next;
+            idx += cb->writepos;
+            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
                 TableAllIntermediateCT tct
                 (
                     tb->tuples,
@@ -414,10 +430,55 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
 
+                /* Go the the next buffer */
+                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
             }
-            else if (table_r->intermediate_res) {
+            /* Free cb */
+            chainedtuplebuffer_free(cb);
+
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            #endif
+        }
+    }
+    else if (table_r->intermediate_res) {
+
+        for (int th = 0; th < THREAD_NUM; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+            /* Get the touples form the results */
+            tuplebuffer_t * tb = cb->buf;
+            uint32_t numbufs = cb->numbufs;
+            uint32_t row_i;
+
+            #ifdef time
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Parallelize first buffer */
+            TableRIntermediateCT tct
+            (
+                tb->tuples,
+                rids_res, rids_r, rids_s,
+                &help_v_r, &help_v_s,
+                idx, old_relnum_r, old_relnum_s, num_relations
+            );
+            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Run the other buffers */
+            tb = tb->next;
+            idx += cb->writepos;
+            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
                 TableRIntermediateCT tct
                 (
                     tb->tuples,
@@ -425,9 +486,56 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+
+                /* Go the the next buffer */
+                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
             }
-            else if (table_s->intermediate_res) {
+            /* Free cb */
+            chainedtuplebuffer_free(cb);
+
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            #endif
+        }
+
+    }
+    else if (table_s->intermediate_res) {
+
+        for (int th = 0; th < THREAD_NUM; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+            /* Get the touples form the results */
+            tuplebuffer_t * tb = cb->buf;
+            uint32_t numbufs = cb->numbufs;
+            uint32_t row_i;
+
+            #ifdef time
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Parallelize first buffer */
+            TableSIntermediateCT tct
+            (
+                tb->tuples,
+                rids_res, rids_r, rids_s,
+                &help_v_r, &help_v_s,
+                idx, old_relnum_r, old_relnum_s, num_relations
+            );
+            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Run the other buffers */
+            tb = tb->next;
+            idx += cb->writepos;
+            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
                 TableSIntermediateCT tct
                 (
                     tb->tuples,
@@ -435,9 +543,53 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                /* Go the the next buffer */
+                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
             }
-            else {
+            /* Free cb */
+            chainedtuplebuffer_free(cb);
+        }
+
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+    }
+    else {
+        for (int th = 0; th < THREAD_NUM; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+
+            /* Get the touples form the results */
+            tuplebuffer_t * tb = cb->buf;
+            uint32_t numbufs = cb->numbufs;
+            uint32_t row_i;
+
+            #ifdef time
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Parallelize first buffer */
+            TableNoneIntermediateCT tct
+            (
+                tb->tuples,
+                rids_res, rids_r, rids_s,
+                &help_v_r, &help_v_s,
+                idx, old_relnum_r, old_relnum_s, num_relations
+            );
+            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
+
+            #ifdef time
+            gettimeofday(&end, NULL);
+            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            gettimeofday(&start, NULL);
+            #endif
+
+            /* Run the other buffers */
+            tb = tb->next;
+            idx += cb->writepos;
+            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
                 TableNoneIntermediateCT tct
                 (
                     tb->tuples,
@@ -445,21 +597,19 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                     &help_v_r, &help_v_s,
                     idx, old_relnum_r, old_relnum_s, num_relations
                 );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF, GRAINSIZE), tct);
+                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
+                /* Go the the next buffer */
+                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
             }
-
-            /* Go the the next buffer */
-            idx += CHAINEDBUFF_NUMTUPLESPERBUF;
-            tb = tb->next;
+            /* Free cb */
+            chainedtuplebuffer_free(cb);
         }
 
-#ifdef time
+        #ifdef time
         gettimeofday(&end, NULL);
         timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
-
-        /* Free cb */
-        chainedtuplebuffer_free(cb);
+        #endif
     }
 
     return new_table;

@@ -3,6 +3,7 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/partitioner.h"
 
 
 using namespace tbb;
