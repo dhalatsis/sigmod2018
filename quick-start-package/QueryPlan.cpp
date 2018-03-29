@@ -980,107 +980,114 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
     fprintf(stderr, "\n");
 }
 
-struct ParallelReduction {
+struct ParallelStatistics {
 private:
-    uint64_t *array;
-    uint64_t max;
-    uint64_t min;
-    bool isSorted;
+    vector<uint64_t*> columnPtrs;
 
 public:
-    ParallelReduction(uint64_t *arr) : array(arr), max(0), min(numeric_limits<uint64_t>::max()), isSorted(true) {}
-    ParallelReduction(ParallelReduction& p, split) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()), isSorted(true) {}
+    vector<uint64_t> columnTuples;
+    vector<ColumnInfo>* columnInfosVector;
 
-    uint64_t getMax() { return max; }
-    uint64_t getMin() { return min; }
-    bool getIsSorted() { return isSorted; }
+    ParallelStatistics(vector<uint64_t*> cp, vector<uint64_t> ct, vector<ColumnInfo>* ci) :
+    columnPtrs(cp), columnTuples(ct), columnInfosVector(ci) {}
+    
+    ParallelStatistics(ParallelStatistics& p, split) :
+    columnPtrs(p.columnPtrs), columnTuples(p.columnTuples), columnInfosVector(p.columnInfosVector) {}
 
-    void operator()(const blocked_range<size_t> &r) {
-        size_t initial = r.begin();
-        for (size_t count = r.begin(); count != r.end(); count++) {
-            max = (max > array[count] ? max : array[count]);
-            min = (min > array[count] ? array[count] : min);
-            if ((count >= initial + 1) && (isSorted == true)) {
-                if (array[count] < array[count-1]) isSorted = false;
+    void operator()(const blocked_range<size_t> &r) const {
+        for (size_t col = r.begin(); col != r.end(); col++) {
+            uint64_t minimum = numeric_limits<uint64_t>::max();
+            uint64_t maximum = 0;
+            uint64_t tuples  = columnTuples[col];
+            uint64_t element;
+
+            // One pass for the min and max
+            for (int i = 0; i < tuples; i++) {
+                element = columnPtrs[col][i];
+                if (element > maximum) maximum = element;
+                if (element < minimum) minimum = element;
             }
-        }
-    }
 
-    void join(const ParallelReduction& pReductionSub) {
-        max = (max > pReductionSub.max ? max : pReductionSub.max);
-        min = (min > pReductionSub.min ? pReductionSub.min : min);
-        isSorted = ((isSorted == true) && (pReductionSub.isSorted == true)) ? true : false;
+            // One pass for the distinct elements
+            vector<bool> distinctElements(maximum - minimum + 1, false);
+            uint64_t distinctCounter = 0;
+
+            for (int i = 0; i < tuples; i++) {
+                element = columnPtrs[col][i];
+                if (distinctElements[element - minimum] == false) {
+                    distinctCounter++;
+                    distinctElements[element - minimum] = true;
+                }
+            }
+
+            // Save the infos
+            (*columnInfosVector)[col].min      = minimum;
+            (*columnInfosVector)[col].max      = maximum;
+            (*columnInfosVector)[col].size     = tuples;
+            (*columnInfosVector)[col].distinct = distinctCounter;
+            (*columnInfosVector)[col].n        = maximum - minimum + 1;
+            (*columnInfosVector)[col].spread   = (((double) (maximum - minimum + 1)) / ((double) ((*columnInfosVector)[col].distinct)));
+
+            (*columnInfosVector)[col].counter = 0;
+            (*columnInfosVector)[col].isSelectionColumn = false;
+        }
     }
 };
 
 // Fills the columnInfo matrix with the data of every column
 void QueryPlan::fillColumnInfo(Joiner& joiner) {
     Relation* relation;
-    int relationsCount = joiner.getRelationsCount(); // Get the number of relations
-    int columnsCount; // Number of columns of a relation
+    int relationsCount = joiner.getRelationsCount();
+    size_t allColumnsCount = 0; // Number of all columns of all relations
+    size_t columnsCount; // Number of columns of a single relation
+
+    // Get the number of all columns
+    for (int rel = 0; rel < relationsCount; rel++) {
+        allColumnsCount += joiner.getRelation(rel).columns.size();
+    }
+
+    // Create a vector of pointers to all columns
+    vector<uint64_t*> columnPtrs(allColumnsCount);
+    vector<uint64_t> columnTuples(allColumnsCount);
+    vector<ColumnInfo> columnInfosVector(allColumnsCount);
+    int index = 0;
+
+    for (int rel = 0; rel < relationsCount; rel++) {
+        // Get the number of columns of this relation
+        relation = &(joiner.getRelation(rel));
+        columnsCount = relation->columns.size();
+
+        for (int col = 0; col < columnsCount; col++) {
+            columnPtrs[index] = relation->columns[col];
+            columnTuples[index] = relation->size;
+            index++;
+        }
+    }
+ 
+    // Get the statistics of every column
+    ParallelStatistics ps(columnPtrs, columnTuples, &columnInfosVector);
+    parallel_for(blocked_range<uint64_t>(0, allColumnsCount, 1000), ps);
+
+    // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix
+    index = 0;
 
     // Allocate memory for every relation
     columnInfos = (ColumnInfo**) malloc(relationsCount * sizeof(ColumnInfo*));
 
-    // For every relation get its column statistics
+    // For every relation allocate memory for its columns
     for (int rel = 0; rel < relationsCount; rel++) {
         // Get the number of columns
-        relation = &(joiner.getRelation(rel));
-        columnsCount = relation->columns.size();
-
-        // Allocate memory for the columns
+        columnsCount = joiner.getRelation(rel).columns.size();
         columnInfos[rel] = (ColumnInfo*) malloc(columnsCount * sizeof(ColumnInfo));
 
         // Get the info of every column
         for (int col = 0; col < columnsCount; col++) {
-            uint64_t minimum = numeric_limits<uint64_t>::max();
-            uint64_t maximum = 0;
-            uint64_t tuples  = relation->size;
-            uint64_t element;
-
-            // Find the minimum and maximum
-            ParallelReduction pr(relation->columns[col]);
-            parallel_reduce(blocked_range<uint64_t>(0, tuples, 1000), pr);
-            minimum = pr.getMin();
-            maximum = pr.getMax();
-
-            // One pass for the minimum and maximum
-            /*
-            for (int i = 0; i < tuples; i++) {
-                element = relation->columns[col][i];
-                if (element > maximum) maximum = element;
-                if (element < minimum) minimum = element;
-            }
-            */
-
-            // One pass for the distinct elements
-            // vector<bool> distinctElements(maximum - minimum + 1, false);
-            // uint64_t distinctCounter = 0;
-            //
-            // for (int i = 0; i < tuples; i++) {
-            //     element = relation->columns[col][i];
-            //     if (distinctElements[element - minimum] == false) {
-            //         distinctCounter++;
-            //         distinctElements[element - minimum] = true;
-            //     }
-            // }
-
-            if (pr.getIsSorted()) fprintf(stderr, "relation %2d column %2d sorted %d\n", rel, col, pr.getIsSorted());
-
-            // Save the infos
-            columnInfos[rel][col].min      = minimum;
-            columnInfos[rel][col].max      = maximum;
-            columnInfos[rel][col].size     = tuples;
-            columnInfos[rel][col].distinct = 100;//distinctCounter;
-            columnInfos[rel][col].n        = maximum - minimum + 1;
-            columnInfos[rel][col].spread   = (((double) (maximum - minimum + 1)) / ((double) (columnInfos[rel][col].distinct)));
-
-            columnInfos[rel][col].counter = 0;
-            columnInfos[rel][col].isSelectionColumn = false;
-            columnInfos[rel][col].isSorted = pr.getIsSorted();
+            columnInfos[rel][col] = columnInfosVector[index];
+            index++;
         }
     }
 }
+
 
 // JoinTreeNode destructor
 void JoinTreeNode::destroy() {
