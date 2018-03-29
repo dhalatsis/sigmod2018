@@ -2,10 +2,12 @@
 #include "tbb_parallel_types.hpp"
 
 #include <vector>
+#include <string.h>
 #include "tbb/tbb.h"
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/blocked_range2d.h"
 
 // generally it's better to be avoided but let it be here...
 using namespace tbb;
@@ -162,7 +164,7 @@ struct ParallelItermediateEqualFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
@@ -214,7 +216,7 @@ struct ParallelNonItermediateEqualFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
@@ -275,7 +277,7 @@ struct ParallelItermediateGreaterFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
@@ -324,7 +326,7 @@ struct ParallelNonItermediateGreaterFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
@@ -385,7 +387,7 @@ struct ParallelItermediateLessFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
@@ -434,83 +436,110 @@ struct ParallelNonItermediateLessFilterT {
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = new_tbi + rhs.new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
     }
 };
 
-// // TODO
-// /* Create Relation T parallel utility struct */
-// struct ParallelSelfJoinUtilityT {
-//     unsigned * row_ids_matrix;
-//     unsigned * new_row_ids_matrix;
-//     unsigned rels_number;
-//     unsigned new_tbi;
-//     uint64_t i;
-//
-//     /* Initial constructor */
-//     ParallelSelfJoinUtilityT ( unsigned* row_ids_matrix, unsigned * new_row_ids_matrix, unsigned rels_number, unsigned new_tbi, uint64_t i )
-//     : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), rels_number(rels_number), new_tbi(new_tbi), i(i)
-//     {}
-//
-//     /* The function call overloaded operator */
-//     void operator()(const tbb::blocked_range<size_t>& range) {
-//         for (size_t relation = range.begin(); relation < range.end(); ++relation) {
-//             new_row_ids_matrix[new_tbi*range.end() + relation] = row_ids_matrix[i*range.end() + relation];
-//         }
-//     }
-// };
-//
-// // TODO
-// /* Create Relation T parallel struct */
-// struct ParallelSelfJoinT {
-//     unsigned * row_ids_matrix;
-//     unsigned * new_row_ids_matrix;
-//     uint64_t *column_values_l;
-//     uint64_t *column_values_r;
-//     int index_l;
-//     int index_r;
-//     unsigned rels_number;
-//     unsigned new_tbi;
-//     uint64_t size;
-//
-//     /* Initial constructor */
-//     ParallelSelfJoinT ( unsigned* row_ids_matrix, unsigned * new_row_ids_matrix, uint64_t* column_values_l, uint64_t* column_values_r, int index_l, int index_r, unsigned rels_number )
-//     : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), column_values_l(column_values_l), column_values_r(column_values_r), index_l(index_l), index_r(index_r), rels_number(rels_number), new_tbi(0), size(0)
-//     {}
-//
-//     /* Slpitting constructor */
-//     ParallelSelfJoinT(ParallelSelfJoinT & x, split)
-//     : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(x.new_row_ids_matrix), column_values_l(x.column_values_l), column_values_r(x.column_values_r), index_l(x.index_l), index_r(x.index_r), rels_number(x.rels_number), new_tbi(0), size(0)
-//     {}
-//
-//     /* The function call overloaded operator */
-//     void operator()(const tbb::blocked_range<size_t>& range) {
-//         for (size_t i = range.begin(); i < range.end(); ++i) {
-//             /* Apply the predicate: In case of success add to new table */
-//             if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-//                 /* Add this row_id to all the relations */
-//                 ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, new_tbi, i );
-//                 parallel_for(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
-//
-//                 new_tbi++;
-//             }
-//         }
-//     }
-//
-//     /* The function to call on thread join */
-//     void join( ParallelSelfJoinT& rhs ) {
-//         if (rhs.new_tbi) {
-//             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-//             unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
-//             copy(new_row_ids_matrix, new_row_ids_matrix + new_tbi, result);
-//             free (new_row_ids_matrix); // we copied them, we are done with them
-//             copy(rhs.new_row_ids_matrix, rhs.new_row_ids_matrix + rhs.new_tbi, result + new_tbi);
-//             size += rhs.size;
-//             new_row_ids_matrix = result;
-//             new_tbi += rhs.new_tbi;
-//         }
-//     }
-// };
+// TODO
+/* Create Relation T parallel utility struct */
+struct ParallelSelfJoinUtilityT {
+    unsigned * row_ids_matrix;
+    unsigned * new_row_ids_matrix;
+    unsigned * new_matrix;
+    unsigned rels_number;
+    uint64_t i;
+    unsigned size;
+    unsigned real_size;
+
+    /* Initial constructor */
+    ParallelSelfJoinUtilityT ( unsigned* row_ids_matrix, unsigned * new_row_ids_matrix, unsigned rels_number, uint64_t i )
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), new_matrix(NULL), rels_number(rels_number), i(i), size(0), real_size(0)
+    {}
+
+    /* Splitting constructor */
+    ParallelSelfJoinUtilityT(ParallelSelfJoinUtilityT & x, split)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(x.new_row_ids_matrix), new_matrix(NULL), rels_number(x.rels_number), i(x.i), size(0), real_size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        for (size_t relation = range.begin(); relation < range.end(); ++relation) {
+            if (real_size == size) {
+                size += 100;
+                new_matrix = (unsigned*) realloc(new_matrix, size * sizeof(unsigned));
+            }
+            new_matrix[real_size] = row_ids_matrix[i*rels_number + relation];
+            real_size++;
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelSelfJoinUtilityT& rhs ) {
+        if (rhs.real_size) {
+            // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
+            unsigned * result = (unsigned*) malloc((real_size + rhs.real_size) * sizeof(unsigned));
+            copy(new_matrix, new_matrix + real_size, result);
+            free (new_matrix); // we copied them, we are done with them
+            copy(rhs.new_matrix, rhs.new_matrix + rhs.real_size, result + real_size);
+            size = real_size + rhs.real_size;
+            new_matrix = result;
+            memcpy(new_row_ids_matrix + new_tbi*rels_number + real_size, rhs.new_matrix, rhs.real_size * sizeof(unsigned));
+            real_size += rhs.real_size;
+        }
+    }
+};
+
+// TODO
+/* Create Relation T parallel struct */
+struct ParallelSelfJoinT {
+    unsigned * row_ids_matrix;
+    unsigned * new_row_ids_matrix;
+    uint64_t *column_values_l;
+    uint64_t *column_values_r;
+    int index_l;
+    int index_r;
+    unsigned rels_number;
+    unsigned new_tbi;
+    ParallelSelfJoinUtilityT *psjut;
+
+    /* Initial constructor */
+    ParallelSelfJoinT ( unsigned* row_ids_matrix, unsigned * new_row_ids_matrix, uint64_t* column_values_l, uint64_t* column_values_r, int index_l, int index_r, unsigned rels_number )
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), column_values_l(column_values_l), column_values_r(column_values_r), index_l(index_l), index_r(index_r), rels_number(rels_number), new_tbi(0)
+    {}
+
+    /* Splitting constructor */
+    ParallelSelfJoinT(ParallelSelfJoinT & x, split)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(x.new_row_ids_matrix), column_values_l(x.column_values_l), column_values_r(x.column_values_r), index_l(x.index_l), index_r(x.index_r), rels_number(x.rels_number), new_tbi(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            /* Apply the predicate: In case of success add to new table */
+            if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+                /* Add this row_id to all the relations */
+                // for (ssize_t relation = 0; relation < rels_number; relation++) {
+                //     new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
+                // }
+                // ParallelSelfJoinUtilityT psjut( row_ids_matrix, rels_number, i );
+                psjut = new ParallelSelfJoinUtilityT( row_ids_matrix, new_row_ids_matrix, rels_number, i );
+                parallel_reduce(blocked_range<size_t>(0,rels_number,GRAINSIZE), *psjut);
+
+                // memcpy(new_row_ids_matrix + new_tbi*rels_number, psjut.new_matrix, rels_number * sizeof(unsigned));
+
+                new_tbi++;
+            }
+        }
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelSelfJoinT& rhs ) {
+        if (rhs.new_tbi) {
+            // memcpy(new_row_ids_matrix + rhs.new_tbi*rels_number, psjut->new_matrix, psjut->real_size * sizeof(unsigned));
+            new_tbi += rhs.new_tbi;
+        }
+    }
+};

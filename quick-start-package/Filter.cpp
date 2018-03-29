@@ -66,6 +66,9 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     // // new_row_ids_matrix = psjt.new_row_ids_matrix;
     // new_tbi = psjt.new_tbi;
 
+    // ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, new_tbi, 1 );
+    // parallel_for(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
+
     new_table->tups_num = new_tbi;
 
     /*Delete old table_t */
@@ -358,8 +361,8 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
         // parallel_reduce(blocked_range<size_t>(0,size), sft);
-        //new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
-        //std::cerr << "Size " << sft.size << '\n';
+        // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
+        // // std::cerr << "Size " << sft.size << '\n';
 
         ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter, new_row_ids );
         parallel_reduce(blocked_range<size_t>(0,size), pft);
