@@ -280,12 +280,13 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 }
 
                 /* Run the other buffers */
+                affinity_partitioner ap;
                 tb = tb->next;
                 for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
 
                     if (!distinctPairs_in_R.empty()) {
                         CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -295,7 +296,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
                     if (!distinctPairs_in_S.empty()) {
                         CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -347,12 +348,13 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 }
 
                 /* Run the other buffers */
+                affinity_partitioner ap;
                 tb = tb->next;
                 for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
 
                     if (!distinctPairs_in_R.empty()) {
                         CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -362,7 +364,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
                     if (!distinctPairs_in_S.empty()) {
                         CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
                             sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
@@ -406,12 +408,13 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 }
 
                 /* Run the other buffers */
+                affinity_partitioner ap;
                 tb = tb->next;
                 for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
 
                     if (!distinctPairs_in_R.empty()) {
                         CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* keep track of the sum */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -421,7 +424,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
                     if (!distinctPairs_in_S.empty()) {
                         CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -465,12 +468,13 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 }
 
                 /* Run the other buffers */
+                affinity_partitioner ap;
                 tb = tb->next;
                 for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
 
                     if (!distinctPairs_in_R.empty()) {
                         CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {
@@ -480,7 +484,7 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
                     if (!distinctPairs_in_S.empty()) {
                         CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
 
                         /* Keep track of the checsums */
                         for (size_t i = 0; i < crt.checksums.size(); i++) {

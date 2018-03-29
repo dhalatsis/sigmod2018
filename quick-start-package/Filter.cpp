@@ -347,16 +347,19 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         // }
     }
     else {
-        // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size), sft);
 
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
-        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter );
-        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
+        // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        //new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
+        //std::cerr << "Size " << sft.size << '\n';
+
+        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter, new_row_ids );
+        parallel_reduce(blocked_range<size_t>(0,size), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
 
@@ -419,15 +422,16 @@ void Joiner::SelectGreater(table_t *table, int filter){
         // }
     }
     else {
-        // ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        blocked_range<size_t> bt(0,size, size / THREAD_NUM);
+        ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
+        parallel_reduce(bt, sft);
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
         ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
+        parallel_reduce(bt, pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
 

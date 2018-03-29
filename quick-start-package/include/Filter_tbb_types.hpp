@@ -173,19 +173,20 @@ struct ParallelItermediateEqualFilterT {
 struct ParallelNonItermediateEqualFilterT {
     uint64_t * values;
     unsigned * old_rids;
-    int filter;
-    unsigned new_tbi;
     unsigned * rids;
+    unsigned * result;
+    unsigned new_tbi;
+    int filter;
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, int filter )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, int filter, unsigned * result )
+    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, result{result}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelNonItermediateEqualFilterT(ParallelNonItermediateEqualFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, result{x.result}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
@@ -195,6 +196,7 @@ struct ParallelNonItermediateEqualFilterT {
             if (values[i] == filter) {
                 if (new_tbi == size) {
                     size += 1000;
+                    //std::cerr << "In realloc " << i << '\n';
                     rids = (unsigned*) realloc(rids, size * sizeof(unsigned));
                 }
                 rids[new_tbi] = i;
@@ -206,8 +208,9 @@ struct ParallelNonItermediateEqualFilterT {
     /* The function to call on thread join */
     void join( ParallelNonItermediateEqualFilterT& rhs ) {
         if (rhs.new_tbi) {
+            //std::cerr << "In JOIN " <<  new_tbi << " " <<  rhs.new_tbi << '\n';
             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned));
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned)); //Added results here
             copy(rids, rids + new_tbi, result);
             free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
