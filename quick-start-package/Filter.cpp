@@ -66,6 +66,9 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     // // new_row_ids_matrix = psjt.new_row_ids_matrix;
     // new_tbi = psjt.new_tbi;
 
+    // ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, new_tbi, 1 );
+    // parallel_for(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
+
     new_table->tups_num = new_tbi;
 
     /*Delete old table_t */
@@ -325,8 +328,8 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
         // parallel_reduce(blocked_range<size_t>(0,size), sft);
-        //new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
-        //std::cerr << "Size " << sft.size << '\n';
+        // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
+        // // std::cerr << "Size " << sft.size << '\n';
 
         ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter, new_row_ids );
         parallel_reduce(blocked_range<size_t>(0,size), pft);
@@ -392,16 +395,16 @@ void Joiner::SelectGreater(table_t *table, int filter){
         // }
     }
     else {
-        blocked_range<size_t> bt(0,size, size / THREAD_NUM);
-        ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
-        parallel_reduce(bt, sft);
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
+        ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
+        parallel_reduce(blocked_range<size_t>(0,size), sft);
+
         ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
-        parallel_reduce(bt, pft);
+        parallel_reduce(blocked_range<size_t>(0,size), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
 
@@ -464,12 +467,12 @@ void Joiner::SelectLess(table_t *table, int filter){
         // }
     }
     else {
-        // ParalleNonItermediateSizeFindLessFilterT sft( values, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size), sft);
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
+        ParalleNonItermediateSizeFindLessFilterT sft( values, filter );
+        parallel_reduce(blocked_range<size_t>(0,size), sft);
 
         ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);

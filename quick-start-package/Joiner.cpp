@@ -15,7 +15,7 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-//#define prints
+#define prints
 
 bool DoCheckSums = true;
 
