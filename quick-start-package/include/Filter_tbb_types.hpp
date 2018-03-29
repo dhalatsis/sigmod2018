@@ -208,13 +208,13 @@ struct ParallelNonItermediateEqualFilterT {
     /* The function to call on thread join */
     void join( ParallelNonItermediateEqualFilterT& rhs ) {
         if (rhs.new_tbi) {
-            //std::cerr << "In JOIN " <<  new_tbi << " " <<  rhs.new_tbi << '\n';
+            std::cerr << "In JOIN " <<  new_tbi << " " <<  rhs.new_tbi << '\n';
             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned)); //Added results here
+            //unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned)); //Added results here
             copy(rids, rids + new_tbi, result);
-            free (rids); // we copied them, we are done with them
+            //free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
-            size += rhs.size;
+            size = rhs.new_tbi + new_tbi;
             rids = result;
             new_tbi += rhs.new_tbi;
         }
