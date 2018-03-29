@@ -1,5 +1,5 @@
 #include "jobBarrier.h"
-namespace mple {
+namespace dataurus {
 
 int JobBarrier::Run() {
 	pthread_mutex_lock(mtx_wait);
@@ -16,4 +16,4 @@ JobBarrier::~JobBarrier() {
 	// TODO Auto-generated destructor stub
 }
 
-} /* namespace mple */
+} /* namespace dataurus */

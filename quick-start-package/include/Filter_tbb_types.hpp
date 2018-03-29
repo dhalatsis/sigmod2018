@@ -7,7 +7,7 @@
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
-#include "tbb/blocked_range2d.h"
+#include "tbb/concurrent_vector.h"
 
 // generally it's better to be avoided but let it be here...
 using namespace tbb;
@@ -176,19 +176,18 @@ struct ParallelNonItermediateEqualFilterT {
     uint64_t * values;
     unsigned * old_rids;
     unsigned * rids;
-    unsigned * result;
     unsigned new_tbi;
     int filter;
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, int filter, unsigned * result )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, result{result}, new_tbi(0), size(0)
+    ParallelNonItermediateEqualFilterT ( uint64_t * values, unsigned * old_rids, int filter)
+    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelNonItermediateEqualFilterT(ParallelNonItermediateEqualFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, result{x.result}, new_tbi(0), size(0)
+    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
@@ -210,11 +209,10 @@ struct ParallelNonItermediateEqualFilterT {
     /* The function to call on thread join */
     void join( ParallelNonItermediateEqualFilterT& rhs ) {
         if (rhs.new_tbi) {
-            std::cerr << "In JOIN " <<  new_tbi << " " <<  rhs.new_tbi << '\n';
             // unsigned * result = new unsigned[new_tbi + rhs.new_tbi];
-            //unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned)); //Added results here
+            unsigned * result = (unsigned*) malloc((new_tbi + rhs.new_tbi) * sizeof(unsigned)); //Added results here
             copy(rids, rids + new_tbi, result);
-            //free (rids); // we copied them, we are done with them
+            free (rids); // we copied them, we are done with them
             copy(rhs.rids, rhs.rids + rhs.new_tbi, result + new_tbi);
             size = new_tbi + rhs.new_tbi;
             rids = result;
@@ -287,20 +285,19 @@ struct ParallelItermediateGreaterFilterT {
 /* Create Relation T parallel ctruct */
 struct ParallelNonItermediateGreaterFilterT {
     uint64_t * values;
-    unsigned * old_rids;
     int filter;
     unsigned new_tbi;
     unsigned * rids;
     uint64_t size;
 
     /* Initial constructor */
-    ParallelNonItermediateGreaterFilterT ( uint64_t * values, unsigned * old_rids, int filter )
-    : values{values}, old_rids{old_rids}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
+    ParallelNonItermediateGreaterFilterT ( uint64_t * values, int filter )
+    : values{values}, rids{NULL}, filter{filter}, new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelNonItermediateGreaterFilterT(ParallelNonItermediateGreaterFilterT & x, split)
-    : values{x.values}, old_rids{x.old_rids}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
+    : values{x.values}, rids{NULL}, filter{x.filter}, new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
@@ -332,6 +329,60 @@ struct ParallelNonItermediateGreaterFilterT {
         }
     }
 };
+
+/* Create Relation T parallel ctruct */
+struct ParallelBMT {
+    uint64_t * values;
+    int filter;
+    int size;
+    vector<bool> & bitmap;
+
+    /* Initial constructor */
+    ParallelBMT ( uint64_t * values, int filter , vector<bool> & bitmap)
+    : values{values}, bitmap{bitmap}, filter{filter}, size(0)
+    {}
+
+    ParallelBMT (const ParallelBMT & x, split )
+    : values{x.values}, bitmap{x.bitmap}, filter{filter}, size(0)
+    {}
+
+    void join (const ParallelBMT & y) {size += y.size;}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+        /* Do the write */
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            if (values[i] > filter) {
+                bitmap[i] = true;
+                size++;
+            }
+        }
+    }
+};
+
+// struct ParallelWriteT {
+//     std::vector<bool> & bitmap;
+//     unsigned * rids;
+//     unsigned chunk_size;
+//     unsigned mod;
+//
+//     /* Initial constructor */
+//     ParallelWriteT ( unsigned * rids, std::vector<bool> & bitmap, unsigned cs, unsigned mod)
+//     : rids{rids}, bitmap{bitmap}, chunk_size{cs}, mod{mod};
+//     {}
+//
+//     /* The function call overloaded operator */
+//     void operator()(const tbb::blocked_range<size_t>& range) const{
+//
+//         /* Do the write */
+//         size_t i range.begin();
+//         size_t bitmap_i = (i == 0) ? 0 : i * chunk_size + mod;
+//         size_t size     = (i == 0) ? range.size() * chunk_size : range.size()  // range.end - range.start
+//         for (size_t i = range.begin(); i < range.end(); ++i) {
+//             rids[i] = vector[i];
+//         }
+//     }
+// };
 
 /* Create Relation T parallel ctruct */
 struct ParallelItermediateLessFilterT {

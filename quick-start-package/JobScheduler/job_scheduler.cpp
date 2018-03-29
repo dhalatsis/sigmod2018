@@ -4,7 +4,7 @@
 
 using namespace std;
 
-namespace mple {
+namespace dataurus {
 
 JobScheduler::JobScheduler(int num_of_threads) {
 	if (num_of_threads < 1)
@@ -102,7 +102,7 @@ int JobScheduler::fetchWork(vector<Job*>* jobs, int * id) {
 	}
 //	printf(" -- %d -- %d\n", availableWeights.size(), availableWeights.front());
 	int maxWeight = 1;
-	
+
 	while (availableWork > 0 && maxWeight > 0) {
 		--availableWork;
 		Job* next = jobsQueue.front();

@@ -1065,7 +1065,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             //     }
             // }
 
-            if (pr.getIsSorted()) fprintf(stderr, "relation %2d column %2d sorted %d\n", rel, col, pr.getIsSorted());
+            //if (pr.getIsSorted()) fprintf(stderr, "relation %2d column %2d sorted %d\n", rel, col, pr.getIsSorted());
 
             // Save the infos
             columnInfos[rel][col].min      = minimum;
@@ -1112,10 +1112,9 @@ void JoinTree::destroy() {
 // QueryPlan destructor
 void QueryPlan::destroy(Joiner& joiner) {
     int relationsCount = joiner.getRelationsCount();
-    
+
     for (int rel = 0; rel < relationsCount; rel++) {
         free(columnInfos[rel]);
     }
     free(columnInfos);
 }
-

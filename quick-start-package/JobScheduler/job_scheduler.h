@@ -21,7 +21,7 @@
 using std::vector;
 using std::list;
 
-namespace mple {
+namespace dataurus {
 
 class Job;
 class JobPacket;

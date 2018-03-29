@@ -15,7 +15,7 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-#define prints
+//#define prints
 
 bool DoCheckSums = true;
 
@@ -1342,9 +1342,9 @@ int main(int argc, char* argv[]) {
     std::cerr << "timeSelectFilter:    " << (long)(timeSelectFilter * 1000) << endl;
     std::cerr << "(a)timeNonIntFilters:" << (long)(timeNonIntermediateFilters * 1000) << endl;
     std::cerr << "(b)timeIntFilters:   " << (long)(timeIntermediateFilters * 1000) << endl;
-    std::cerr << "--timeGreaterFilter: " << (long)(timeGreaterFilter * 1000) << endl;
-    std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
-    std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
+    //std::cerr << "--timeGreaterFilter: " << (long)(timeGreaterFilter * 1000) << endl;
+    //std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
+    //std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
     std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;

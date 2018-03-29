@@ -3,7 +3,7 @@
 
 #include "defn.h"
 
-namespace mple
+namespace dataurus
 {
 
 class Job

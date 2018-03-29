@@ -331,7 +331,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
         // // std::cerr << "Size " << sft.size << '\n';
 
-        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter, new_row_ids );
+        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter);
         parallel_reduce(blocked_range<size_t>(0,size), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
@@ -400,13 +400,27 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
-        parallel_reduce(blocked_range<size_t>(0,size), sft);
-
-        ParallelNonItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        // ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        //
+        ParallelNonItermediateGreaterFilterT pft( values, /*new_row_ids,*/ filter );
         parallel_reduce(blocked_range<size_t>(0,size), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
+
+        // /* BITS SET attempt */
+        // vector<bool> bitmap(size, false);
+        // ParallelBMT bmt(values, filter, bitmap);
+        // parallel_reduce(blocked_range<size_t>(0,size), bmt);
+        //
+        //
+        // /* Construct the new array from the bitmap */
+        // unsigned chunk_size = size / bmt.size;
+        // unsigned mod        = size % bmt.size;
+        // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * bmt.size);
+        // ParallelWriteT pw();
+
+
 
         #ifdef time
         struct timeval end;

@@ -6,9 +6,9 @@
 #include <iostream>
 
 
-namespace mple {
+namespace dataurus {
 
-class JobPrint: public mple::Job {
+class JobPrint: public dataurus::Job {
 public:
 	std::string message;
 
@@ -21,8 +21,8 @@ public:
 	}
 
 	virtual ~JobPrint(){}
-	
+
 };
 
-} /* namespace mple */
+} /* namespace dataurus */
 #endif /* JOBPRINT_H_ */

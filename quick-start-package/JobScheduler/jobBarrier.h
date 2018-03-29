@@ -4,9 +4,9 @@
 #include "job.h"
 #include <pthread.h>
 
-namespace mple {
+namespace dataurus {
 
-class JobBarrier: public mple::Job {
+class JobBarrier: public dataurus::Job {
 public:
 	pthread_cond_t* cond_wait;
 	pthread_mutex_t* mtx_wait;
@@ -20,11 +20,11 @@ public:
 
 	}
 	virtual ~JobBarrier();
-	
+
 	bool isBarier() {
 		return true;
 	}
 };
 
-} /* namespace mple */
+} /* namespace dataurus */
 #endif /* JOBBARRIER_H_ */

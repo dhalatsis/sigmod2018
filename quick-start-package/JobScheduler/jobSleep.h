@@ -8,9 +8,9 @@
 #include <chrono>
 
 
-namespace mple {
+namespace dataurus {
 
-class JobSleep: public mple::Job {
+class JobSleep: public dataurus::Job {
 public:
 	int time_s;
 	int jid;
@@ -27,7 +27,7 @@ public:
 	}
 
 	virtual ~JobSleep(){}
-	
+
 };
 
 } /* namespace mple */
