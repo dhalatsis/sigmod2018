@@ -87,6 +87,7 @@ struct ColumnInfo {
 
     unsigned counter; // Number of times the column appears in the query
     bool isSelectionColumn;
+    bool isSorted;
 
     // Prints a Column Info structure
     void print();
@@ -105,8 +106,6 @@ struct JoinTreeNode {
 
     PredicateInfo* predicatePtr;
     vector<FilterInfo*> filterPtrs;
-    ColumnInfo columnInfo;
-
     columnInfoMap usedColumnInfos; // Keeps track of all the columns of every relation to be used in the query
 
     // Estimates the new info of a node's column
@@ -133,6 +132,9 @@ struct JoinTreeNode {
     // Estimates the cost of a given Plan Tree Node
     void cost(PredicateInfo& predicateInfo);
 
+    // The destructor
+    void destroy();
+
     void print(JoinTreeNode* joinTreeNodePtr);
 };
 
@@ -152,8 +154,8 @@ struct JoinTree {
     // Returns the cost of a given JoinTree
     double getCost();
 
-    // destructor
-    void destrJoinTree();
+    // The destructor
+    void destroy();
 };
 
 // Query Plan data structure
@@ -168,8 +170,8 @@ struct QueryPlan {
     // Build a query plan with the given info
     void build(QueryInfo& queryInfoPtr);
 
-    // destructor
-    void destrQueryPlan(Joiner& joiner);
+    // The destructor
+    void destroy(Joiner& joiner);
 
     // Execute a query plan with the given info
     void execute(QueryInfo& queryInfoPtr);

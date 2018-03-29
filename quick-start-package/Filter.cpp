@@ -248,68 +248,35 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
 #endif
 }
 
-
-/* Its better hot to use it TODO change it */
-void Joiner::Select(FilterInfo &fil_info, table_t* table) {
-
-#ifdef time
-    struct timeval start1;
-    gettimeofday(&start1, NULL);
-#endif
+void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo) {
+    #ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    #endif
 
     /* Construct table  - Initialize variable */
-    //(table->intermediate_res)? (construct(table)) : ((void)0);
     SelectInfo &sel_info = fil_info.filterColumn;
     uint64_t filter = fil_info.constant;
 
     if (fil_info.comparison == FilterInfo::Comparison::Less) {
-        #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-        #endif
-
         SelectLess(table, filter);
-
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeLessFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
+        columnInfo->max = filter;
     }
     else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
-        #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-        #endif
-
         SelectGreater(table, filter);
-
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeGreaterFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
+        columnInfo->min = filter;
     }
     else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
-        #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-        #endif
-
         SelectEqual(table, filter);
-
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeEqualFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
+        columnInfo->min = filter;
+        columnInfo->max = filter;
     }
 
-#ifdef time
+    #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
     timeSelectFilter += (end.tv_sec - start1.tv_sec) + (end.tv_usec - start1.tv_usec) / 1000000.0;
-#endif
+    #endif
 }
 
 void Joiner::SelectEqual(table_t *table, int filter) {
