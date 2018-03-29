@@ -12,7 +12,7 @@ using namespace mple;
 int main(void){
 	cout << "<|*_*|>" << endl;
 
-	A job scheduler with 4 threads
+	//A job scheduler with 4 threads
 	JobScheduler js1(4);
 	js1.Schedule(new JobSleep(1, 2));
 	js1.Schedule(new JobSleep(2, 1));

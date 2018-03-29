@@ -275,7 +275,7 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
     #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeSelectFilter += (end.tv_sec - start1.tv_sec) + (end.tv_usec - start1.tv_usec) / 1000000.0;
+    timeSelectFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
 }
 

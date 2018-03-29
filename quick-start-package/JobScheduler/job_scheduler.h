@@ -6,8 +6,8 @@
 #include <semaphore.h>
 #include <iostream>
 
-#include <google/dense_hash_map>
-#include <google/sparsehash/libc_allocator_with_realloc.h>
+#include "google/dense_hash_map"
+#include "google/sparsehash/libc_allocator_with_realloc.h"
 
 #include <queue>
 #include <map>
@@ -62,9 +62,9 @@ public:
 
     void nojobleft(){
         pthread_mutex_lock(&mtx_availableWork);
-	    while(availableWork >0){      
+	    while(availableWork >0){
 		    pthread_cond_wait(&cond_availableWork,&mtx_availableWork);
-	    }	   
+	    }
 	    pthread_mutex_unlock(&mtx_availableWork);
     }
 
