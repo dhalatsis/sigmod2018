@@ -87,6 +87,7 @@ struct ColumnInfo {
 
     unsigned counter; // Number of times the column appears in the query
     bool isSelectionColumn;
+    bool isSorted;
 
     // Prints a Column Info structure
     void print();

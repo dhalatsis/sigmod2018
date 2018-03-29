@@ -13,12 +13,12 @@
 
 /** number of total radix bits used for partitioning. */
 #ifndef NUM_RADIX_BITS
-#define NUM_RADIX_BITS 8 // 8 - 10 best time
+#define NUM_RADIX_BITS 10 // 8 - 10 best time
 #endif
 
 /** number of passes in multipass partitioning, currently fixed at 2. */
 #ifndef NUM_PASSES
-#define NUM_PASSES 1
+#define NUM_PASSES 2
 #endif
 
 /** number of probe items for prefetching: must be a power of 2 */

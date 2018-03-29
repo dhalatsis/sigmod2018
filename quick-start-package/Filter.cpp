@@ -237,26 +237,28 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
 #endif
 }
 
-
-/* Its better hot to use it TODO change it */
-void Joiner::Select(FilterInfo &fil_info, table_t* table) {
-
-#ifdef time
+void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo) {
+    #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
-#endif
+    #endif
 
     /* Construct table  - Initialize variable */
-    //(table->intermediate_res)? (construct(table)) : ((void)0);
     SelectInfo &sel_info = fil_info.filterColumn;
     uint64_t filter = fil_info.constant;
 
     if (fil_info.comparison == FilterInfo::Comparison::Less) {
         SelectLess(table, filter);
-    } else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
+        columnInfo->max = filter;
+    }
+    else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
         SelectGreater(table, filter);
-    } else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
+        columnInfo->min = filter;
+    }
+    else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
         SelectEqual(table, filter);
+        columnInfo->min = filter;
+        columnInfo->max = filter;
     }
 
 #ifdef time
@@ -274,7 +276,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;// (unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+    unsigned * new_row_ids = NULL;
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
@@ -282,19 +284,19 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
     /* Intermediate result */
     if (inter_res) {
-        ParallelItermediateEqualFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        ParallelItermediateEqualFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index]] == filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index];
+        //     if (values[old_row_ids[index*rel_num + table_index]] == filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
         //         new_tbi++;
         //     }
         // }
     }
     else {
-        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
@@ -303,7 +305,6 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         //         new_row_ids[new_tbi] = index;
         //         new_tbi++;
         //     }
-        // }
     }
 
     /* Swap the old vector with the new one */
@@ -322,19 +323,19 @@ void Joiner::SelectGreater(table_t *table, int filter){
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;//(unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+    unsigned * new_row_ids = NULL;
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
     if (inter_res) {
-        ParallelItermediateGreaterFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        ParallelItermediateGreaterFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index]] > filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index];
+        //     if (values[old_row_ids[index*rel_num + table_index]] > filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
         //         new_tbi++;
         //     }
         // }
@@ -367,25 +368,25 @@ void Joiner::SelectLess(table_t *table, int filter){
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL;//(unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+    unsigned * new_row_ids = NULL;
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
     if (inter_res) {
-        ParallelItermediateLessFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        ParallelItermediateLessFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;
         // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index]] < filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index];
+        //     if (values[old_row_ids[index*rel_num + table_index]] < filter) {
+        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
         //         new_tbi++;
         //     }
         // }
     }
     else {
-        ParallelNonItermediateLessFilterT pft( values, old_row_ids, /*new_row_ids,*/ filter );
+        ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
         parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         new_row_ids = pft.rids;
         new_tbi = pft.new_tbi;

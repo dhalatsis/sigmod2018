@@ -808,7 +808,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         // Apply the filters
         for (auto filter : joinTreeNodePtr->filterPtrs) {
             joiner.AddColumnToTableT(filter->filterColumn, res);
-            joiner.Select(*filter, res);
+            joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
         }
         return res;
     }
@@ -820,13 +820,40 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     if (right != NULL) {
         table_r = joinTreeNodePtr->execute(right, joiner, queryInfo);
 
-        if (joinTreeNodePtr->parent == NULL) {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true);
+        uint64_t leftMin  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].min;
+        uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
+        uint64_t rightMin = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].min;
+        uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
+/*
+        // Apply a custom filter to create the same range
+        if (leftMin < rightMin) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMin-1, FilterInfo::Comparison::Greater);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
+            joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
         }
-        else {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false);
+        else if (leftMin > rightMin) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMin-1, FilterInfo::Comparison::Greater);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_r);
+            joiner.Select(customFilter, table_r, &(joinTreeNodePtr->right->usedColumnInfos[customFilter.filterColumn]));
         }
 
+        if (leftMax < rightMax) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMax+1, FilterInfo::Comparison::Less);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_r);
+            joiner.Select(customFilter, table_r, &(joinTreeNodePtr->right->usedColumnInfos[customFilter.filterColumn]));
+        }
+        else if (leftMax > rightMax) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMax+1, FilterInfo::Comparison::Less);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
+            joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
+        }
+*/
+        if (joinTreeNodePtr->parent == NULL) {
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true, queryInfo.selections);
+        }
+        else {
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false, queryInfo.selections);
+        }
         return res;
     }
     else {
@@ -956,27 +983,33 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
 struct ParallelReduction {
 private:
     uint64_t *array;
-    uint64_t max, min;
+    uint64_t max;
+    uint64_t min;
+    bool isSorted;
 
 public:
-    //ParallelReduction() { array = NULL; max = 0; min = numeric_limits<uint64_t>::max(); }
-    ParallelReduction(uint64_t *arr) : array(arr), max(0), min(numeric_limits<uint64_t>::max()) {}
-    //ParallelReduction(ParallelReduction& p) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()) {}
-    ParallelReduction(ParallelReduction& p, split) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()){}
+    ParallelReduction(uint64_t *arr) : array(arr), max(0), min(numeric_limits<uint64_t>::max()), isSorted(true) {}
+    ParallelReduction(ParallelReduction& p, split) : array(p.array), max(0), min(numeric_limits<uint64_t>::max()), isSorted(true) {}
 
     uint64_t getMax() { return max; }
     uint64_t getMin() { return min; }
+    bool getIsSorted() { return isSorted; }
 
     void operator()(const blocked_range<size_t> &r) {
+        size_t initial = r.begin();
         for (size_t count = r.begin(); count != r.end(); count++) {
             max = (max > array[count] ? max : array[count]);
             min = (min > array[count] ? array[count] : min);
+            if ((count >= initial + 1) && (isSorted == true)) {
+                if (array[count] < array[count-1]) isSorted = false;
+            }
         }
     }
 
     void join(const ParallelReduction& pReductionSub) {
         max = (max > pReductionSub.max ? max : pReductionSub.max);
         min = (min > pReductionSub.min ? pReductionSub.min : min);
+        isSorted = ((isSorted == true) && (pReductionSub.isSorted == true)) ? true : false;
     }
 };
 
@@ -1032,6 +1065,8 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
             //     }
             // }
 
+            if (pr.getIsSorted()) fprintf(stderr, "relation %2d column %2d sorted %d\n", rel, col, pr.getIsSorted());
+
             // Save the infos
             columnInfos[rel][col].min      = minimum;
             columnInfos[rel][col].max      = maximum;
@@ -1042,6 +1077,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
 
             columnInfos[rel][col].counter = 0;
             columnInfos[rel][col].isSelectionColumn = false;
+            columnInfos[rel][col].isSorted = pr.getIsSorted();
         }
     }
 }
