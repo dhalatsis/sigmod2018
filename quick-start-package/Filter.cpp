@@ -63,6 +63,11 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
         }
     }
 
+    // ParallelSelfJoinT psjt( row_ids_matrix, column_values_l, column_values_r, index_l, index_r, rels_number );
+    // parallel_reduce(blocked_range<size_t>(0,rows_number,GRAINSIZE), psjt);
+    // new_row_ids_matrix = psjt.new_row_ids_matrix;
+    // new_tbi = psjt.new_tbi;
+
     new_table->tups_num = new_tbi;
 
     /*Delete old table_t */

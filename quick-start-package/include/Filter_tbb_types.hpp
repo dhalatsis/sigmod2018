@@ -439,7 +439,36 @@ struct ParallelNonItermediateLessFilterT {
 };
 
 // TODO
-/* Create Relation T parallel ctruct */
+/* Create Relation T parallel utility struct */
+struct ParallelSelfJoinUtilityT {
+    unsigned * row_ids_matrix;
+    unsigned * new_row_ids_matrix;
+    unsigned rels_number;
+    uint64_t size;
+
+    /* Initial constructor */
+    ParallelSelfJoinUtilityT ( unsigned* row_ids_matrix, unsigned rels_number )
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(NULL), rels_number(rels_number), size(0)
+    {}
+
+    /* Slpitting constructor */
+    ParallelSelfJoinUtilityT(ParallelSelfJoinUtilityT & x, split)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(NULL), rels_number(x.rels_number), size(0)
+    {}
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+
+    }
+
+    /* The function to call on thread join */
+    void join( ParallelSelfJoinUtilityT& rhs ) {
+        
+    }
+};
+
+// TODO
+/* Create Relation T parallel struct */
 struct ParallelSelfJoinT {
     unsigned * row_ids_matrix;
     unsigned * new_row_ids_matrix;
@@ -447,32 +476,36 @@ struct ParallelSelfJoinT {
     uint64_t *column_values_r;
     int index_l;
     int index_r;
-    unsigned rows_number;
     unsigned rels_number;
     unsigned new_tbi;
     uint64_t size;
 
     /* Initial constructor */
-    ParallelSelfJoinT ( unsigned* row_ids_matrix, uint64_t* column_values_l, uint64_t* column_values_r, int index_l, int index_r, unsigned rows_number, unsigned rels_number )
-    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(column_values_l), column_values_r(column_values_r), index_l(index_l), index_r(index_r), rows_number(rows_number), rels_number(rels_number), new_tbi(0), size(0)
+    ParallelSelfJoinT ( unsigned* row_ids_matrix, uint64_t* column_values_l, uint64_t* column_values_r, int index_l, int index_r, unsigned rels_number )
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(column_values_l), column_values_r(column_values_r), index_l(index_l), index_r(index_r), rels_number(rels_number), new_tbi(0), size(0)
     {}
 
     /* Slpitting constructor */
     ParallelSelfJoinT(ParallelSelfJoinT & x, split)
-    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(x.column_values_l), column_values_r(x.column_values_r), index_l(x.index_l), index_r(x.index_r), rows_number(x.rows_number), rels_number(x.rels_number), new_tbi(0), size(0)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(NULL), column_values_l(x.column_values_l), column_values_r(x.column_values_r), index_l(x.index_l), index_r(x.index_r), rels_number(x.rels_number), new_tbi(0), size(0)
     {}
 
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
         for (size_t i = range.begin(); i < range.end(); ++i) {
-            // /* Apply the predicate: In case of success add to new table */
-            // if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-            //     /* Add this row_id to all the relations */
+            /* Apply the predicate: In case of success add to new table */
+            if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+                /* Add this row_id to all the relations */
             //     for (ssize_t relation = 0; relation < rels_number; relation++) {
             //         new_row_ids_matrix[new_tbi*rels_number  + relation] = row_ids_matrix[i*rels_number  + relation];
             //     }
-            //     new_tbi++;
-            // }
+
+                ParallelSelfJoinUtilityT psjut( row_ids_matrix, rels_number /*???*/ );
+                parallel_reduce(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
+                new_row_ids_matrix = psjut.new_row_ids_matrix;
+
+                new_tbi++;
+            }
         }
     }
 
