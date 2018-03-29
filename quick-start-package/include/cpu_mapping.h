@@ -11,18 +11,11 @@
 #ifndef CPU_MAPPING_H
 #define CPU_MAPPING_H
 #include "sys.h"
-/**
- * @defgroup cpumapping CPU mapping tool
- * @{
- */
 
-/**
- * if the custom cpu mapping file exists, logical to physical mappings are
- * initialized from that file, otherwise it will be round-robin
- */
-#ifndef CUSTOM_CPU_MAPPING
-#define CUSTOM_CPU_MAPPING "cpu-mapping.txt"
-#endif
+/*-------------------------------ALWAYS REMEBERRRRRRRRRRRRRRRRRR -------------*/
+#define MY_PC
+//#define SIGMOD_1CPU 1
+//#define SIGMOD_2CPU 1
 
 /**
  * Returns SMT aware logical to physical CPU mapping for a given thread id.
@@ -53,6 +46,8 @@ get_num_numa_regions(void);
 int
 get_numa_node_of_address(void * ptr);
 
+//int
+//get_numa_region_id(int logicaltid);
 /** @} */
 
 #endif /* CPU_MAPPING_H */

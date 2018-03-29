@@ -4,6 +4,8 @@
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
 #include "tbb/partitioner.h"
+#include "tuple_buffer.h"
+#include "table_t.hpp"
 
 struct checksumST {
     unsigned colId;
@@ -15,7 +17,11 @@ struct checksumST {
 using namespace tbb;
 using namespace std;
 
-/* Struct for praralle check sum */
+/* Struct for prarallel check sum */
+
+
+
+
 
 // Struct for Intermediate S table
 struct CheckSumIntermediateRT {
@@ -197,4 +203,104 @@ public:
 private:
     tuple_t  * tups;
     vector<struct checksumST> * distinctPairs;
+};
+
+
+struct ThreadsParallelT {
+
+    vector<uint64_t> checksums;
+
+    /* Initial constructor */
+    ThreadsParallelT(threadresult_t * list, table_t * table_r, table_t * table_s,
+                     vector<struct checksumST> * distinctPairs_in_R,
+                     vector<struct checksumST> * distinctPairs_in_S
+                     )
+    :list{list}, table_r{table_r}, table_s{table_s},
+    distinctPairs_in_R{distinctPairs_in_R}, distinctPairs_in_S{distinctPairs_in_S}
+    {
+        checksums.resize((*distinctPairs_in_R).size() + (*distinctPairs_in_S).size(), 0);
+    }
+
+    ThreadsParallelT(ThreadsParallelT & x, split)
+    :list{x.list}, table_r{x.table_r}, table_s{x.table_s},
+    distinctPairs_in_R{x.distinctPairs_in_R}, distinctPairs_in_S{x.distinctPairs_in_S}
+    {
+        checksums.resize((*distinctPairs_in_R).size() + (*distinctPairs_in_S).size(), 0);
+    }
+
+    void join (const ThreadsParallelT & y) {
+        for(size_t i = 0; i < y.checksums.size(); i++ ) {
+            checksums[i] += y.checksums[i];
+        }
+    }
+
+    /* The function call overloaded operator */
+    void operator()(const tbb::blocked_range<size_t>& range) {
+
+        /* Loop the list of Thread results */
+        for (size_t i = range.begin(); i < range.end(); ++i) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) list[i].results;
+
+            /* Get the touples form the results */
+            tuplebuffer_t * tb = cb->buf;
+            uint32_t numbufs = cb->numbufs;
+
+            /* Parallelize first buffer */
+            if (!(*distinctPairs_in_R).empty()) {
+                CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, distinctPairs_in_R, table_r->rels_num);
+                parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                /* Keep track of the checsums */
+                for (size_t i = 0; i < crt.checksums.size(); i++) {
+                    checksums[i] += crt.checksums[i];
+                }
+            }
+
+            if (!(*distinctPairs_in_S).empty()) {
+                CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, distinctPairs_in_S, table_s->rels_num);
+                parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
+
+                /* Keep track of the checsums */
+                for (size_t i = 0; i < crt.checksums.size(); i++) {
+                    checksums[i + (*distinctPairs_in_R).size()] += crt.checksums[i];
+                }
+            }
+
+            /* Run the other buffers */
+            tb = tb->next;
+            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
+
+                if (!(*distinctPairs_in_R).empty()) {
+                    CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, distinctPairs_in_R, table_r->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        checksums[i] += crt.checksums[i];
+                    }
+                }
+
+                if (!(*distinctPairs_in_S).empty()) {
+                    CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, distinctPairs_in_S, table_s->rels_num);
+                    parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt);
+
+                    /* Keep track of the checsums */
+                    for (size_t i = 0; i < crt.checksums.size(); i++) {
+                        checksums[i + (*distinctPairs_in_R).size()] += crt.checksums[i];
+                    }
+                }
+
+                /* Go the the next buffer */
+                tb = tb->next;
+            }
+            /* Free cb */
+            //chainedtuplebuffer_free(cb);
+        }
+    }
+private:
+    threadresult_t * list;
+    table_t * table_r;
+    table_t * table_s;
+    vector<struct checksumST> * distinctPairs_in_R;
+    vector<struct checksumST> * distinctPairs_in_S;
 };

@@ -15,7 +15,14 @@
 
 #include "types.h" /* relation_t */
 
+/* not timing */
 #define NO_TIMING
+
+/* if you don define it 2 passes will do*/
+#define NUM_PASSES 1
+
+/* we want to store the results */
+#define JOIN_RESULT_MATERIALIZE
 
 /**
  * PRO: Parallel Radix Join Optimized.

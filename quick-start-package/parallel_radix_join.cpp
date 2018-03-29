@@ -30,7 +30,6 @@
 #include "affinity.h"           /* pthread_attr_setaffinity_np */
 #include "generator.h"          /* numa_localize() */
 
-#define JOIN_RESULT_MATERIALIZE
 #ifdef JOIN_RESULT_MATERIALIZE
 #include "tuple_buffer.h"       /* for materialization */
 #endif
@@ -454,11 +453,11 @@ parallel_radix_partition(part_t * const part)
         my_hist[i] = sum;
     }
 
-    SYNC_TIMER_STOP(&part->thrargs->localtimer.sync1[part->relidx]);
+    //SYNC_TIMER_STOP(&part->thrargs->localtimer.sync1[part->relidx]);
     /* wait at a barrier until each thread complete histograms */
     BARRIER_ARRIVE(part->thrargs->barrier, rv);
     /* barrier global sync point-1 */
-    SYNC_GLOBAL_STOP(&part->thrargs->globaltimer->sync1[part->relidx], my_tid);
+    //SYNC_GLOBAL_STOP(&part->thrargs->globaltimer->sync1[part->relidx], my_tid);
 
     /* determine the start and end of each cluster */
     for(i = 0; i < my_tid; i++) {
@@ -536,6 +535,7 @@ prj_thread(void * param)
     //MALLOC_CHECK((outputR && outputS));
 
     int numaid = get_numa_id(my_tid);
+    //int numaid = get_numa_region_id(my_tid);
     part_queue = args->part_queue[numaid];
     join_queue = args->join_queue[numaid];
 
@@ -550,7 +550,7 @@ prj_thread(void * param)
     BARRIER_ARRIVE(args->barrier, rv);
 
     /* if monitoring synchronization stats */
-    SYNC_TIMERS_START(args, my_tid);
+   //SYNC_TIMERS_START(args, my_tid);
 
     /********** 1st pass of multi-pass partitioning ************/
     part.R       = 0;
@@ -644,17 +644,18 @@ prj_thread(void * param)
         /*        counts[0], counts[1], counts[2], counts[3]); */
     }
 
-    SYNC_TIMER_STOP(&args->localtimer.sync3);
+    //SYNC_TIMER_STOP(&args->localtimer.sync3);
     /* wait at a barrier until first thread adds all partitioning tasks */
     BARRIER_ARRIVE(args->barrier, rv);
     /* global barrier sync point-3 */
-    SYNC_GLOBAL_STOP(&args->globaltimer->sync3, my_tid);
+    //SYNC_GLOBAL_STOP(&args->globaltimer->sync3, my_tid);
 
     /************ 2nd pass of multi-pass partitioning ********************/
     /* 4. now each thread further partitions and add to join task queue **/
 
 #if NUM_PASSES==1
     /* If the partitioning is single pass we directly add tasks from pass-1 */
+    //fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     task_queue_t * swap = join_queue;
     join_queue = part_queue;
     /* part_queue is used as a temporary queue for handling skewed parts */
@@ -675,11 +676,11 @@ prj_thread(void * param)
     free(outputR);
     free(outputS);
 
-    SYNC_TIMER_STOP(&args->localtimer.sync4);
+    //SYNC_TIMER_STOP(&args->localtimer.sync4);
     /* wait at a barrier until all threads add all join tasks */
     BARRIER_ARRIVE(args->barrier, rv);
     /* global barrier sync point-4 */
-    SYNC_GLOBAL_STOP(&args->globaltimer->sync4, my_tid);
+    //SYNC_GLOBAL_STOP(&args->globaltimer->sync4, my_tid);
 
     DEBUGMSG((my_tid == 0), "Number of join tasks = %d\n", join_queue->count);
 
@@ -707,10 +708,10 @@ prj_thread(void * param)
 #endif
 
     /* this thread is finished */
-    SYNC_TIMER_STOP(&args->localtimer.finish_time);
+    //SYNC_TIMER_STOP(&args->localtimer.finish_time);
 
     /* global finish time */
-    SYNC_GLOBAL_STOP(&args->globaltimer->finish_time, my_tid);
+    //SYNC_GLOBAL_STOP(&args->globaltimer->finish_time, my_tid);
 
     return 0;
 }
@@ -723,8 +724,6 @@ prj_thread(void * param)
  * the parallel radix join implemetations and their Join (build-probe) functions:
  *
  * - PRO,  Parallel Radix Join Optimized --> bucket_chaining_join()
- * - PRH,  Parallel Radix Join Histogram-based --> histogram_join()
- * - PRHO, Parallel Radix Histogram-based Optimized -> histogram_optimized_join()
  */
 result_t *
 join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads)
@@ -745,12 +744,6 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     int numnuma = get_num_numa_regions();
     task_queue_t * part_queue[numnuma];
     task_queue_t * join_queue[numnuma];
-
-#ifdef SKEW_HANDLING
-    task_queue_t * skew_queue;
-    task_t * skewtask = NULL;
-    skew_queue = task_queue_init(FANOUT_PASS1);
-#endif
 
     for(i = 0; i < numnuma; i++){
         part_queue[i] = task_queue_init(FANOUT_PASS1);
@@ -773,7 +766,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     //MALLOC_CHECK((tmpRelR && tmpRelS));
     /** Not an elegant way of passing whether we will numa-localize, but this
         feature is experimental anyway. */
-    if(numalocalize) {
+    /*if(numalocalize) {
         uint64_t numwithpad;
 
         numwithpad = (relR->num_tuples * sizeof(tuple_t) +
@@ -783,7 +776,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         numwithpad = (relS->num_tuples * sizeof(tuple_t) +
                       RELATION_PADDING)/sizeof(tuple_t);
         numa_localize(tmpRelS, numwithpad, nthreads);
-    }
+    }*/
 
 
     /* allocate histograms arrays, actual allocation is local to threads */
@@ -811,11 +804,10 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         int cpu_idx = get_cpu_id(i);
 
         DEBUGMSG(1, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-
+        //fprintf(stderr, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
         CPU_ZERO(&set);
         CPU_SET(cpu_idx, &set);
         pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);  //TODO CHANGE
-
 
         args[i].relR = relR->tuples + i * numperthr[0];
         args[i].tmpR = tmpRelR;
@@ -835,10 +827,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         args[i].my_tid = i;
         args[i].part_queue = part_queue;
         args[i].join_queue = join_queue;
-#ifdef SKEW_HANDLING
-        args[i].skew_queue = skew_queue;
-        args[i].skewtask   = &skewtask;
-#endif
+
         args[i].barrier       = &barrier;
         args[i].join_function = jf;
         args[i].nthreads      = nthreads;
@@ -846,7 +835,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
 
         rv = pthread_create(&tid[i], &attr, prj_thread, (void*)&args[i]);
         if (rv){
-            printf("[ERROR] return code from pthread_create() is %d\n", rv);
+            fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
             exit(-1);
         }
     }
@@ -895,9 +884,6 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         task_queue_free(join_queue[i]);
     }
 
-#ifdef SKEW_HANDLING
-    task_queue_free(skew_queue);
-#endif
     free(tmpRelR);
     free(tmpRelS);
 #ifdef SYNCSTATS
