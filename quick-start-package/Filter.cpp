@@ -49,23 +49,21 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     unsigned rows_number = table->tups_num;
     unsigned rels_number = table->rels_num;
     unsigned new_tbi = 0;
-    for (unsigned i = 0; i < rows_number; i++) {
 
+    for (unsigned i = 0; i < rows_number; i++) {
         /* Apply the predicate: In case of success add to new table */
         if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-
             /* Add this row_id to all the relations */
             for (ssize_t relation = 0; relation < rels_number; relation++) {
-                new_row_ids_matrix[new_tbi*rels_number  + relation] = row_ids_matrix[i*rels_number  + relation];
-
+                new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
             }
             new_tbi++;
         }
     }
 
-    // ParallelSelfJoinT psjt( row_ids_matrix, column_values_l, column_values_r, index_l, index_r, rels_number );
+    // ParallelSelfJoinT psjt( row_ids_matrix, new_row_ids_matrix, column_values_l, column_values_r, index_l, index_r, rels_number );
     // parallel_reduce(blocked_range<size_t>(0,rows_number,GRAINSIZE), psjt);
-    // new_row_ids_matrix = psjt.new_row_ids_matrix;
+    // // new_row_ids_matrix = psjt.new_row_ids_matrix;
     // new_tbi = psjt.new_tbi;
 
     new_table->tups_num = new_tbi;
