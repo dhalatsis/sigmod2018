@@ -21,7 +21,7 @@
 #include <thread>
 /*----------------*/
 
-#define time
+//#define time
 
 class JTree;
 
