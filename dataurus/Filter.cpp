@@ -61,6 +61,20 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
         }
     }
 
+    // for (unsigned i = 0; i < rows_number; i++) {
+    //     /* Apply the predicate: In case of success add to new table */
+    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+    //         /* Add this row_id to all the relations */
+    //
+    //         ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, i );
+    //         parallel_reduce(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
+    //
+    //         memcpy(new_row_ids_matrix + new_tbi*rels_number, psjut.new_matrix, rels_number * sizeof(unsigned));
+    //
+    //         new_tbi++;
+    //     }
+    // }
+
     // ParallelSelfJoinT psjt( row_ids_matrix, new_row_ids_matrix, column_values_l, column_values_r, index_l, index_r, rels_number );
     // parallel_reduce(blocked_range<size_t>(0,rows_number,GRAINSIZE), psjt);
     // // new_row_ids_matrix = psjt.new_row_ids_matrix;
