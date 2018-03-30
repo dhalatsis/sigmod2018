@@ -72,40 +72,40 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     unsigned rels_number = table->rels_num;
     unsigned new_tbi = 0;
 
-    // for (unsigned i = 0; i < rows_number; i++) {
-    //     /* Apply the predicate: In case of success add to new table */
-    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-    //         /* Add this row_id to all the relations */
-    //         for (ssize_t relation = 0; relation < rels_number; relation++) {
-    //             new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
-    //         }
-    //         new_tbi++;
-    //     }
-    // }
-
     for (unsigned i = 0; i < rows_number; i++) {
         /* Apply the predicate: In case of success add to new table */
         if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
             /* Add this row_id to all the relations */
-
-            struct self_join_arg a[THREAD_NUM];
-            for (size_t j = 0; j < THREAD_NUM; j++) {
-                a[j].low   = (j < rels_number % THREAD_NUM) ? j * (rels_number / THREAD_NUM) + j : j * (rels_number / THREAD_NUM) + rels_number % THREAD_NUM;
-                a[j].high  = (j < rels_number % THREAD_NUM) ? a[j].low + rels_number / THREAD_NUM + 1 :  a[j].low + rels_number / THREAD_NUM;
-                a[j].column_values_l = column_values_l;
-                a[j].column_values_r = column_values_r;
-                a[j].row_ids_matrix = row_ids_matrix;
-                a[j].new_row_ids_matrix = new_row_ids_matrix;
-                a[j].rels_number = rels_number;
-                a[j].new_tbi = new_tbi;
-                a[j].i = i;
-                job_scheduler1.Schedule(new JobSelfJoin(a[j]));
+            for (ssize_t relation = 0; relation < rels_number; relation++) {
+                new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
             }
-            job_scheduler1.Barrier();
-
             new_tbi++;
         }
     }
+
+    // for (unsigned i = 0; i < rows_number; i++) {
+    //     /* Apply the predicate: In case of success add to new table */
+    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+    //         /* Add this row_id to all the relations */
+    //
+    //         struct self_join_arg a[THREAD_NUM];
+    //         for (size_t j = 0; j < THREAD_NUM; j++) {
+    //             a[j].low   = (j < rels_number % THREAD_NUM) ? j * (rels_number / THREAD_NUM) + j : j * (rels_number / THREAD_NUM) + rels_number % THREAD_NUM;
+    //             a[j].high  = (j < rels_number % THREAD_NUM) ? a[j].low + rels_number / THREAD_NUM + 1 :  a[j].low + rels_number / THREAD_NUM;
+    //             a[j].column_values_l = column_values_l;
+    //             a[j].column_values_r = column_values_r;
+    //             a[j].row_ids_matrix = row_ids_matrix;
+    //             a[j].new_row_ids_matrix = new_row_ids_matrix;
+    //             a[j].rels_number = rels_number;
+    //             a[j].new_tbi = new_tbi;
+    //             a[j].i = i;
+    //             job_scheduler1.Schedule(new JobSelfJoin(a[j]));
+    //         }
+    //         job_scheduler1.Barrier();
+    //
+    //         new_tbi++;
+    //     }
+    // }
 
     // for (unsigned i = 0; i < rows_number; i++) {
     //     /* Apply the predicate: In case of success add to new table */
