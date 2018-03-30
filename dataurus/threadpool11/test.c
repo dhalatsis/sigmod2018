@@ -163,7 +163,7 @@ int main() {
             int start = (chunck_number - 1) * chunck_size;
             return array_2pass_filter_less(column + start, NUM_ROWS - start, v);
           }));
-  
+
       for (auto& it : futures) {
         free(it.get());
       }
@@ -181,7 +181,7 @@ int main() {
     int chunck_size = NUM_ROWS / (float) chunck_number;
     std::vector<std::thread> threads(chunck_number);
     uint64_t* res[chunck_number];
-    
+
     t = clock();
     for (int i = 0; i < chunck_number - 1; ++i) {
       threads[i] = std::thread([=, &res]() {
@@ -213,10 +213,10 @@ int main() {
     printf("Pthreads array filter 2 passes :: \n");
 
     // Chunk variables
-    int chunck_number = 20;
+    int chunck_number = 4;
     uint64_t v = domain * selectivity;
     int chunck_size = NUM_ROWS / (float) chunck_number;
-    int cpus[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+    int cpus[] = {0, 1, 2, 3};//int cpus[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
 
     // Pthreads variables
     pthread_t tid[chunck_number];
@@ -293,5 +293,3 @@ int main() {
             (endt.tv_sec - startt.tv_sec) + (endt.tv_usec - startt.tv_usec) / 1000000.0);
   }
 }
-
-
