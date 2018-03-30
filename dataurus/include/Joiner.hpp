@@ -24,6 +24,8 @@
 
 #define time
 
+#define THREAD_NUM 4
+
 class JTree;
 
 struct ColumnInfo;
