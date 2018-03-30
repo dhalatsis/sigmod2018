@@ -357,6 +357,58 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     table->intermediate_res = true;
 }
 
+struct arg {
+    unsigned low;
+    unsigned high;
+    unsigned prefix;
+    uint64_t filter;
+    uint64_t * array;
+    unsigned * new_array;
+};
+
+void * parallelLessFindSize(void * args) {
+    struct arg * a = (struct arg *) args;
+    a->prefix = 0;
+    for (size_t i = a->low; i < a->high; i++) {
+        if (a->array[i] < a->filter)
+            a->prefix++;
+    }
+}
+
+void * parallelLessFilter(void * args) {
+    struct arg * a = (struct arg *) args;
+    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
+    for (size_t i = a->low; i < a->high; i++) {
+        if (a->array[i] < a->filter) {
+            a->new_array[a->prefix] = i;
+            //std::cerr << "p " << a->prefix << '\n';
+            a->prefix++;
+        }
+    }
+}
+
+void * parallelGreaterFindSize(void * args) {
+    struct arg * a = (struct arg *) args;
+    a->prefix = 0;
+    for (size_t i = a->low; i < a->high; i++) {
+        if (a->array[i] > a->filter)
+            a->prefix++;
+    }
+}
+
+void * parallelGreaterFilter(void * args) {
+    struct arg * a = (struct arg *) args;
+    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
+    for (size_t i = a->low; i < a->high; i++) {
+        if (a->array[i] > a->filter) {
+            a->new_array[a->prefix] = i;
+            //std::cerr << "p " << a->prefix << '\n';
+            a->prefix++;
+        }
+    }
+}
+
+
 void Joiner::SelectGreater(table_t *table, int filter){
 
     /* Initialize helping variables */
@@ -400,13 +452,57 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
+        pthread_t threads[THREAD_NUM];
+        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
+            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+            a[i].array = values;
+            a[i].filter = filter;
+            pthread_create(&threads[i], NULL, parallelGreaterFindSize, (void *) &a[i]);
+        }
+
+        unsigned temp;
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            pthread_join(threads[i], NULL);
+            temp = a[i].prefix;
+            a[i].prefix = new_tbi;
+            //std::cerr << "PREFIX " << a[i].prefix << '\n';
+            new_tbi += temp;
+        }
+        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
+
+        // malloc new array
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].new_array = new_row_ids;
+            pthread_create(&threads[i], NULL, parallelGreaterFilter, (void *) &a[i]);
+        }
+
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            pthread_join(threads[i], NULL);
+        }
+
         // ParalleNonItermediateSizeFindGreaterFilterT sft( values, filter );
         // parallel_reduce(blocked_range<size_t>(0,size), sft);
-        //
-        ParallelNonItermediateGreaterFilterT pft( values, /*new_row_ids,*/ filter );
-        parallel_reduce(blocked_range<size_t>(0,size), pft);
-        new_row_ids = pft.rids;
-        new_tbi = pft.new_tbi;
+
+        // ParallelNonItermediateGreaterFilterT pft( values, /*new_row_ids,*/ filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), pft);
+        // new_row_ids = pft.rids;
+        // new_tbi = pft.new_tbi;
+        // std::cerr << "SUM " << new_tbi << '\n';
+
+
+        // uint64_t sum1= 0 , sum2 = 0;
+        // for (size_t i = 0; i < new_tbi; i++) {
+        //     sum1 += new_row_ids[i];
+        // }
+        // for (size_t j = 0; j < new_tbi; j++) {
+        //     sum2 += rids[j];
+        // }
+        // std::cerr << "SUM 1 " << sum1 << '\n';
+        // std::cerr << "SUM 2 " << sum2 << '\n';
+        // new_row_ids = rids;
 
         // /* BITS SET attempt */
         // vector<bool> bitmap(size, false);
@@ -485,13 +581,43 @@ void Joiner::SelectLess(table_t *table, int filter){
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
-        ParalleNonItermediateSizeFindLessFilterT sft( values, filter );
-        parallel_reduce(blocked_range<size_t>(0,size), sft);
+        pthread_t threads[THREAD_NUM];
+        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
+            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+            a[i].array = values;
+            a[i].filter = filter;
+            pthread_create(&threads[i], NULL, parallelLessFindSize, (void *) &a[i]);
+        }
 
-        ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
-        parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
-        new_row_ids = pft.rids;
-        new_tbi = pft.new_tbi;
+        unsigned temp;
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            pthread_join(threads[i], NULL);
+            temp = a[i].prefix;
+            a[i].prefix = new_tbi;
+            //std::cerr << "PREFIX " << a[i].prefix << '\n';
+            new_tbi += temp;
+        }
+        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
+
+        // malloc new array
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].new_array = new_row_ids;
+            pthread_create(&threads[i], NULL, parallelLessFilter, (void *) &a[i]);
+        }
+
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            pthread_join(threads[i], NULL);
+        }
+        // ParalleNonItermediateSizeFindLessFilterT sft( values, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size), sft);
+        //
+        // ParallelNonItermediateLessFilterT pft( values, old_row_ids, filter );
+        // parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
+        // new_row_ids = pft.rids;
+        // new_tbi = pft.new_tbi;
 
         #ifdef time
         struct timeval end;
