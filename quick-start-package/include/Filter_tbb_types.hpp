@@ -504,19 +504,21 @@ struct ParallelSelfJoinUtilityT {
     uint64_t i;
     unsigned size;
     unsigned real_size;
+    size_t range_beg;
 
     /* Initial constructor */
     ParallelSelfJoinUtilityT ( unsigned* row_ids_matrix, unsigned * new_row_ids_matrix, unsigned rels_number, uint64_t i )
-    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), new_matrix(NULL), rels_number(rels_number), i(i), size(0), real_size(0)
+    : row_ids_matrix(row_ids_matrix), new_row_ids_matrix(new_row_ids_matrix), new_matrix(NULL), rels_number(rels_number), i(i), size(0), real_size(0), range_beg(0)
     {}
 
     /* Splitting constructor */
     ParallelSelfJoinUtilityT(ParallelSelfJoinUtilityT & x, split)
-    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(x.new_row_ids_matrix), new_matrix(NULL), rels_number(x.rels_number), i(x.i), size(0), real_size(0)
+    : row_ids_matrix(x.row_ids_matrix), new_row_ids_matrix(x.new_row_ids_matrix), new_matrix(NULL), rels_number(x.rels_number), i(x.i), size(0), real_size(0), range_beg(0)
     {}
 
     /* The function call overloaded operator */
     void operator()(const tbb::blocked_range<size_t>& range) {
+        range_beg = range.begin();
         for (size_t relation = range.begin(); relation < range.end(); ++relation) {
             if (real_size == size) {
                 size += 100;
@@ -537,8 +539,8 @@ struct ParallelSelfJoinUtilityT {
             copy(rhs.new_matrix, rhs.new_matrix + rhs.real_size, result + real_size);
             size = real_size + rhs.real_size;
             new_matrix = result;
-            memcpy(new_row_ids_matrix + new_tbi*rels_number + real_size, rhs.new_matrix, rhs.real_size * sizeof(unsigned));
             real_size += rhs.real_size;
+            memcpy(new_row_ids_matrix + new_tbi*rels_number + range_beg, new_matrix, real_size * sizeof(unsigned));
         }
     }
 };
