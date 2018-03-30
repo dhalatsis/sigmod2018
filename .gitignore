@@ -9,5 +9,8 @@ dataurus/CMakeLists.txt
 # Dont push public
 dataurus/workloads/public/
 
+dataurus/include/types_predefinition.hpp
+dataurus/include/libraries.hpp
+
 # for now...
 execution_plan/

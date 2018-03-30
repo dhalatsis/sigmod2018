@@ -1,5 +1,12 @@
 #include "filter_job.h"
 
+// Self Join functions
+int JobSelfJoin::Run() {
+    for (size_t relation = args_.low; relation < args_.high; relation++) {
+        args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
+    }
+}
+
 // Less Intermediate Filter functions
 int JobLessInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {

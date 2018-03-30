@@ -16,7 +16,7 @@ struct SelectInfo {
 
     // copy conustroctor
     SelectInfo(const SelectInfo& si) : relId(si.relId), binding(si.binding), colId(si.colId){};
-    
+
     // Equality operator
     bool operator==(const SelectInfo& o) const;
 

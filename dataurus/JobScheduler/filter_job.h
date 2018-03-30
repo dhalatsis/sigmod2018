@@ -2,6 +2,19 @@
 #include <stdint.h>
 #include "job_scheduler.h"
 
+// Args for Self Join
+struct self_join_arg {
+    unsigned low;
+    unsigned high;
+    uint64_t * column_values_l;
+    uint64_t * column_values_r;
+    unsigned * row_ids_matrix;
+    unsigned * new_row_ids_matrix;
+    unsigned rels_number;
+    unsigned new_tbi;
+    size_t i;
+};
+
 // Args for intermediate functions
 struct inter_arg {
     unsigned low;
@@ -25,13 +38,25 @@ struct noninter_arg {
     unsigned * new_array;
 };
 
+class JobSelfJoin: public Job {
+public:
+    struct self_join_arg & args_;
+
+  JobSelfJoin(struct self_join_arg & args)
+  :args_(args)
+  {}
+
+  ~JobSelfJoin() {};
+
+  int Run();
+};
+
 class JobFilter: public Job {
 public:
   virtual int Run() = 0;
   JobFilter() {}
   ~JobFilter() {};
 };
-
 
 // Less filter classes
 class JobLessInterFindSize : public JobFilter {
