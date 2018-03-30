@@ -1,5 +1,3 @@
-# Don't commit the quick start folder
-./quick-start-package/*
 # Don't commit the build folder
 dataurus/build/
 # Don't commit the test folder
