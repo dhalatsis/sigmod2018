@@ -1178,6 +1178,10 @@ int main(int argc, char* argv[]) {
     // Create threads
     task_scheduler_init init(THREAD_NUM);
 
+    // Create scheduler
+    JobScheduler job_scheduler;
+    job_scheduler.Init(THREAD_NUM, 0);
+
     // Preparation phase (not timed)
     QueryPlan queryPlan;
 
