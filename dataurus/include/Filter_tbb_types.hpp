@@ -47,6 +47,7 @@ private:
     uint64_t * values;
     int filter;
 };
+
 struct ParalleNonItermediateSizeFindLessFilterT {
     uint64_t size;
 
@@ -77,6 +78,7 @@ private:
     uint64_t * values;
     int filter;
 };
+
 struct ParalleNonItermediateSizeFindGreaterFilterT {
     uint64_t size;
 
@@ -107,9 +109,6 @@ private:
     uint64_t * values;
     int filter;
 };
-
-
-
 
 struct ParallelItermediateEqualFilterT {
     uint64_t * values;
@@ -494,7 +493,6 @@ struct ParallelNonItermediateLessFilterT {
     }
 };
 
-// TODO
 /* Create Relation T parallel utility struct */
 struct ParallelSelfJoinUtilityT {
     unsigned * row_ids_matrix;
@@ -545,7 +543,6 @@ struct ParallelSelfJoinUtilityT {
     }
 };
 
-// // TODO
 // /* Create Relation T parallel struct */
 // struct ParallelSelfJoinT {
 //     unsigned * row_ids_matrix;
