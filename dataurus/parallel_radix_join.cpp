@@ -166,6 +166,11 @@ struct arg_t {
     int32_t my_tid;
     int     nthreads;
 
+    // # JIM/GEORGE
+    //ADDITIONAL CACHED INFO HERE
+    cached_t *outS;
+    cached_t *outR;
+
     /* results of the thread */
     threadresult_t * threadresult;
 
@@ -559,26 +564,88 @@ prj_thread(void * param)
     part.padding = PADDING_TUPLES;
 
     /* 1. partitioning for relation R */
-    part.rel          = args->relR;
-    part.tmp          = args->tmpR;
-    part.hist         = args->histR;
-    part.output       = outputR;
-    part.num_tuples   = args->numR;
-    part.total_tuples = args->totalR;
-    part.relidx       = 0;
+    // # JIM/GEORGE
 
-    parallel_radix_partition(&part);
+    if (args->outR != NULL) {
+
+        if (args->outR->tmp == NULL) {
+            part.rel = args->relR;
+            part.tmp          = args->tmpR;
+            part.hist         = args->histR;        //maybe delete
+            part.output       = outputR;
+            part.num_tuples   = args->numR;
+            part.total_tuples = args->totalR;
+            part.relidx       = 0;
+
+            parallel_radix_partition(&part);
+            
+            args->outR->tmp = (void *) args->tmpR;
+            args->outR->hist = args->histR;
+            args->outR->output = outputR;
+            args->outR->num_tuples = args->numR;
+            args->outR->total_tuples = args->totalR;
+        }
+        else {
+            args->tmpR        = (tuple_t *) args->outR->tmp;
+            args->histR       = args->outR->hist;
+            outputR           = args->outR->output;
+            args->numR        = args->outR->num_tuples;
+            args->totalR      = args->outR->total_tuples;
+            
+        }
+    } else {
+            part.rel = args->relR;
+            part.tmp          = args->tmpR;
+            part.hist         = args->histR;        //maybe delete
+            part.output       = outputR;
+            part.num_tuples   = args->numR;
+            part.total_tuples = args->totalR;
+            part.relidx       = 0;
+
+            parallel_radix_partition(&part);
+    }
+
 
     /* 2. partitioning for relation S */
-    part.rel          = args->relS;
-    part.tmp          = args->tmpS;
-    part.hist         = args->histS;
-    part.output       = outputS;
-    part.num_tuples   = args->numS;
-    part.total_tuples = args->totalS;
-    part.relidx       = 1;
+     // # JIM/GEORGE
 
-    parallel_radix_partition(&part);
+    if (args->outS != NULL) {
+        if (args->outS->tmp == NULL) {
+            part.rel = args->relS;
+            part.tmp          = args->tmpS;
+            part.hist         = args->histS;       //maybe delete
+            part.output       = outputS;
+            part.num_tuples   = args->numS;
+            part.total_tuples = args->totalS;
+            part.relidx       = 1;
+
+            parallel_radix_partition(&part);
+
+            args->outS->tmp = (void *) args->tmpS;
+            args->outS->hist = args->histS;
+            args->outS->output = outputS;
+            args->outS->num_tuples = args->numS;
+            args->outS->total_tuples = args->totalS;
+        }
+        else {
+            args->tmpS        = (tuple_t *) args->outS->tmp;
+            args->histS       = args->outS->hist;
+            outputS           = args->outS->output;
+            args->numS        = args->outS->num_tuples;
+            args->totalS      = args->outS->total_tuples;
+        }
+    } else {
+        part.rel = args->relS;
+        part.tmp          = args->tmpS;
+        part.hist         = args->histS;       //maybe delete
+        part.output       = outputS;
+        part.num_tuples   = args->numS;
+        part.total_tuples = args->totalS;
+        part.relidx       = 1;
+
+        parallel_radix_partition(&part);
+    }
+
 
     /* wait at a barrier until each thread copies out */
     BARRIER_ARRIVE(args->barrier, rv);
@@ -673,8 +740,11 @@ prj_thread(void * param)
 #warning Only 2-pass partitioning is implemented, set NUM_PASSES to 2!
 #endif
 
-    free(outputR);
-    free(outputS);
+    // # JIM/GEORGE
+    if (args->outR == NULL)
+        free(outputR);
+    if (args->outS == NULL)
+        free(outputS);
 
     //SYNC_TIMER_STOP(&args->localtimer.sync4);
     /* wait at a barrier until all threads add all join tasks */
@@ -716,6 +786,8 @@ prj_thread(void * param)
     return 0;
 }
 
+// # JIM/GEORGE
+
 /**
  * The template function for different joins: Basically each parallel radix join
  * has a initialization step, partitioning step and build-probe steps. All our
@@ -726,7 +798,7 @@ prj_thread(void * param)
  * - PRO,  Parallel Radix Join Optimized --> bucket_chaining_join()
  */
 result_t *
-join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads)
+join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads, struct Cacheinf& cinf)
 {
     int i, rv;
     pthread_t tid[nthreads];
@@ -833,6 +905,17 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         args[i].nthreads      = nthreads;
         args[i].threadresult  = &(joinresult->resultlist[i]);
 
+        // # JIM/GEORGE
+        if (cinf.R == NULL)
+            args[i].outR = NULL;
+        else
+            args[i].outR = &(cinf.R[i]);
+
+        if (cinf.S == NULL)
+            args[i].outS = NULL;
+        else
+            args[i].outS = &(cinf.S[i]);
+
         rv = pthread_create(&tid[i], &attr, prj_thread, (void*)&args[i]);
         if (rv){
             fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
@@ -870,22 +953,31 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
                 glob->finish_time - local->finish_time);
     }
 #endif
-
+    // # JIM/GEORGE
     /* clean up */
-    for(i = 0; i < nthreads; i++) {
-        free(histR[i]);
-        free(histS[i]);
-    }
+    if (cinf.R == NULL)
+        for(i = 0; i < nthreads; i++) {
+            free(histR[i]);
+        }
+    if (cinf.S == NULL)
+        for(i = 0; i < nthreads; i++) {
+            free(histS[i]);
+        }
+
     free(histR);
     free(histS);
+    
 
     for(i = 0; i < numnuma; i++){
         task_queue_free(part_queue[i]);
         task_queue_free(join_queue[i]);
     }
 
-    free(tmpRelR);
-    free(tmpRelS);
+// # JIM/GEORGE
+    if (cinf.R == NULL)
+        free(tmpRelR);
+    if (cinf.S == NULL)
+        free(tmpRelS);
 #ifdef SYNCSTATS
     free(args[0].globaltimer);
 #endif
@@ -893,10 +985,11 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     return joinresult;
 }
 
+// # JIM/GEORGE
 /** \copydoc PRO */
 result_t *
-PRO(relation_t * relR, relation_t * relS, int nthreads)
+PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf &cinf)
 {
-    return join_init_run(relR, relS, bucket_chaining_join, nthreads);
+    return join_init_run(relR, relS, bucket_chaining_join, nthreads, cinf);
 }
 /** @} */

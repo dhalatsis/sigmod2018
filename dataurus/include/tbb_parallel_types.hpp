@@ -5,7 +5,7 @@
 #include "tbb/blocked_range.h"
 #include "tbb/partitioner.h"
 
-#define THREAD_NUM 20
+
 #define GRAINSIZE  100
 
 using namespace tbb;

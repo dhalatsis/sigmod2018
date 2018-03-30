@@ -191,7 +191,7 @@ void JoinTreeNode::estimateInfoAfterJoin(PredicateInfo& predicateInfo) {
         leftColumnInfo->max      = min(leftColumnInfo->max, rightColumnInfo->max);
         leftColumnInfo->distinct = (uint64_t) (((double) (leftColumnInfo->max - leftColumnInfo->min)) / leftColumnInfo->spread);
         if (leftColumnInfo->distinct == 0) leftColumnInfo->distinct = 1;
-        leftColumnInfo->size     = leftColumnInfo->distinct * (leftColumnInfo->size / oldDistinct);
+        leftColumnInfo->size     = leftColumnInfo->distinct * (leftColumnInfo->size / oldDistinct + 1);
         leftColumnInfo->n        = leftColumnInfo->max - leftColumnInfo->min + 1;
         leftColumnInfo->spread   = ((double) leftColumnInfo->n) / ((double) leftColumnInfo->distinct);
 
@@ -800,6 +800,8 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     table_t *table_l;
     table_t *table_r;
     table_t *res;
+    // # JIM/GEORGE
+    int leafs = 0;
 
     // Leaf node containing a single relation
     if (left == NULL && right == NULL) {
@@ -810,6 +812,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             joiner.AddColumnToTableT(filter->filterColumn, res);
             joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
         }
+
+        //Apply all fiters
+        // if (!joinTreeNodePtr->filterPtrs.empty())
+        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
+
         return res;
     }
 
@@ -848,11 +855,19 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
         }
 */
+        // Calculate leafs
+        if (left->nodeId != -1 && left->filterPtrs.size() == 0)
+            leafs = 1;
+        if (right->nodeId != -1 && right->filterPtrs.size() == 0)
+            leafs |= 2;
+
         if (joinTreeNodePtr->parent == NULL) {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true, queryInfo.selections);
+            // # JIM/GEORGE
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true, queryInfo.selections, leafs);
         }
         else {
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false, queryInfo.selections);
+            // # JIM/GEORGE
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false, queryInfo.selections, leafs);
         }
         return res;
     }
@@ -1023,7 +1038,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
 
     // Wait for the threads to finish
     joiner.job_scheduler1.Barrier();
-    
+
     //for (int i = 0; i < allColumns; i++) columnInfosVector[i].print();
 
     // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix

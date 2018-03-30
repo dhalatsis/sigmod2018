@@ -24,6 +24,29 @@
 /* we want to store the results */
 #define JOIN_RESULT_MATERIALIZE
 
+
+// # JIM/GEORGE
+struct cached_t {
+
+	void *  rel;
+    void  *  tmp;
+    int32_t ** hist;
+    int64_t *  output;
+    uint64_t   total_tuples;
+    uint32_t   num_tuples;
+    int32_t    R;
+    uint32_t   D;
+    int        relidx;  /* 0: R, 1: S */
+    uint32_t   padding;
+};
+
+struct Cacheinf {
+
+	cached_t *S;
+	cached_t *R;
+
+};
+
 /**
  * PRO: Parallel Radix Join Optimized.
  *
@@ -40,5 +63,5 @@
  * @return number of result tuples
  */
 result_t *
-PRO(relation_t * relR, relation_t * relS, int nthreads);
+PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf&);
 #endif /* PARALLEL_RADIX_JOIN_H */

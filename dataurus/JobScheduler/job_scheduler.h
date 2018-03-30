@@ -45,6 +45,11 @@ class Job {
   DISALLOW_COPY_AND_ASSIGN(Job);
 };
 
+// Chunking policy
+
+
+
+
 // Class JobScheduler
 class JobScheduler {
  public:

@@ -213,48 +213,73 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
     unsigned size = rel.size;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);  //TODO CHANGE HERE
+    unsigned * new_row_ids = NULL;  //TODO CHANGE HERE
+
+    bool inter_res = table->intermediate_res;
+    unsigned new_tbi = 0;
+
+    /* Intermediate result */
+    if (inter_res) {
+
+    }
+    else {
+        struct allfilters_arg a[THREAD_NUM];
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
+            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+            a[i].columns = & columns;
+            a[i].filterPtrs = & filterPtrs;
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobAllNonInterFindSize(a[i]));
+        }
+        job_scheduler1.Barrier();
+
+        /* Calculate the prefix sums */
+        unsigned temp;
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            temp = a[i].prefix;
+            a[i].prefix = new_tbi;
+            new_tbi += temp;
+        }
+
+        // malloc new values
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        for (size_t i = 0; i < THREAD_NUM; i++) {
+            a[i].new_array = new_row_ids;
+            job_scheduler1.Schedule(new JobAllNonInterFilter(a[i]));
+        }
+        job_scheduler1.Barrier();
+    }
+
 
     /* Loop for the relation size */
-    unsigned index = 0;
-    for (unsigned i = 0; i < size; i++) {
-
-        /* Loop for all the predicates */
-        bool pass = false;
-        for (auto filter : filterPtrs) {
-
-            unsigned col_id = (*filter).filterColumn.colId;
-            uint64_t filter_const = (*filter).constant;
-
-            /* If it passes all the filter */
-            if ((*filter).comparison == FilterInfo::Comparison::Less) {
-                if (columns[col_id][i] < filter_const)
-                    pass = true;
-            } else if ((*filter).comparison == FilterInfo::Comparison::Greater) {
-                if (columns[col_id][i] > filter_const)
-                    pass = true;
-            } else if ((*filter).comparison == FilterInfo::Comparison::Equal) {
-                if (columns[col_id][i] == filter_const)
-                    pass = true;
-
-            }
-
-            /* Did we pass the filter */
-            if(pass) continue;
-            else     break;
-        }
-
-        /* Add it if pass == true */
-        if (pass) {
-            new_row_ids[index] = i;
-            index++;
-        }
-    }
+    // unsigned index = 0;
+    // for (unsigned i = 0; i < size; i++) {
+    //
+    //     /* Loop for all the predicates */
+    //     bool pass;
+    //     for (auto filter : filterPtrs) {
+    //         pass = false;
+    //
+    //         /* If it passes all the filter */
+    //         if ((*filter).comparison == FilterInfo::Comparison::Equal)
+    //             pass = (columns[(*filter).filterColumn.colId][i] == (*filter).constant) ? true : false;
+    //         else if ((*filter).comparison == FilterInfo::Comparison::Less)
+    //             pass = (columns[(*filter).filterColumn.colId][i] < (*filter).constant) ? true : false;
+    //         else
+    //             pass = (columns[(*filter).filterColumn.colId][i] > (*filter).constant) ? true : false;
+    //
+    //         if (!pass) break;
+    //     }
+    //
+    //     /* Add it if pass == true */
+    //     if (pass) new_row_ids[index++] = i;
+    // }
 
     /* Swap the old vector with the new one */
     (table->intermediate_res) ? (free(old_row_ids)) : ((void)0);
     table->row_ids = new_row_ids;
-    table->tups_num = index;
+    table->tups_num = new_tbi;
     table->intermediate_res = true;
 
 #ifdef time
@@ -293,60 +318,6 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
     gettimeofday(&end, NULL);
     timeSelectFilter += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
     #endif
-}
-
-struct arg {
-    unsigned low;
-    unsigned high;
-    unsigned prefix;
-    uint64_t filter;
-    uint64_t * array;
-    unsigned * new_array;
-    unsigned * old_rids;
-    unsigned rel_num;
-    unsigned table_index;
-};
-
-void * parallelIntermediateEqualFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] == a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelIntermediateEqualFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] == a->filter) {
-            a->new_array[a->prefix] =  a->old_rids[i*a->rel_num + a->table_index];;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
-}
-
-void * parallelNonIntermediateEqualFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] == a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelNonIntermediateEqualFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] == a->filter) {
-            a->new_array[a->prefix] = i;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
 }
 
 void Joiner::SelectEqual(table_t *table, int filter) {

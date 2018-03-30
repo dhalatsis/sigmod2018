@@ -94,13 +94,13 @@ void QueryInfo::resolveRelationIds() {
     for (auto& sInfo : selections) {
         resolveIds(relationIds,sInfo);
     }
-  
+
     // Predicates
     for (auto& pInfo : predicates) {
         resolveIds(relationIds,pInfo.left);
         resolveIds(relationIds,pInfo.right);
     }
-  
+
     // Filters
     for (auto& fInfo : filters) {
         resolveIds(relationIds,fInfo.filterColumn);
@@ -265,6 +265,15 @@ bool operator<(const SelectInfo& lhs, const SelectInfo& rhs) {
         return true;
     else if (rhs.binding < lhs.binding)
         return false;
-    else 
+    else
+        return lhs.colId < rhs.colId;
+}
+
+bool operator<(const Selection& lhs, const Selection& rhs) {
+    if (lhs.relId < rhs.relId)
+        return true;
+    else if (rhs.relId < lhs.relId)
+        return false;
+    else
         return lhs.colId < rhs.colId;
 }

@@ -16,7 +16,7 @@ struct SelectInfo {
 
     // copy conustroctor
     SelectInfo(const SelectInfo& si) : relId(si.relId), binding(si.binding), colId(si.colId){};
-    
+
     // Equality operator
     bool operator==(const SelectInfo& o) const;
 
@@ -120,6 +120,17 @@ class QueryInfo {
     QueryInfo(std::string rawQuery);
 };
 
+
+class Selection {
+    public:
+    RelationId relId; // Relation id
+    unsigned colId; // Column id
+
+    Selection(const SelectInfo& si) : relId(si.relId), colId(si.colId){};
+};
+
+
 bool operator<(const PredicateInfo& lhs, const PredicateInfo& rhs);
 bool operator<(const FilterInfo& lhs, const FilterInfo& rhs);
 bool operator<(const SelectInfo& lhs, const SelectInfo& rhs);
+bool operator<(const Selection& lhs, const Selection& rhs);

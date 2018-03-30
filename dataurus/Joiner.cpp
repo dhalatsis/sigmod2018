@@ -15,7 +15,6 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-//#define prints
 
 bool DoCheckSums = true;
 
@@ -1036,15 +1035,15 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections) {
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int leafs) {
 
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
 #endif
 
-    relation_t * r1 = CreateRelationT(table_r, pred_info.left);
-    relation_t * r2 = CreateRelationT(table_s, pred_info.right);
+    relation_t * r1;
+    relation_t * r2;
 
 #ifdef time
     struct timeval end;
@@ -1056,7 +1055,55 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     gettimeofday(&start, NULL);
 #endif
 
-    result_t * res  = PRO(r1, r2, THREAD_NUM);
+    //HERE WE CHECK FOR CACHED PARTITIONS
+    Cacheinf c;
+
+    Selection left(pred_info.left);
+    Selection right(pred_info.right);
+
+
+    if (leafs&1) {
+        if (idxcache.find(left) != idxcache.end()) {
+            r1 = (relation_t *)malloc(sizeof(relation_t));
+            r1->num_tuples = table_r->tups_num;
+            c.R = idxcache[left];
+        }
+        else {
+
+            r1 = CreateRelationT(table_r, pred_info.left);
+            c.R = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
+        }
+    } else {
+
+        r1 = CreateRelationT(table_r, pred_info.left);
+        c.R = NULL;
+    }
+
+    if (leafs&2) {
+        if (idxcache.find(right) != idxcache.end()) {
+            r2 = (relation_t *)malloc(sizeof(relation_t));
+            r2->num_tuples = table_s->tups_num;
+            c.S = idxcache[right];
+        }
+        else {
+            r2 = CreateRelationT(table_s, pred_info.right);
+            c.S = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));;
+        }
+    } else {
+        r2 = CreateRelationT(table_s, pred_info.right);
+        c.S = NULL;
+    }
+
+    result_t * res  = PRO(r1, r2, THREAD_NUM, c);
+
+    if (leafs&1) {
+        free(r1);
+        idxcache[left] = c.R;
+    }
+    if (leafs&2) {
+        free(r2);
+        idxcache[right] = c.S;
+    }
 
 #ifdef time
     gettimeofday(&end, NULL);
@@ -1177,8 +1224,11 @@ int main(int argc, char* argv[]) {
     // Create threads
     task_scheduler_init init(THREAD_NUM);
 
-    // Create scheduler
+    // Create scheduler NUMA REG 0
     joiner.job_scheduler1.Init(THREAD_NUM, 0);
+
+    // Create scheduler NUMA REG 1
+    //joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 0);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
@@ -1186,68 +1236,6 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
-#ifdef TIME_DETAILS
-    done_testing = false;
-    cerr << endl;
-    // bool its_over = false;
-    for (int i = 1000; i <= 41000; i += 10000) {
-        for (int j = 1000; j <= 41000; j += 10000) {
-            vector<table_t*> tables;
-            tables.push_back(joiner.CreateTableTFromId(7, 7));
-            tables.push_back(joiner.CreateTableTFromId(13, 13));
-            if (i <= tables[0]->relations_row_ids[0][0].size()) {
-                for (int k = 0; k < tables[0]->relations_row_ids[0].size(); k++)
-                    tables[0]->relations_row_ids[k][0].resize(i);
-            } else {
-                tables[0] = NULL;
-            }
-            if (j <= tables[1]->relations_row_ids[0][0].size()) {
-                for (int k = 0; k < tables[1]->relations_row_ids[0].size(); k++)
-                    tables[1]->relations_row_ids[k][0].resize(j);
-            } else {
-                tables[1] = NULL;
-            }
-
-            if (!tables[0] || !tables[1]) {
-                // its_over = true;
-                break;
-            }
-
-            PredicateInfo predicate;
-            // predicate.left.relId = 13;
-            // predicate.left.binding = 0;
-            // predicate.left.colId = 1;
-            // predicate.right.relId = 13;
-            // predicate.right.binding = 1;
-            // predicate.right.colId = 1;
-            struct timeval start, end;
-            gettimeofday(&start, NULL);
-            // joiner.join(tables[0], tables[0], predicate);
-            gettimeofday(&end, NULL);
-            double dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            // std::ostringstream strs;
-            // cerr << "13,\t" << i << ",\t13,\t" << j << ",\t" << dt << " sec" << endl;
-            // flush(cerr);
-            // timeDetStr.append(strs.str());
-
-            predicate.left.relId = 7;
-            predicate.left.binding = 0;
-            predicate.left.colId = 1;
-            predicate.right.relId = 13;
-            predicate.right.binding = 1;
-            predicate.right.colId = 1;
-            gettimeofday(&start, NULL);
-            joiner.join(tables[0], tables[1], predicate);
-            gettimeofday(&end, NULL);
-            dt = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            cerr << "7,\t" << i << ",\t13,\t" << j << ",\t" << dt << "sec" << endl;
-        }
-        // if (its_over)
-        //     break;
-    }
-    cerr << timeDetStr << endl;
-    done_testing = true;
-#endif
 
     #ifdef time
     struct timeval end;

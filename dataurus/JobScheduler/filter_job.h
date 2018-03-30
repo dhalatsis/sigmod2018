@@ -1,6 +1,18 @@
 #pragma once
 #include <stdint.h>
+#include "Joiner.hpp"
 #include "job_scheduler.h"
+
+// Args for allthefilters function
+struct allfilters_arg {
+    unsigned low;
+    unsigned high;
+    unsigned prefix;
+    vector<uint64_t*> * columns;
+    vector<FilterInfo*> * filterPtrs;
+    unsigned * new_array;
+};
+
 
 // Args for intermediate functions
 struct inter_arg {
@@ -30,6 +42,34 @@ public:
   virtual int Run() = 0;
   JobFilter() {}
   ~JobFilter() {};
+};
+
+
+// ALL filters class
+class JobAllNonInterFindSize : public JobFilter {
+public:
+    struct allfilters_arg & args_;
+
+    JobAllNonInterFindSize(struct allfilters_arg & args)
+    :args_(args)
+    {}
+
+    ~JobAllNonInterFindSize() {}
+
+    int Run();
+};
+
+class JobAllNonInterFilter : public JobFilter {
+public:
+    struct allfilters_arg & args_;
+
+    JobAllNonInterFilter(struct allfilters_arg & args)
+    :args_(args)
+    {}
+
+    ~JobAllNonInterFilter() {}
+
+    int Run();
 };
 
 

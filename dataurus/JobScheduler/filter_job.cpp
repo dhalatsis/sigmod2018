@@ -56,6 +56,57 @@ int JobEqualInterFilter::Run() {
 /* NON INTERMERIATE PRALLEL FUNCTIONS */
 /*++++++++++++++++++++++++++++++++++++*/
 
+// All filter Run functions
+int JobAllNonInterFindSize::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+
+        /* Loop for all the predicates */
+        /* Loop for all the predicates */
+        bool pass;
+        for (auto filter : (*args_.filterPtrs)) {
+            pass = false;
+
+            /* If it passes all the filter */
+            if ((*filter).comparison == FilterInfo::Comparison::Less)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] < (*filter).constant ? true : false;
+            else if ((*filter).comparison == FilterInfo::Comparison::Greater)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] > (*filter).constant? true : false;
+            else if ((*filter).comparison == FilterInfo::Comparison::Equal)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] == (*filter).constant ? true : false;
+
+            if (!pass) break;
+        }
+
+        /* Add it if pass == true */
+        if (pass) args_.prefix++;
+    }
+}
+
+int JobAllNonInterFilter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+
+        /* Loop for all the predicates */
+        bool pass;
+        for (auto filter : (*args_.filterPtrs)) {
+            pass = false;
+
+            /* If it passes all the filter */
+            if ((*filter).comparison == FilterInfo::Comparison::Less)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] < (*filter).constant ? true : false;
+            else if ((*filter).comparison == FilterInfo::Comparison::Greater)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] > (*filter).constant? true : false;
+            else if ((*filter).comparison == FilterInfo::Comparison::Equal)
+                pass = (*args_.columns)[(*filter).filterColumn.colId][i] == (*filter).constant ? true : false;
+
+            if (!pass) break;
+        }
+
+        /* Add it if pass == true */
+        if (pass) args_.new_array[args_.prefix++] = i;
+    }
+}
+
+
 // Less filter Run functions
 int JobLessNonInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {

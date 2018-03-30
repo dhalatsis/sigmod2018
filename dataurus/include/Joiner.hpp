@@ -23,8 +23,10 @@
 /*----------------*/
 
 #define time
+//#define prints
 
 #define THREAD_NUM 20
+#define THREAD_NUM_2CPU 0
 
 class JTree;
 
@@ -78,10 +80,21 @@ class Joiner {
 
     // Joins a given set of relations
     void join(QueryInfo& i);
-    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections);
+    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int );
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
+
+    //caching info
+    std::map<Selection, cached_t*> idxcache;
+
+
+    Cacheinf newcf() {
+        Cacheinf c;
+        c.S = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
+        c.R = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
+        return c;
+    }
 };
 
 #include "QueryPlan.hpp"
