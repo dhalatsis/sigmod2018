@@ -12,6 +12,7 @@
 #include "parallel_radix_join.h"
 #include "tuple_buffer.h"
 #include "prj_params.h"
+#include "job_scheduler.h"
 
 /* THread pool Includes */
 #include <algorithm>
@@ -39,6 +40,10 @@ class Joiner {
     std::vector<Relation> relations; // The relations that might be joined
 
     public:
+
+    /* 2 Jobs scheduler */
+    JobScheduler job_scheduler1;
+    JobScheduler job_scheduler2;
 
     /* do the checksum */
     //std::string check_sum(SelectInfo &sel_info, table_t *table, threadpool11::Pool & p, std::array<std::future<uint64_t>, THREAD_NUM> & f);

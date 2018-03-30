@@ -15,7 +15,6 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
-#include "job_scheduler.h"
 //#define prints
 
 bool DoCheckSums = true;
@@ -1179,8 +1178,7 @@ int main(int argc, char* argv[]) {
     task_scheduler_init init(THREAD_NUM);
 
     // Create scheduler
-    JobScheduler job_scheduler;
-    job_scheduler.Init(THREAD_NUM, 0);
+    joiner.job_scheduler1.Init(THREAD_NUM, 0);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
