@@ -122,8 +122,8 @@ struct QueryPlan {
 struct StatisticsThreadArgs {
     unsigned low;
     unsigned high;
-    vector<uint64_t*>& columnPtrs;
-    vector<uint64_t>& columnTuples;
+    vector<uint64_t*>* columnPtrs;
+    vector<uint64_t>* columnTuples;
     vector<ColumnInfo>* columnInfosVector;
 };
 
@@ -139,12 +139,12 @@ public:
         for (unsigned col = myArg->low; col < myArg->high; col++) {
             uint64_t minimum = numeric_limits<uint64_t>::max();
             uint64_t maximum = 0;
-            uint64_t tuples  = myArg->columnTuples[col];
+            uint64_t tuples  = (*myArg->columnTuples)[col];
             uint64_t element;
 
             // One pass for the min and max
             for (int i = 0; i < tuples; i++) {
-                element = myArg->columnPtrs[col][i];
+                element = (*myArg->columnPtrs)[col][i];
                 if (element > maximum) maximum = element;
                 if (element < minimum) minimum = element;
             }
@@ -154,7 +154,7 @@ public:
             uint64_t distinctCounter = 0;
 
             for (int i = 0; i < tuples; i++) {
-                element = myArg->columnPtrs[col][i];
+                element = (*myArg->columnPtrs)[col][i];
                 if (distinctElements[element - minimum] == false) {
                     distinctCounter++;
                     distinctElements[element - minimum] = true;

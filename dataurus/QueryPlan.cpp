@@ -1011,14 +1011,20 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
     }
 
     // Get the statistics of every column
-    StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(sizeof(StatisticsThreadArgs) * THREAD_NUM);
+    StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(THREAD_NUM * sizeof(StatisticsThreadArgs));
     for (int i = 0; i < THREAD_NUM; i++) {
         args[i].low = (i < allColumns % THREAD_NUM) ? i * (allColumns / THREAD_NUM) + i : i * (allColumns / THREAD_NUM) + allColumns % THREAD_NUM;
         args[i].high = (i < allColumns % THREAD_NUM) ? args[i].low + allColumns / THREAD_NUM + 1 :  args[i].low + allColumns / THREAD_NUM;
-        args[i].columnPtrs = columnPtrs;
-        args[i].columnTuples = columnTuples;
+        args[i].columnPtrs = &columnPtrs;
+        args[i].columnTuples = &columnTuples;
         args[i].columnInfosVector = &columnInfosVector;
+        joiner.job_scheduler1.Schedule(new StatisticsJob(&args[i]));
     }
+
+    // Wait for the threads to finish
+    joiner.job_scheduler1.Barrier();
+    
+    //for (int i = 0; i < allColumns; i++) columnInfosVector[i].print();
 
     // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix
     index = 0;

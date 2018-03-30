@@ -1,4 +1,6 @@
-#include "include/Filter_tbb_types.hpp"
+//#include "include/Filter_tbb_types.hpp"  UNCOMENT TO USE TBB
+#include "Joiner.hpp"
+#include "filter_job.h"
 
 double timeSelfJoin = 0;
 double timeSelectFilter = 0;
@@ -369,50 +371,49 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         gettimeofday(&start, NULL);
         #endif
 
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        struct inter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
             a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
-            pthread_create(&threads[i], NULL, parallelIntermediateEqualFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobEqualInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelIntermediateEqualFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
         }
+        job_scheduler1.Barrier();
 
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
+        // TBB praralle loop
         // ParallelItermediateEqualFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         // parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         // new_row_ids = pft.rids;
         // new_tbi = pft.new_tbi;
 
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-
+        // Serial Loop
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] == filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -427,46 +428,32 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         gettimeofday(&start, NULL);
         #endif
 
-        // ParalleNonItermediateSizeFindEqualFilterT sft( values, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size), sft);
-        // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * sft.size);
-        // // std::cerr << "Size " << sft.size << '\n';
-
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        struct noninter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
             a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].values = values;
             a[i].filter = filter;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateEqualFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobEqualNonInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateEqualFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobEqualNonInterFilter(a[i]));
         }
-
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
-
-        // ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter);
-        // parallel_reduce(blocked_range<size_t>(0,size), pft);
-        // new_row_ids = pft.rids;
-        // new_tbi = pft.new_tbi;
+        job_scheduler1.Barrier();
 
         #ifdef time
         struct timeval end;
@@ -474,6 +461,13 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
+        // Parallel tbi
+        // ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter);
+        // parallel_reduce(blocked_range<size_t>(0,size), pft);
+        // new_row_ids = pft.rids;
+        // new_tbi = pft.new_tbi;
+
+        // Serial
         // for (size_t index = 0; index < size; index++) {
         //     if (values[index] == filter) {
         //         new_row_ids[new_tbi] = index;
@@ -489,47 +483,6 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     table->intermediate_res = true;
 }
 
-void * parallelIntermediateGreaterFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] > a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelIntermediateGreaterFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] > a->filter) {
-            a->new_array[a->prefix] =  a->old_rids[i*a->rel_num + a->table_index];;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
-}
-
-void * parallelNonIntermediateGreaterFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] > a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelNonIntermediateGreaterFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] > a->filter) {
-            a->new_array[a->prefix] = i;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
-}
 
 void Joiner::SelectGreater(table_t *table, int filter){
 
@@ -551,49 +504,47 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        struct inter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
             a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
-            pthread_create(&threads[i], NULL, parallelIntermediateGreaterFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobGreaterInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelIntermediateGreaterFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobGreaterInterFilter(a[i]));
         }
+        job_scheduler1.Barrier();
 
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         // ParallelItermediateGreaterFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         // parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
         // new_row_ids = pft.rids;
         // new_tbi = pft.new_tbi;
 
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] > filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -607,55 +558,33 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        struct noninter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i      : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 : a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
+            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+            a[i].values = values;
             a[i].filter = filter;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateGreaterFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobGreaterNonInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateGreaterFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobGreaterNonInterFilter(a[i]));
         }
+        job_scheduler1.Barrier();
 
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
-        // uint64_t sum1= 0 , sum2 = 0;
-        // for (size_t i = 0; i < new_tbi; i++) {
-        //     sum1 += new_row_ids[i];
-        // }
-        // for (size_t j = 0; j < new_tbi; j++) {
-        //     sum2 += rids[j];
-        // }
-        // std::cerr << "SUM 1 " << sum1 << '\n';
-        // std::cerr << "SUM 2 " << sum2 << '\n';
-        // new_row_ids = rids;
-        // /* BITS SET attempt */
-        // vector<bool> bitmap(size, false);
-        // ParallelBMT bmt(values, filter, bitmap);
-        // parallel_reduce(blocked_range<size_t>(0,size), bmt);
-        // /* Construct the new array from the bitmap */
-        // unsigned chunk_size = size / bmt.size;
-        // unsigned mod        = size % bmt.size;
-        // new_row_ids = (unsigned *) malloc(sizeof(unsigned) * bmt.size);
-        // ParallelWriteT pw();
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);
@@ -674,48 +603,6 @@ void Joiner::SelectGreater(table_t *table, int filter){
     table->row_ids = new_row_ids;
     table->tups_num = new_tbi;
     table->intermediate_res = true;
-}
-
-void * parallelIntermediateLessFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] < a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelIntermediateLessFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[a->old_rids[i*a->rel_num + a->table_index]] < a->filter) {
-            a->new_array[a->prefix] =  a->old_rids[i*a->rel_num + a->table_index];;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
-}
-
-void * parallelNonIntermediateLessFindSize(void * args) {
-    struct arg * a = (struct arg *) args;
-    a->prefix = 0;
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] < a->filter)
-            a->prefix++;
-    }
-}
-
-void * parallelNonIntermediateLessFilter(void * args) {
-    struct arg * a = (struct arg *) args;
-    //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-    for (size_t i = a->low; i < a->high; i++) {
-        if (a->array[i] < a->filter) {
-            a->new_array[a->prefix] = i;
-            //std::cerr << "p " << a->prefix << '\n';
-            a->prefix++;
-        }
-    }
 }
 
 void Joiner::SelectLess(table_t *table, int filter){
@@ -737,49 +624,46 @@ void Joiner::SelectLess(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+        struct inter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
             a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
-            pthread_create(&threads[i], NULL, parallelIntermediateLessFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobLessInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelIntermediateLessFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobLessInterFilter(a[i]));
         }
+        job_scheduler1.Barrier();
 
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
+        #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
         // ParallelItermediateLessFilterT pft( values, old_row_ids, rel_num, table_index, filter );
         // parallel_reduce(blocked_range<size_t>(0,size), pft);
         // new_row_ids = pft.rids;
         // new_tbi = pft.new_tbi;
 
-        #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
         // for (size_t index = 0; index < size; index++) {
         //     if (values[old_row_ids[index*rel_num + table_index]] < filter) {
         //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
@@ -792,36 +676,33 @@ void Joiner::SelectLess(table_t *table, int filter){
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
-        pthread_t threads[THREAD_NUM];
-        struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
+
+        struct noninter_arg a[THREAD_NUM];
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
             a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-            a[i].array = values;
+            a[i].values = values;
             a[i].filter = filter;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateLessFindSize, (void *) &a[i]);
+            a[i].prefix = 0;
+            job_scheduler1.Schedule(new JobLessNonInterFindSize(a[i]));
         }
+        job_scheduler1.Barrier();
 
+        /* Calculate the prefix sums */
         unsigned temp;
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
-            //std::cerr << "PREFIX " << a[i].prefix << '\n';
             new_tbi += temp;
         }
-        //std::cerr << "SUM " << new_tbi << " " << size << '\n';
 
-        // malloc new array
+        // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < THREAD_NUM; i++) {
             a[i].new_array = new_row_ids;
-            pthread_create(&threads[i], NULL, parallelNonIntermediateLessFilter, (void *) &a[i]);
+            job_scheduler1.Schedule(new JobLessNonInterFilter(a[i]));
         }
-
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            pthread_join(threads[i], NULL);
-        }
+        job_scheduler1.Barrier();
 
         #ifdef time
         struct timeval end;
