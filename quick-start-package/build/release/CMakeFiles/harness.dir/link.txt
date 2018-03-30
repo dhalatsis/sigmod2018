@@ -1,1 +1,0 @@
-/usr/bin/c++    -fuse-ld=gold -Ofast -march=native -lpthread  -ltbb -O3 -DNDEBUG  -rdynamic CMakeFiles/harness.dir/harness.cpp.o  -o harness 
