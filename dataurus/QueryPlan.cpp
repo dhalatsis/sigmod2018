@@ -2,7 +2,7 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
-#include "tbb/tbb.h"
+#include "tbb_parallel_types.hpp"
 
 using namespace std;
 using namespace tbb;
@@ -980,84 +980,30 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
     fprintf(stderr, "\n");
 }
 
-struct ParallelStatistics {
-private:
-    vector<uint64_t*> columnPtrs;
-
-public:
-    vector<uint64_t> columnTuples;
-    vector<ColumnInfo>* columnInfosVector;
-
-    ParallelStatistics(vector<uint64_t*> cp, vector<uint64_t> ct, vector<ColumnInfo>* ci) :
-    columnPtrs(cp), columnTuples(ct), columnInfosVector(ci) {}
-
-    ParallelStatistics(ParallelStatistics& p, split) :
-    columnPtrs(p.columnPtrs), columnTuples(p.columnTuples), columnInfosVector(p.columnInfosVector) {}
-
-    void operator()(const blocked_range<size_t> &r) const {
-        for (size_t col = r.begin(); col != r.end(); col++) {
-            uint64_t minimum = numeric_limits<uint64_t>::max();
-            uint64_t maximum = 0;
-            uint64_t tuples  = columnTuples[col];
-            uint64_t element;
-
-            // One pass for the min and max
-            for (int i = 0; i < tuples; i++) {
-                element = columnPtrs[col][i];
-                if (element > maximum) maximum = element;
-                if (element < minimum) minimum = element;
-            }
-
-            // One pass for the distinct elements
-            vector<bool> distinctElements(maximum - minimum + 1, false);
-            uint64_t distinctCounter = 0;
-
-            for (int i = 0; i < tuples; i++) {
-                element = columnPtrs[col][i];
-                if (distinctElements[element - minimum] == false) {
-                    distinctCounter++;
-                    distinctElements[element - minimum] = true;
-                }
-            }
-
-            // Save the infos
-            (*columnInfosVector)[col].min      = minimum;
-            (*columnInfosVector)[col].max      = maximum;
-            (*columnInfosVector)[col].size     = tuples;
-            (*columnInfosVector)[col].distinct = distinctCounter;
-            (*columnInfosVector)[col].n        = maximum - minimum + 1;
-            (*columnInfosVector)[col].spread   = (((double) (maximum - minimum + 1)) / ((double) ((*columnInfosVector)[col].distinct)));
-
-            (*columnInfosVector)[col].counter = 0;
-            (*columnInfosVector)[col].isSelectionColumn = false;
-        }
-    }
-};
-
 // Fills the columnInfo matrix with the data of every column
 void QueryPlan::fillColumnInfo(Joiner& joiner) {
     Relation* relation;
     int relationsCount = joiner.getRelationsCount();
-    size_t allColumnsCount = 0; // Number of all columns of all relations
-    size_t columnsCount; // Number of columns of a single relation
+    size_t allColumns = 0; // Number of all columns of all relations
+    size_t relationColumns; // Number of columns of a single relation
 
     // Get the number of all columns
     for (int rel = 0; rel < relationsCount; rel++) {
-        allColumnsCount += joiner.getRelation(rel).columns.size();
+        allColumns += joiner.getRelation(rel).columns.size();
     }
 
     // Create a vector of pointers to all columns
-    vector<uint64_t*> columnPtrs(allColumnsCount);
-    vector<uint64_t> columnTuples(allColumnsCount);
-    vector<ColumnInfo> columnInfosVector(allColumnsCount);
+    vector<uint64_t*> columnPtrs(allColumns);
+    vector<uint64_t> columnTuples(allColumns);
+    vector<ColumnInfo> columnInfosVector(allColumns);
     int index = 0;
 
     for (int rel = 0; rel < relationsCount; rel++) {
         // Get the number of columns of this relation
         relation = &(joiner.getRelation(rel));
-        columnsCount = relation->columns.size();
+        relationColumns = relation->columns.size();
 
-        for (int col = 0; col < columnsCount; col++) {
+        for (int col = 0; col < relationColumns; col++) {
             columnPtrs[index] = relation->columns[col];
             columnTuples[index] = relation->size;
             index++;
@@ -1065,8 +1011,20 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
     }
 
     // Get the statistics of every column
-    ParallelStatistics ps(columnPtrs, columnTuples, &columnInfosVector);
-    parallel_for(blocked_range<uint64_t>(0, allColumnsCount, 5), ps);
+    StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(THREAD_NUM * sizeof(StatisticsThreadArgs));
+    for (int i = 0; i < THREAD_NUM; i++) {
+        args[i].low = (i < allColumns % THREAD_NUM) ? i * (allColumns / THREAD_NUM) + i : i * (allColumns / THREAD_NUM) + allColumns % THREAD_NUM;
+        args[i].high = (i < allColumns % THREAD_NUM) ? args[i].low + allColumns / THREAD_NUM + 1 :  args[i].low + allColumns / THREAD_NUM;
+        args[i].columnPtrs = &columnPtrs;
+        args[i].columnTuples = &columnTuples;
+        args[i].columnInfosVector = &columnInfosVector;
+        joiner.job_scheduler1.Schedule(new StatisticsJob(&args[i]));
+    }
+
+    // Wait for the threads to finish
+    joiner.job_scheduler1.Barrier();
+    
+    //for (int i = 0; i < allColumns; i++) columnInfosVector[i].print();
 
     // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix
     index = 0;
@@ -1077,11 +1035,11 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
     // For every relation allocate memory for its columns
     for (int rel = 0; rel < relationsCount; rel++) {
         // Get the number of columns
-        columnsCount = joiner.getRelation(rel).columns.size();
-        columnInfos[rel] = (ColumnInfo*) malloc(columnsCount * sizeof(ColumnInfo));
+        relationColumns = joiner.getRelation(rel).columns.size();
+        columnInfos[rel] = (ColumnInfo*) malloc(relationColumns * sizeof(ColumnInfo));
 
         // Get the info of every column
-        for (int col = 0; col < columnsCount; col++) {
+        for (int col = 0; col < relationColumns; col++) {
             columnInfos[rel][col] = columnInfosVector[index];
             index++;
         }
