@@ -6,7 +6,7 @@
 #include "tbb/partitioner.h"
 
 
-#define THREAD_NUM 20
+#define THREAD_NUM 4
 #define GRAINSIZE  100
 
 using namespace tbb;

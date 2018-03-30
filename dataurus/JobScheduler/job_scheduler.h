@@ -2,11 +2,11 @@
 #define JOB_SCHEDULER_H
 
 // #include "defn.h"
-
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <queue>
+#include "cpu_mapping.h"
 
 #define DISALLOW_COPY_AND_ASSIGN(TypeName)      \
   TypeName(const TypeName&);                    \
@@ -16,6 +16,19 @@
 typedef unsigned int JobID;
 
 using std::queue;
+
+// the cpu mapping from cpu mapping .cpp
+#ifdef MY_PC
+extern int numa[][4];
+#endif
+
+#ifdef SIGMOD_1CPU/*<---------------------------ALWAYS DEFIEND IT BEFORE UPLOAD-------------------*/
+extern int numa[][20];
+#endif
+
+#ifdef SIGMOD_2CPU
+extern int numa[][20];
+#endif
 
 // Class Job - Abstract
 class Job {
@@ -36,7 +49,7 @@ class JobScheduler {
   JobScheduler() = default;
   ~JobScheduler() = default;
 
-  bool Init(int num_of_threads) {
+  bool Init(int num_of_threads, int numa_region) {
     int i;
     num_of_executors_ = num_of_threads;
     id_gen_ = 0;
@@ -44,6 +57,11 @@ class JobScheduler {
     pthread_mutexattr_init(&jobs_mutexattr_);
     pthread_mutex_init(&jobs_mutex_, &jobs_mutexattr_);
     sem_init(&available_work_, 0, 0);
+
+    // inti attrs for threads
+    pthread_attr_t attr;
+    cpu_set_t set;
+    pthread_attr_init(&attr);
 
     if ( (executors_ = new JobExecutor*[num_of_executors_]) == nullptr ) {
       return false;
@@ -55,7 +73,15 @@ class JobScheduler {
         return false;
       }
 
-      executors_[i]->Create();
+      std::cerr << "Physical thread no " << numa[numa_region][i] << '\n';
+
+      // Bind thread to physical thread
+      CPU_ZERO(&set);
+      CPU_SET(numa[numa_region][i], &set);
+      pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);
+
+      // Create bounded threads
+      executors_[i]->Create(&attr);
     }
 
     return true;
@@ -146,8 +172,8 @@ private:
 
     virtual ~JobExecutor() {}
 
-    bool Create() {
-      return !pthread_create(&thread_id_, NULL, CallThrFn, this);
+    bool Create(pthread_attr_t * attr) {
+      return !pthread_create(&thread_id_, attr, CallThrFn, this);
     }
 
     bool Stop() {
