@@ -1,0 +1,2 @@
+/usr/bin/ar qc libthreadPool.a  CMakeFiles/threadPool.dir/lib/threadPool/src/worker.cpp.o CMakeFiles/threadPool.dir/lib/threadPool/src/pool.cpp.o
+/usr/bin/ranlib libthreadPool.a

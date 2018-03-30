@@ -1066,7 +1066,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
 
     // Get the statistics of every column
     ParallelStatistics ps(columnPtrs, columnTuples, &columnInfosVector);
-    parallel_for(blocked_range<uint64_t>(0, allColumnsCount, 1000), ps);
+    parallel_for(blocked_range<uint64_t>(0, allColumnsCount, 5), ps);
 
     // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix
     index = 0;
