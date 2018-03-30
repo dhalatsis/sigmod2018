@@ -1,15 +1,15 @@
 # Don't commit the quick start folder
 ./quick-start-package/*
 # Don't commit the build folder
-quick-start-package/build/
+dataurus/build/
 # Don't commit the test folder
-quick-start-package/test/
+dataurus/test/
 # Don't commit the CMake Folder
-quick-start-package/CMakeFiles/
+dataurus/CMakeFiles/
 # Don't push the CMakeList.txt
-quick-start-package/CMakeLists.txt
+dataurus/CMakeLists.txt
 # Dont push public
-quick-start-package/workloads/public/
+dataurus/workloads/public/
 
 # for now...
 execution_plan/
