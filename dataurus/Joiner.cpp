@@ -15,6 +15,7 @@
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
+#include "job_scheduler.h"
 //#define prints
 
 bool DoCheckSums = true;
