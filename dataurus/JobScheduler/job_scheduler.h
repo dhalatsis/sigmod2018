@@ -75,7 +75,7 @@ class JobScheduler {
         return false;
       }
 
-     std::cerr << "Physical thread no " << numa[numa_region][i] << '\n';
+     //std::cerr << "Physical thread no " << numa[numa_region][i] << '\n';
 
       // Bind thread to physical thread
       CPU_ZERO(&set);

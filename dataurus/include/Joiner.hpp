@@ -24,7 +24,7 @@
 
 #define time
 
-#define THREAD_NUM 4
+#define THREAD_NUM 20
 
 class JTree;
 
