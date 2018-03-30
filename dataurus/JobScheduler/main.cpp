@@ -40,14 +40,13 @@ class JobSleep: public Job {
 
 int main() {
   JobScheduler sch;
-  sch.Init(10);
+  sch.Init(4, 0);
 
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 4; ++i) {
     sch.Schedule(new JobSleep(i, 2));
   }
   sch.Barrier();
-  sch.Stop(false);
+  std::cout << "END OF BARRIER" << '\n';
+  sch.Stop(true);
   sch.Destroy();
 }
-
-

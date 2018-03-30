@@ -4,6 +4,7 @@
 // #include "defn.h"
 #include <pthread.h>
 #include <semaphore.h>
+#include <iostream>
 #include <signal.h>
 #include <queue>
 #include "cpu_mapping.h"
@@ -18,6 +19,7 @@ typedef unsigned int JobID;
 using std::queue;
 
 // the cpu mapping from cpu mapping .cpp
+//int numa[][4] = {0,1,2,3};
 #ifdef MY_PC
 extern int numa[][4];
 #endif
@@ -73,7 +75,7 @@ class JobScheduler {
         return false;
       }
 
-      std::cerr << "Physical thread no " << numa[numa_region][i] << '\n';
+     std::cerr << "Physical thread no " << numa[numa_region][i] << '\n';
 
       // Bind thread to physical thread
       CPU_ZERO(&set);

@@ -469,8 +469,8 @@ void Joiner::SelectGreater(table_t *table, int filter){
         pthread_t threads[THREAD_NUM];
         struct arg * a = (struct arg *) malloc(sizeof(struct arg) * THREAD_NUM);
         for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i      : i * (size / THREAD_NUM) + size % THREAD_NUM;
+            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 : a[i].low + size / THREAD_NUM;
             a[i].array = values;
             a[i].filter = filter;
             pthread_create(&threads[i], NULL, parallelGreaterFindSize, (void *) &a[i]);
