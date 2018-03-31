@@ -26,8 +26,8 @@
 
 //#define time
 //#define prints
-#define THREAD_NUM      20
-#define THREAD_NUM_1CPU 20
+#define THREAD_NUM      4
+#define THREAD_NUM_1CPU 4
 #define THREAD_NUM_2CPU 0
 
 using namespace std;
