@@ -7,6 +7,8 @@
 #include <iostream>
 #include <signal.h>
 #include <queue>
+#include <sys/sysinfo.h>
+#include <unistd.h>
 #include "cpu_mapping.h"
 
 #define DISALLOW_COPY_AND_ASSIGN(TypeName)      \
@@ -69,6 +71,11 @@ class JobScheduler {
     pthread_attr_t attr;
     cpu_set_t set;
     pthread_attr_init(&attr);
+
+    fprintf(stderr, "This system has %d processors configured and "
+        "%d processors available.\n",
+        get_nprocs_conf(), get_nprocs());
+
     if ( (executors_ = new JobExecutor*[num_of_executors_]) == nullptr ) {
       return false;
     }
@@ -179,8 +186,17 @@ private:
     virtual ~JobExecutor() {}
 
     bool Create(pthread_attr_t * attr) {
-      return !pthread_create(&thread_id_, attr, CallThrFn, this);
-    }
+      int r = pthread_create(&thread_id_, attr, CallThrFn, this);
+      /* Check affinity */
+      int cpus = get_nprocs();
+      pthread_t thread = thread_id_;
+      cpu_set_t set;
+      pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
+      for (int j = 0; j < cpus; j++)
+          if (CPU_ISSET(j, &set))
+              fprintf(stderr,"[TID] -->  CPU %d\n", j);
+      return !r;
+  }
 
     bool Stop() {
       return !pthread_join(thread_id_, NULL);

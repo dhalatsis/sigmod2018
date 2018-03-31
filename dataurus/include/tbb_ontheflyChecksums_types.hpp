@@ -1,3 +1,4 @@
+
 #pragma once
 #include "tbb/tbb.h"
 #include "tbb/parallel_reduce.h"
@@ -56,6 +57,7 @@ public:
         int idx = 0;
         for (struct checksumST & p: (*distinctPairs)) {
             for (size_t i = range.begin(); i < range.end(); ++i) {
+                //std::cerr << "Index is " << rids[(tups[i].key)*relnum + p.index] << '\n';
                 checksums[idx] += p.values[rids[(tups[i].key)*relnum + p.index]];
             }
             idx++;
