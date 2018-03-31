@@ -853,16 +853,17 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         uint64_t rightMin = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].min;
         uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
 
-        fprintf(stderr, "%6lu %6lu - %6lu %6lu -- %6lu %6lu\n",
-            leftMin, leftMax, rightMin, rightMax, table_l->tups_num, table_r->tups_num);
+        // fprintf(stderr, "%6lu %6lu - %6lu %6lu -- %6lu %6lu\n",
+        //  leftMin, leftMax, rightMin, rightMax, table_l->tups_num, table_r->tups_num);
 
         // Apply a custom filter to create the same range
-        if (leftMin < rightMin) {
+/*
+        if (leftMin < rightMin && table_l->intermediate_res) {
             FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMin-1, FilterInfo::Comparison::Greater);
             joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
             joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
         }
-/*
+
         else if (leftMin > rightMin) {
             FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMin-1, FilterInfo::Comparison::Greater);
             joiner.AddColumnToTableT(customFilter.filterColumn, table_r);

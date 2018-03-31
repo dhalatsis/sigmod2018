@@ -11,6 +11,7 @@ struct allfilters_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     vector<uint64_t*> * columns;
     vector<FilterInfo*> * filterPtrs;
     unsigned * new_array;
@@ -69,6 +70,7 @@ struct inter_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     uint64_t filter;
     uint64_t * values;
     unsigned * new_array;
@@ -82,6 +84,7 @@ struct noninter_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     uint64_t filter;
     uint64_t * values;
     unsigned * new_array;

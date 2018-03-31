@@ -69,7 +69,7 @@ int JobNoConstrSelfJoinChecksum::Run() {
 int JobLessInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] < args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -89,7 +89,7 @@ int JobLessInterFilter::Run() {
 int JobGreaterInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] > args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -108,7 +108,7 @@ int JobGreaterInterFilter::Run() {
 int JobEqualInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] == args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -185,7 +185,7 @@ int JobLessNonInterFindSize::Run() {
 
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] < args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -200,12 +200,13 @@ int JobLessNonInterFilter::Run() {
 int JobGreaterNonInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] > args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
 int JobGreaterNonInterFilter::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
+        //std::cerr << "Index is " << args_.prefix << '\n';
         if (args_.values[i] > args_.filter)
             args_.new_array[args_.prefix++] = i;
     }
@@ -215,7 +216,7 @@ int JobGreaterNonInterFilter::Run() {
 int JobEqualNonInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] == args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 

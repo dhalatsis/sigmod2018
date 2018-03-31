@@ -333,16 +333,17 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
             a[i].columns = & columns;
             a[i].filterPtrs = & filterPtrs;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobAllNonInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        for (size_t i = 1; i < THREAD_NUM; i++) {
+            a[i].prefix = a[i-1].size;
+            //std::cerr << "Prefix is :" << a[i].prefix << '\n';
+            new_tbi += a[i].size;
         }
 
         // malloc new values
@@ -457,21 +458,24 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobEqualInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
         }
@@ -510,21 +514,24 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobEqualNonInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < range; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobEqualNonInterFilter(a[i]));
         }
@@ -590,22 +597,24 @@ void Joiner::SelectGreater(table_t *table, int filter){
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobGreaterInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            //std::cerr << "Prefix is :" << a[i].prefix << '\n';
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobGreaterInterFilter(a[i]));
         }
@@ -630,10 +639,12 @@ void Joiner::SelectGreater(table_t *table, int filter){
         // }
     }
     else {
+
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
+
 
         struct noninter_arg a[range];
         for (size_t i = 0; i < range; i++) {
@@ -642,21 +653,24 @@ void Joiner::SelectGreater(table_t *table, int filter){
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobGreaterNonInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
-        /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
+            flush(cerr);
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < range; i++) {
+        for (size_t i = 0; i < range ; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobGreaterNonInterFilter(a[i]));
         }
@@ -712,21 +726,24 @@ void Joiner::SelectLess(table_t *table, int filter){
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobLessInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobLessInterFilter(a[i]));
         }
@@ -762,21 +779,24 @@ void Joiner::SelectLess(table_t *table, int filter){
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
+            a[i].size = 0;
             job_scheduler1.Schedule(new JobLessNonInterFindSize(a[i]));
         }
         job_scheduler1.Barrier();
 
         /* Calculate the prefix sums */
-        unsigned temp;
-        for (size_t i = 0; i < range; i++) {
-            temp = a[i].prefix;
-            a[i].prefix = new_tbi;
-            new_tbi += temp;
+        new_tbi += a[0].size;
+        unsigned temp = a[0].size;
+        for (size_t i = 1; i < range; i++) {
+            a[i].prefix = temp;
+            temp += a[i].size;
         }
+        new_tbi = temp;
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < range; i++) {
+            if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobLessNonInterFilter(a[i]));
         }

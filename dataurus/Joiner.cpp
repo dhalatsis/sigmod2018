@@ -940,7 +940,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     Selection right(pred_info.right);
 
     /* Debug orest */
-
     if (leafs&1) {
         if (idxcache.find(left) != idxcache.end()) {
             r1 = (relation_t *)malloc(sizeof(relation_t));
