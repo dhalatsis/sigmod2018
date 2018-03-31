@@ -378,7 +378,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
 
-    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
 
     /* Intermediate result */
     if (inter_res) {
@@ -411,7 +411,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         }
 
         // malloc new values
-        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
@@ -515,7 +515,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
@@ -541,11 +541,12 @@ void Joiner::SelectGreater(table_t *table, int filter){
         for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
+            //std::cerr << "Prefix is :" << a[i].prefix << '\n';
             new_tbi += temp;
         }
 
         // malloc new values
-        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobGreaterInterFilter(a[i]));
@@ -636,7 +637,7 @@ void Joiner::SelectLess(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
@@ -666,7 +667,7 @@ void Joiner::SelectLess(table_t *table, int filter){
         }
 
         // malloc new values
-        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
+        new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rel_num);
         for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobLessInterFilter(a[i]));

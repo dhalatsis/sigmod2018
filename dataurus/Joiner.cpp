@@ -1061,6 +1061,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     Selection left(pred_info.left);
     Selection right(pred_info.right);
 
+    /* Debug orest */
 
     if (leafs&1) {
         if (idxcache.find(left) != idxcache.end()) {
@@ -1105,6 +1106,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         idxcache[right] = c.S;
     }
 
+
 #ifdef time
     gettimeofday(&end, NULL);
     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
@@ -1122,18 +1124,23 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         temp = CreateTableT(res, table_r, table_s, cmap);
     }
 
+
 #ifdef time
     gettimeofday(&end, NULL);
     timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
+
     /* Free the tables */
     free(table_r->row_ids);
+    delete table_r->column_j;
     delete table_r;
     free(table_s->row_ids);
+    delete table_s->column_j;
     delete table_s;
     free(res->resultlist);
     free(res);
+
 
     return temp;
 }

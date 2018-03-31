@@ -1,6 +1,7 @@
 #include "filter_job.h"
 
 
+
 // Give a good range depending on threads and size
 int getRange(int threads, unsigned size) {
      // if (size < 10000)
@@ -28,7 +29,10 @@ int JobLessInterFindSize::Run() {
 int JobLessInterFilter::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] < args_.filter) {
-            args_.new_array[args_.prefix++] =  args_.old_rids[i*args_.rel_num + args_.table_index];;
+            for (size_t j = 0; j < args_.rel_num; j++){
+                args_.new_array[args_.prefix*args_.rel_num + j] = args_.old_rids[i*args_.rel_num + j];
+            }
+            args_.prefix++;
         }
     }
 
@@ -44,11 +48,13 @@ int JobGreaterInterFindSize::Run() {
 
 int JobGreaterInterFilter::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
-        if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] > args_.filter) {
-            args_.new_array[args_.prefix++] =  args_.old_rids[i*args_.rel_num + args_.table_index];;
+        if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] > args_.filter){
+            for (size_t j = 0; j < args_.rel_num; j++){
+                args_.new_array[args_.prefix*args_.rel_num + j] = args_.old_rids[i*args_.rel_num + j];
+            }
+            args_.prefix++;
         }
     }
-
 }
 
 // Equal Intermediate Filter functions
@@ -62,7 +68,10 @@ int JobEqualInterFindSize::Run() {
 int JobEqualInterFilter::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] == args_.filter) {
-            args_.new_array[args_.prefix++] =  args_.old_rids[i*args_.rel_num + args_.table_index];;
+            for (size_t j = 0; j < args_.rel_num; j++){
+                args_.new_array[args_.prefix*args_.rel_num + j] = args_.old_rids[i*args_.rel_num + j];
+            }
+            args_.prefix++;
         }
     }
 
@@ -126,6 +135,7 @@ int JobAllNonInterFilter::Run() {
 
 // Less filter Run functions
 int JobLessNonInterFindSize::Run() {
+
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] < args_.filter)
             args_.prefix++;
