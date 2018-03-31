@@ -847,18 +847,22 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
             return NULL;
         }
 
+        // Get the somains of the two columns to be joined
         uint64_t leftMin  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].min;
         uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
         uint64_t rightMin = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].min;
         uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
 
-/*
+        fprintf(stderr, "%6lu %6lu - %6lu %6lu -- %6lu %6lu\n",
+            leftMin, leftMax, rightMin, rightMax, table_l->tups_num, table_r->tups_num);
+
         // Apply a custom filter to create the same range
         if (leftMin < rightMin) {
             FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMin-1, FilterInfo::Comparison::Greater);
             joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
             joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
         }
+/*
         else if (leftMin > rightMin) {
             FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMin-1, FilterInfo::Comparison::Greater);
             joiner.AddColumnToTableT(customFilter.filterColumn, table_r);

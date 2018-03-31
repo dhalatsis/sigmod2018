@@ -1290,7 +1290,7 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        //std::cerr << q_counter  << ":" << line << '\n';
+        std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         q_counter++;
