@@ -226,6 +226,29 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
+
+relation_t * Joiner::CreateRowRelationT(uint64_t * column, unsigned size) {
+
+    /* Create the relation_t */
+    relation_t * new_relation = gen_rel(size);
+
+    // Get the range for the threds chinking
+    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+
+    /* Initialize relation */
+    struct noninterRel_arg a[range];
+    for (size_t i = 0; i < range; i++) {
+        a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+        a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
+        a[i].values = column;
+        a[i].tups = new_relation->tuples;
+        job_scheduler1.Schedule(new JobCreateNonInterRel(a[i]));
+    }
+    job_scheduler1.Barrier();
+
+    return new_relation;
+}
+
 void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str) {
 #ifdef time
     struct timeval start;
