@@ -1132,9 +1132,7 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        #ifdef prints
-        std::cerr << q_counter  << ":" << line << '\n';
-        #endif
+        //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         q_counter++;
@@ -1145,6 +1143,7 @@ int main(int argc, char* argv[]) {
 
         JoinTree* optimalJoinTree;
         optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -1153,8 +1152,8 @@ int main(int argc, char* argv[]) {
         #endif
 
         string result_str;
-        table_t * result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str);
-
+        bool stop = false;
+        table_t* result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str, &stop);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -1172,7 +1171,6 @@ int main(int argc, char* argv[]) {
             unordered_map<string, string> cached_sums;
             vector<SelectInfo> &selections = i.selections;
             for (size_t i = 0; i < selections.size(); i++) {
-
                 // Check if checksum is cached
                 string key = to_string(selections[i].binding) + to_string(selections[i].colId);
                 unordered_map<string, string>::const_iterator got = cached_sums.find(key);
