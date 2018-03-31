@@ -30,6 +30,27 @@ int JobNoConstrSelfJoinFindIdx::Run() {
     }
 }
 
+int JobNoConstrSelfJoinKeepRowIds::Run() {
+    for (ssize_t i = args_.low; i < args_.high; i++) {
+        /* Apply the predicate: In case of success add to new table */
+        if (args_.column_values_l[args_.row_ids_matrix[args_.index_l][i]] == args_.column_values_r[args_.row_ids_matrix[args_.index_r][i]]) {
+            /* Add this row_id to all the relations */
+            for (ssize_t relation = 0; relation < args_.relations_num; relation++) {
+                /* Create checksums */
+                int j = 0;
+                for (SelectInfo sel: args_.selections) {
+                    if(args_.table->relations_bindings[relation] == sel.binding) {
+                        uint64_t * col = args_.joinerPtr->getRelation(sel.relId).columns[sel.colId];
+                        args_.checksums[j] += col[args_.row_ids_matrix[relation][i]];
+                    }
+                    j++;
+                }
+            }
+        }
+    }
+}
+
+
 // Less Intermediate Filter functions
 int JobLessInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {

@@ -217,26 +217,45 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
 
     /* Loop all the row_ids and keep the one's matching the predicate */
     int rows_number = table->relations_row_ids->operator[](0).size();
-    for (ssize_t i = 0; i < rows_number; i++) {
 
-        /* Apply the predicate: In case of success add to new table */
-        if (column_values_l[row_ids_matrix[index_l][i]] == column_values_r[row_ids_matrix[index_r][i]]) {
-
-            /* Add this row_id to all the relations */
-            for (ssize_t relation = 0; relation < relations_num; relation++) {
-
-                /* Create checksums */
-                int j = 0;
-                for (SelectInfo sel: selections) {
-                    if(table->relations_bindings[relation] == sel.binding) {
-                        uint64_t * col = getRelation(sel.relId).columns[sel.colId];
-                        checksums[j] += col[row_ids_matrix[relation][i]];
-                    }
-                    j++;
-                }
-            }
-        }
+    struct no_constr_self_join_keep_rowids a[THREAD_NUM];
+    for (size_t i = 0; i < THREAD_NUM; i++) {
+        a[i].low   = (i < rows_number % THREAD_NUM) ? i * (rows_number / THREAD_NUM) + i : i * (rows_number / THREAD_NUM) + rows_number % THREAD_NUM;
+        a[i].high  = (i < rows_number % THREAD_NUM) ? a[i].low + rows_number / THREAD_NUM + 1 :  a[i].low + rows_number / THREAD_NUM;
+        a[i].column_values_l = column_values_l;
+        a[i].column_values_r = column_values_r;
+        a[i].row_ids_matrix = row_ids_matrix;
+        a[i].index_l = index_l;
+        a[i].index_r = index_r;
+        a[i].relations_num = relations_num;
+        a[i].selections = selections;
+        a[i].table = table;
+        a[i].checksums = checksums;
+        a[i].joinerPtr = this;
+        job_scheduler1.Schedule(new JobNoConstrSelfJoinKeepRowIds(a[i]));
     }
+    job_scheduler1.Barrier();
+
+    // for (ssize_t i = 0; i < rows_number; i++) {
+    //
+    //     /* Apply the predicate: In case of success add to new table */
+    //     if (column_values_l[row_ids_matrix[index_l][i]] == column_values_r[row_ids_matrix[index_r][i]]) {
+    //
+    //         /* Add this row_id to all the relations */
+    //         for (ssize_t relation = 0; relation < relations_num; relation++) {
+    //
+    //             /* Create checksums */
+    //             int j = 0;
+    //             for (SelectInfo sel: selections) {
+    //                 if(table->relations_bindings[relation] == sel.binding) {
+    //                     uint64_t * col = getRelation(sel.relId).columns[sel.colId];
+    //                     checksums[j] += col[row_ids_matrix[relation][i]];
+    //                 }
+    //                 j++;
+    //             }
+    //         }
+    //     }
+    // }
 
     /* Print the checksum */
     string result_str;
