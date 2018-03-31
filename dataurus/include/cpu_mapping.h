@@ -13,9 +13,9 @@
 #include "sys.h"
 
 /*-------------------------------ALWAYS REMEBERRRRRRRRRRRRRRRRRR -------------*/
-#define MY_PC
-// #define SIGMOD_1CPU 1
-// #define SIGMOD_2CPU 1
+//#define MY_PC
+#define SIGMOD_1CPU 1
+//#define SIGMOD_2CPU 1
 
 /**
  * Returns SMT aware logical to physical CPU mapping for a given thread id.
