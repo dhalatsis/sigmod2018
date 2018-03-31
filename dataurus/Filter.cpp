@@ -378,6 +378,8 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
 
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+
     /* Intermediate result */
     if (inter_res) {
 
@@ -386,10 +388,10 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         gettimeofday(&start, NULL);
         #endif
 
-        struct inter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct inter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
@@ -402,7 +404,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -410,7 +412,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
         }
@@ -443,10 +445,10 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         gettimeofday(&start, NULL);
         #endif
 
-        struct noninter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct noninter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
@@ -456,7 +458,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -464,7 +466,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobEqualNonInterFilter(a[i]));
         }
@@ -513,16 +515,17 @@ void Joiner::SelectGreater(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
-        struct inter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct inter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
@@ -535,7 +538,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -543,7 +546,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobGreaterInterFilter(a[i]));
         }
@@ -573,10 +576,10 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        struct noninter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct noninter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
@@ -586,7 +589,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -594,7 +597,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobGreaterNonInterFilter(a[i]));
         }
@@ -633,16 +636,17 @@ void Joiner::SelectLess(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
         gettimeofday(&start, NULL);
         #endif
 
-        struct inter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct inter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].old_rids = old_row_ids;
@@ -655,7 +659,7 @@ void Joiner::SelectLess(table_t *table, int filter){
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -663,7 +667,7 @@ void Joiner::SelectLess(table_t *table, int filter){
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobLessInterFilter(a[i]));
         }
@@ -692,10 +696,10 @@ void Joiner::SelectLess(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-        struct noninter_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct noninter_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].filter = filter;
             a[i].prefix = 0;
@@ -705,7 +709,7 @@ void Joiner::SelectLess(table_t *table, int filter){
 
         /* Calculate the prefix sums */
         unsigned temp;
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             temp = a[i].prefix;
             a[i].prefix = new_tbi;
             new_tbi += temp;
@@ -713,7 +717,7 @@ void Joiner::SelectLess(table_t *table, int filter){
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobLessNonInterFilter(a[i]));
         }

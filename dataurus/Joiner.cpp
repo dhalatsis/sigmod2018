@@ -1225,10 +1225,10 @@ int main(int argc, char* argv[]) {
     task_scheduler_init init(THREAD_NUM);
 
     // Create scheduler NUMA REG 0
-    joiner.job_scheduler1.Init(THREAD_NUM, 0);
+    joiner.job_scheduler1.Init(THREAD_NUM_1CPU, 0);
 
     // Create scheduler NUMA REG 1
-    //joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 0);
+    //joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 1);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;

@@ -3,6 +3,10 @@
 #include "Joiner.hpp"
 #include "job_scheduler.h"
 
+
+
+int getRange(int threads, unsigned size);
+
 // Args for allthefilters function
 struct allfilters_arg {
     unsigned low;

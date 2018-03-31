@@ -69,7 +69,6 @@ class JobScheduler {
     pthread_attr_t attr;
     cpu_set_t set;
     pthread_attr_init(&attr);
-
     if ( (executors_ = new JobExecutor*[num_of_executors_]) == nullptr ) {
       return false;
     }

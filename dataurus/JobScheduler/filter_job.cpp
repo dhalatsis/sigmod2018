@@ -1,5 +1,15 @@
 #include "filter_job.h"
 
+
+// Give a good range depending on threads and size
+int getRange(int threads, unsigned size) {
+     // if (size < 10000)
+     //     return threads/2;
+
+    return threads;
+}
+
+
 // Self Join functions
 int JobSelfJoin::Run() {
     for (size_t relation = args_.low; relation < args_.high; relation++) {
