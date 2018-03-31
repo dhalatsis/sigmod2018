@@ -168,19 +168,40 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
     int column_size_l            = relation_l.size;
     int column_size_r            = relation_r.size;
 
-    /* Fint the indexes of the raltions in the table's */
+    /* Find the indexes of the raltions in the table's */
     int index_l                  = -1;
     int index_r                  = -1;
     int relations_num            = table->relations_bindings.size();
 
-    for (ssize_t index = 0; index < relations_num ; index++) {
-        if (predicate_ptr->left.binding == table->relations_bindings[index]) {
-            index_l = index;
-        }
-        if (predicate_ptr->right.binding == table->relations_bindings[index]){
-            index_r = index;
-        }
+    struct no_constr_self_join_find_idx_arg a[THREAD_NUM];
+    for (size_t i = 0; i < THREAD_NUM; i++) {
+        a[i].low   = (i < relations_num % THREAD_NUM) ? i * (relations_num / THREAD_NUM) + i : i * (relations_num / THREAD_NUM) + relations_num % THREAD_NUM;
+        a[i].high  = (i < relations_num % THREAD_NUM) ? a[i].low + relations_num / THREAD_NUM + 1 :  a[i].low + relations_num / THREAD_NUM;
+        a[i].table = table;
+        a[i].predicate_ptr = predicate_ptr;
+        a[i].index_l = index_l;
+        a[i].index_r = index_r;
+        job_scheduler1.Schedule(new JobNoConstrSelfJoinFindIdx(a[i]));
     }
+    job_scheduler1.Barrier();
+
+    /* Calculate the prefix sums */
+    unsigned temp;
+    for (size_t i = 0; i < THREAD_NUM; i++) {
+        if (a[i].index_l != -1) index_l = a[i].index_l;
+        if (a[i].index_r != -1) index_l = a[i].index_r;
+        if (index_l != -1 && index_r != -1) break;
+    }
+
+    // for (ssize_t index = 0; index < relations_num ; index++) {
+    //     if (predicate_ptr->left.binding == table->relations_bindings[index]) {
+    //         index_l = index;
+    //     }
+    //     if (predicate_ptr->right.binding == table->relations_bindings[index]){
+    //         index_r = index;
+    //     }
+    //     if (index_l != -1 && index_r != -1) break;
+    // }
 
     if (index_l == -1 || index_r == -1) std::cerr << "Error in SelfJoin: No mapping found for predicates" << '\n';
 
