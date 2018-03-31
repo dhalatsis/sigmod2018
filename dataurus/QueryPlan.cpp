@@ -794,7 +794,7 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
 //#define prints
 
 // Execute the plan described by a JoinTree
-table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo) {
+table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str) {
     JoinTreeNode *left  = joinTreeNodePtr->left;
     JoinTreeNode *right = joinTreeNodePtr->right;
     table_t *table_l;
@@ -821,11 +821,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 
     // Go left
-    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo);
+    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo, result_str);
 
     // This is an intermediate node (join)
     if (right != NULL) {
-        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo);
+        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo, result_str);
 
         uint64_t leftMin  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].min;
         uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
@@ -863,11 +863,15 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
         if (joinTreeNodePtr->parent == NULL) {
             // # JIM/GEORGE
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, true, queryInfo.selections, leafs);
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+                             joinTreeNodePtr->usedColumnInfos, true,
+                             queryInfo.selections, leafs, result_str);
         }
         else {
             // # JIM/GEORGE
-            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos, false, queryInfo.selections, leafs);
+            res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+                             joinTreeNodePtr->usedColumnInfos, false,
+                             queryInfo.selections, leafs, result_str);
         }
         return res;
     }

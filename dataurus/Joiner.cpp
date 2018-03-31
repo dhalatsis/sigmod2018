@@ -16,8 +16,6 @@
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
 
-bool DoCheckSums = true;
-
 using namespace tbb;
 using namespace std;
 
@@ -228,7 +226,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
-std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections) {
+void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str) {
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
@@ -283,6 +281,8 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
                 /* Get the touples form the results */
                 tuplebuffer_t * tb = cb->buf;
                 uint32_t numbufs = cb->numbufs;
+
+                fprintf(stderr, "[CS] Thread[%d] -- %d\n",th, cb->numbufs);
 
                 /* Parallelize first buffer */
                 if (!distinctPairs_in_R.empty()) {
@@ -528,8 +528,6 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
 
         /* Construct the checksums in the right way */
         bool found = false;
-        string result_str;
-
         for (size_t i = 0; i < selections.size(); i++) {
 
             // Check if checksum is cached
@@ -562,19 +560,11 @@ std::string Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table
             }
         }
 
-        //std::cerr << "The string " << result_str << '\n';
-        DoCheckSums = false;
-        std::cout << result_str << '\n';
-
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);
         timeCheckSumsOnTheFly += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-
-        //std::cerr << result_str << endl;
-
-        return result_str;
 }
 
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
@@ -1063,25 +1053,22 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int leafs) {
+table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int leafs, string & result_str) {
 
-#ifdef time
+    #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
-#endif
+    #endif
 
     relation_t * r1;
     relation_t * r2;
 
-#ifdef time
+    #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
     timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
-
-#ifdef time
     gettimeofday(&start, NULL);
-#endif
+    #endif
 
     //HERE WE CHECK FOR CACHED PARTITIONS
     Cacheinf c;
@@ -1136,31 +1123,28 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     }
 
 
-#ifdef time
+    #ifdef time
     gettimeofday(&end, NULL);
     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
-
-
-#ifdef time
     gettimeofday(&start, NULL);
-#endif
+    #endif
 
     table_t *temp = NULL;
+    // On root dont create a resilting table just get the checksums
     if (isRoot) {
-        CheckSumOnTheFly(res, table_r, table_s, cmap, selections);
+        CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
     } else {
         temp = CreateTableT(res, table_r, table_s, cmap);
     }
 
 
-#ifdef time
+    #ifdef time
     gettimeofday(&end, NULL);
     timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
+    #endif
 
 
-    /* Free the tables */
+    /* Free the tables and the result of radix */
     free(table_r->row_ids);
     delete table_r->column_j;
     delete table_r;
@@ -1169,7 +1153,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     delete table_s;
     free(res->resultlist);
     free(res);
-
 
     return temp;
 }
@@ -1303,13 +1286,11 @@ int main(int argc, char* argv[]) {
         #ifdef time
         gettimeofday(&end, NULL);
         timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-
-        #ifdef time
         gettimeofday(&start, NULL);
         #endif
 
-        table_t * result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i);
+        string result_str;
+        table_t * result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str);
 
 
         #ifdef time
@@ -1317,11 +1298,11 @@ int main(int argc, char* argv[]) {
         timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
-        #ifdef time
-        gettimeofday(&start, NULL);
-        #endif
+        if (result_str.empty()) {
+            #ifdef time
+            gettimeofday(&start, NULL);
+            #endif
 
-        if (DoCheckSums) {
             //Compute the selection predicates
             string result_str;
             uint64_t checksum = 0;
@@ -1358,10 +1339,9 @@ int main(int argc, char* argv[]) {
             // Print the result
             std::cout << result_str << endl;
             //std::cerr << result_str << endl;
+        } else {
+            std::cout << result_str << endl;
         }
-
-        /* true do check sums */
-        DoCheckSums = true;
     }
 
 #ifdef time

@@ -288,7 +288,7 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
     //     if (i != checksums.size() - 1)
     //         result_str +=  " ";
     // }
-    
+
     cout << result_str << endl;
 
 #ifdef time
@@ -476,7 +476,6 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
-
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);

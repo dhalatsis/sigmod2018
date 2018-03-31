@@ -57,14 +57,14 @@ struct JoinTreeNode {
     // Estimates the info of a node's column
     // after a join predicate is applied to its children
     void estimateInfoAfterJoin(PredicateInfo& predicateInfo);
-    
+
     // Updates the column info map
     ColumnInfo estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo);
     ColumnInfo estimateInfoAfterRightDependentJoin(PredicateInfo& predicateInfo);
     ColumnInfo estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo);
 
     // Execute a Join Tree
-    table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo);
+    table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str);
 
     // Estimates the cost of a given Plan Tree Node
     void cost(PredicateInfo& predicateInfo);
@@ -174,4 +174,3 @@ public:
         }
     }
 };
-

@@ -23,16 +23,16 @@
 #include <thread>
 /*----------------*/
 
-#define time
+//#define time
 //#define prints
-
-#define THREAD_NUM 4
-
-#define THREAD_NUM_1CPU 4
+#define THREAD_NUM 20
+#define THREAD_NUM_1CPU 20
 #define THREAD_NUM_2CPU 0
 
-class JTree;
+using namespace std;
 
+
+class JTree;
 struct ColumnInfo;
 typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
 
@@ -71,7 +71,7 @@ class Joiner {
     table_t*    CreateTableTFromId(unsigned rel_id, unsigned rel_binding);
     relation_t* CreateRelationT(table_t * table, SelectInfo &sel_info);
     table_t*    CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
-    std::string CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections);
+    void        CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections, string &);
     void        AddColumnToTableT(SelectInfo &sel_info, table_t *table);
 
     // The select functions
@@ -83,7 +83,7 @@ class Joiner {
 
     // Joins a given set of relations
     void join(QueryInfo& i);
-    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int );
+    table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int, string &);
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
 
     void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
