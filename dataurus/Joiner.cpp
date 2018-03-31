@@ -282,8 +282,6 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                 tuplebuffer_t * tb = cb->buf;
                 uint32_t numbufs = cb->numbufs;
 
-                fprintf(stderr, "[CS] Thread[%d] -- %d\n",th, cb->numbufs);
-
                 /* Parallelize first buffer */
                 if (!distinctPairs_in_R.empty()) {
                     CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
