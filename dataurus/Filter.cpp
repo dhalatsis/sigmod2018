@@ -259,17 +259,36 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
 
     /* Print the checksum */
     string result_str;
-    for (size_t i = 0; i < checksums.size(); i++) {
 
-        if (checksums[i] != 0)
-            result_str += to_string(checksums[i]);
-        else
-            result_str += "NULL";
-
-        // Create the write check sum
-        if (i != checksums.size() - 1)
-            result_str +=  " ";
+    size_t size = checksums.size();
+    struct no_constr_self_join_checksum a[THREAD_NUM];
+    for (size_t i = 0; i < THREAD_NUM; i++) {
+        a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
+        a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        a[i].checksums = checksums;
+        a[i].local_result_str = "";
+        job_scheduler1.Schedule(new JobNoConstrSelfJoinChecksum(a[i]));
     }
+    job_scheduler1.Barrier();
+
+    /* Calculate the whole checksum string */
+    unsigned temp;
+    for (size_t i = 0; i < THREAD_NUM; i++) {
+        result_str += a[i].local_result_str;
+    }
+
+    // for (size_t i = 0; i < checksums.size(); i++) {
+    //
+    //     if (checksums[i] != 0)
+    //         result_str += to_string(checksums[i]);
+    //     else
+    //         result_str += "NULL";
+    //
+    //     // Create the write check sum
+    //     if (i != checksums.size() - 1)
+    //         result_str +=  " ";
+    // }
+    
     cout << result_str << endl;
 
 #ifdef time

@@ -56,6 +56,14 @@ struct no_constr_self_join_keep_rowids {
     Joiner * joinerPtr;
 };
 
+// Args for No Construct Self Join check sum printing
+struct no_constr_self_join_checksum {
+    unsigned low;
+    unsigned high;
+    vector<uint64_t>  & checksums;
+    string local_result_str;
+};
+
 // Args for intermediate functions
 struct inter_arg {
     unsigned low;
@@ -121,6 +129,19 @@ public:
   {}
 
   ~JobNoConstrSelfJoinKeepRowIds() {};
+
+  int Run();
+};
+
+class JobNoConstrSelfJoinChecksum: public JobJoin {
+public:
+    struct no_constr_self_join_checksum & args_;
+
+  JobNoConstrSelfJoinChecksum(struct no_constr_self_join_checksum & args)
+  :args_(args)
+  {}
+
+  ~JobNoConstrSelfJoinChecksum() {};
 
   int Run();
 };

@@ -51,6 +51,19 @@ int JobNoConstrSelfJoinKeepRowIds::Run() {
     }
 }
 
+int JobNoConstrSelfJoinChecksum::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.checksums[i] != 0)
+            args_.local_result_str += to_string(args_.checksums[i]);
+        else
+            args_.local_result_str += "NULL";
+
+        // Create the write check sum
+        if (i != args_.checksums.size() - 1)
+            args_.local_result_str +=  " ";
+    }
+}
+
 
 // Less Intermediate Filter functions
 int JobLessInterFindSize::Run() {
