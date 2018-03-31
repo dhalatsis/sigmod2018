@@ -31,6 +31,16 @@ struct self_join_arg {
     size_t i;
 };
 
+// Args for No Construct Self Join Find Indexes
+struct no_constr_self_join_find_idx_arg {
+    unsigned low;
+    unsigned high;
+    table_t * table;
+    PredicateInfo * predicate_ptr;
+    int index_l;
+    int index_r;
+};
+
 // Args for intermediate functions
 struct inter_arg {
     unsigned low;
@@ -63,6 +73,19 @@ public:
   {}
 
   ~JobSelfJoin() {};
+
+  int Run();
+};
+
+class JobNoConstrSelfJoinFindIdx: public Job {
+public:
+    struct no_constr_self_join_find_idx_arg & args_;
+
+  JobNoConstrSelfJoinFindIdx(struct no_constr_self_join_find_idx_arg & args)
+  :args_(args)
+  {}
+
+  ~JobNoConstrSelfJoinFindIdx() {};
 
   int Run();
 };

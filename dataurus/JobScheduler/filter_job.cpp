@@ -17,6 +17,19 @@ int JobSelfJoin::Run() {
     }
 }
 
+// No Construct Self Join functions
+int JobNoConstrSelfJoinFindIdx::Run() {
+    for (ssize_t index = args_.low; index < args_.high; index++) {
+        if (args_.predicate_ptr->left.binding == args_.table->relations_bindings[index]) {
+            args_.index_l = index;
+        }
+        if (args_.predicate_ptr->right.binding == args_.table->relations_bindings[index]){
+            args_.index_r = index;
+        }
+        if (args_.index_l != -1 && args_.index_r != -1) break;
+    }
+}
+
 // Less Intermediate Filter functions
 int JobLessInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
