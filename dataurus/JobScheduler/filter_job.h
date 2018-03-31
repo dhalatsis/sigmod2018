@@ -4,7 +4,6 @@
 #include "job_scheduler.h"
 
 
-
 int getRange(int threads, unsigned size);
 
 // Args for allthefilters function
@@ -41,6 +40,30 @@ struct no_constr_self_join_find_idx_arg {
     int index_r;
 };
 
+// Args for No Construct Self Join add row_id to all the relations
+struct no_constr_self_join_keep_rowids {
+    unsigned low;
+    unsigned high;
+    uint64_t * column_values_l;
+    uint64_t * column_values_r;
+    std::vector<std::vector<uint64_t>> & row_ids_matrix;
+    int index_l;
+    int index_r;
+    int relations_num;
+    std::vector<SelectInfo> & selections;
+    table_t * table;
+    vector<uint64_t>  & checksums;
+    Joiner * joinerPtr;
+};
+
+// Args for No Construct Self Join check sum printing
+struct no_constr_self_join_checksum {
+    unsigned low;
+    unsigned high;
+    vector<uint64_t>  & checksums;
+    string local_result_str;
+};
+
 // Args for intermediate functions
 struct inter_arg {
     unsigned low;
@@ -64,7 +87,14 @@ struct noninter_arg {
     unsigned * new_array;
 };
 
-class JobSelfJoin: public Job {
+class JobJoin: public Job {
+public:
+  virtual int Run() = 0;
+  JobJoin() {}
+  ~JobJoin() {};
+};
+
+class JobSelfJoin: public JobJoin {
 public:
     struct self_join_arg & args_;
 
@@ -77,7 +107,7 @@ public:
   int Run();
 };
 
-class JobNoConstrSelfJoinFindIdx: public Job {
+class JobNoConstrSelfJoinFindIdx: public JobJoin {
 public:
     struct no_constr_self_join_find_idx_arg & args_;
 
@@ -86,6 +116,32 @@ public:
   {}
 
   ~JobNoConstrSelfJoinFindIdx() {};
+
+  int Run();
+};
+
+class JobNoConstrSelfJoinKeepRowIds: public JobJoin {
+public:
+    struct no_constr_self_join_keep_rowids & args_;
+
+  JobNoConstrSelfJoinKeepRowIds(struct no_constr_self_join_keep_rowids & args)
+  :args_(args)
+  {}
+
+  ~JobNoConstrSelfJoinKeepRowIds() {};
+
+  int Run();
+};
+
+class JobNoConstrSelfJoinChecksum: public JobJoin {
+public:
+    struct no_constr_self_join_checksum & args_;
+
+  JobNoConstrSelfJoinChecksum(struct no_constr_self_join_checksum & args)
+  :args_(args)
+  {}
+
+  ~JobNoConstrSelfJoinChecksum() {};
 
   int Run();
 };
