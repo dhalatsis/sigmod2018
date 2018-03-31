@@ -12,11 +12,31 @@ int getRange(int threads, unsigned size) {
 
 
 // Self Join functions
-int JobSelfJoin::Run() {
-    for (size_t relation = args_.low; relation < args_.high; relation++) {
-        args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
+int JobSelfJoinFindSize::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]])
+            args_.new_tbi++;
     }
 }
+
+int JobSelfJoin::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        /* Apply the predicate: In case of success add to new table */
+        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]]) {
+            /* Add this row_id to all the relations */
+            for (ssize_t relation = 0; relation < args_.rels_number; relation++) {
+                args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[i*args_.rels_number + relation];
+            }
+            args_.new_tbi++;
+        }
+    }
+}
+
+// int JobSelfJoin::Run() {
+//     for (size_t relation = args_.low; relation < args_.high; relation++) {
+//         args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
+//     }
+// }
 
 // No Construct Self Join functions
 int JobNoConstrSelfJoinFindIdx::Run() {

@@ -44,7 +44,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     new_table->intermediate_res   = true;
     new_table->column_j           = new column_t;
     new_table->rels_num           = table->rels_num;
-    new_table->row_ids  = (unsigned *) malloc(sizeof(unsigned) * table->rels_num * table->tups_num);
+    new_table->row_ids  = /*NULL;*/(unsigned *) malloc(sizeof(unsigned) * table->rels_num * table->tups_num);
 
     /* Get the 2 relation rows ids vectors in referances */
     unsigned * row_ids_matrix       = table->row_ids;
@@ -71,6 +71,38 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     unsigned rows_number = table->tups_num;
     unsigned rels_number = table->rels_num;
     unsigned new_tbi = 0;
+
+    // struct self_join_arg a[THREAD_NUM];
+    // for (size_t i = 0; i < THREAD_NUM; i++) {
+    //     a[i].low   = (i < rows_number % THREAD_NUM) ? i * (rows_number / THREAD_NUM) + i : i * (rows_number / THREAD_NUM) + rows_number % THREAD_NUM;
+    //     a[i].high  = (i < rows_number % THREAD_NUM) ? a[i].low + rows_number / THREAD_NUM + 1 :  a[i].low + rows_number / THREAD_NUM;
+    //     a[i].column_values_l = column_values_l;
+    //     a[i].column_values_r = column_values_r;
+    //     a[i].index_l = index_l;
+    //     a[i].index_r = index_r;
+    //     a[i].row_ids_matrix = row_ids_matrix;
+    //     a[i].new_row_ids_matrix = new_row_ids_matrix;
+    //     a[i].rels_number = rels_number;
+    //     a[i].new_tbi = 0;
+    //     job_scheduler1.Schedule(new JobSelfJoinFindSize(a[i]));
+    // }
+    // job_scheduler1.Barrier();
+    //
+    // /* Calculate the prefix sums */
+    // for (size_t i = 0; i < THREAD_NUM; i++) {
+    //     new_tbi += a[i].new_tbi;
+    // }
+    //
+    // // malloc new values
+    // new_row_ids_matrix = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rels_number);
+    // for (size_t i = 0; i < THREAD_NUM; i++) {
+    //     a[i].new_row_ids_matrix = new_row_ids_matrix;
+    //     a[i].new_tbi = 0;
+    //     job_scheduler1.Schedule(new JobSelfJoin(a[i]));
+    // }
+    // job_scheduler1.Barrier();
+    //
+    // new_table->row_ids = new_row_ids_matrix;
 
     for (unsigned i = 0; i < rows_number; i++) {
         /* Apply the predicate: In case of success add to new table */
