@@ -14,6 +14,7 @@
 #include "prj_params.h"
 //#include "job_scheduler.h"
 #include "create_job.h"
+#include "checksum_job.h"
 
 /* THread pool Includes */
 #include <algorithm>
