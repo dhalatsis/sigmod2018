@@ -12,7 +12,8 @@
 #include "parallel_radix_join.h"
 #include "tuple_buffer.h"
 #include "prj_params.h"
-#include "job_scheduler.h"
+//#include "job_scheduler.h"
+#include "create_job.h"
 
 /* THread pool Includes */
 #include <algorithm>
@@ -25,9 +26,9 @@
 #define time
 //#define prints
 
-#define THREAD_NUM 4
+#define THREAD_NUM 20
 
-#define THREAD_NUM_1CPU 4
+#define THREAD_NUM_1CPU 20
 #define THREAD_NUM_2CPU 0
 
 class JTree;

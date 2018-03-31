@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
+#set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fuse-ld=gold -Ofast -march=native -lpthread  -msse4.2")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread  -ltbb")
@@ -13,7 +13,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread
 
 include_directories(include ~/tbb/tbb2018_20171205oss/include JobScheduler)
 
-set(JS_SOURCE_FILES JobScheduler/filter_job.cpp)
+set(JS_SOURCE_FILES JobScheduler/filter_job.cpp JobScheduler/create_job.cpp)
 
 
 add_library(database QueryPlan.cpp Relation.cpp Filter.cpp sys.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp Parser.cpp Utils.cpp)
