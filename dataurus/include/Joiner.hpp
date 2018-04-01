@@ -24,7 +24,7 @@
 #include <thread>
 /*----------------*/
 
-#define time
+//#define time
 //#define prints
 #define THREAD_NUM      4
 #define THREAD_NUM_1CPU 4

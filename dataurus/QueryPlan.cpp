@@ -39,10 +39,10 @@ void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
 
     // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
-
     newColumnInfo.min      = oldColumnInfo.min;
     newColumnInfo.max      = filterInfo.constant;
     newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
+    if(newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
     newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
@@ -53,12 +53,14 @@ void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
     // Update the info of the other columns
     for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
         if (!(it->first == filterInfo.filterColumn)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newColumnInfo.size;
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double)it->second.n) / ((double) it->second.distinct);
         }
     }
@@ -82,6 +84,7 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
     newColumnInfo.min      = filterInfo.constant;
     newColumnInfo.max      = oldColumnInfo.max;
     newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
+    if(newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
     newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
@@ -95,12 +98,14 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
     // Update the info of the other columns
     for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
         if (!(it->first == filterInfo.filterColumn)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newColumnInfo.size;
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
 
             //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
@@ -140,12 +145,14 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
     // Update the info of the other columns
     for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
         if (!(it->first == filterInfo.filterColumn)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
 
             //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
@@ -250,6 +257,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newLeftColumnInfo.max      = oldLeftColumnInfo.max;
     newLeftColumnInfo.size     = oldLeftColumnInfo.size * (oldRightColumnInfo.size / oldRightColumnInfo.distinct);
     newLeftColumnInfo.distinct = oldLeftColumnInfo.distinct;
+    if(newLeftColumnInfo.distinct == 0) newLeftColumnInfo.distinct = 1;
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
@@ -258,6 +266,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newRightColumnInfo.max      = oldRightColumnInfo.max;
     newRightColumnInfo.size     = oldLeftColumnInfo.size * (oldRightColumnInfo.size / oldRightColumnInfo.distinct);
     newRightColumnInfo.distinct = oldLeftColumnInfo.distinct;
+    if(newRightColumnInfo.distinct == 0) newRightColumnInfo.distinct = 1;
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
@@ -279,12 +288,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     // in the same relation as the left predicate
     for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newLeftColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
 
@@ -297,12 +308,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     // in the same relation as the right predicate
     for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newRightColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
 
@@ -348,6 +361,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     newLeftColumnInfo.max      = oldLeftColumnInfo.max;
     newLeftColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
     newLeftColumnInfo.distinct = oldRightColumnInfo.distinct;
+    if(newLeftColumnInfo.distinct == 0) newLeftColumnInfo.distinct = 1;
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
@@ -356,6 +370,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     newRightColumnInfo.max      = oldRightColumnInfo.max;
     newRightColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
     newRightColumnInfo.distinct = oldRightColumnInfo.distinct;
+    if(newRightColumnInfo.distinct == 0) newRightColumnInfo.distinct = 1;
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
@@ -367,12 +382,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     // in the same relation as the left predicate
     for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newLeftColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
         }
@@ -382,12 +399,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     // in the same relation as the right predicate
     for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newRightColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
         }
@@ -430,6 +449,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     newLeftColumnInfo.max      = oldLeftColumnInfo.max;
     newLeftColumnInfo.size     = (oldLeftColumnInfo.size * oldRightColumnInfo.size);
     newLeftColumnInfo.distinct = oldRightColumnInfo.distinct;
+    if(newLeftColumnInfo.distinct == 0) newLeftColumnInfo.distinct = 1;
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
@@ -438,6 +458,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     newRightColumnInfo.max      = oldRightColumnInfo.max;
     newRightColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
     newRightColumnInfo.distinct = oldRightColumnInfo.distinct;
+    if(newRightColumnInfo.distinct == 0) newRightColumnInfo.distinct = 1;
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
@@ -449,12 +470,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     // in the same relation as the left predicate
     for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newLeftColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
         }
@@ -464,12 +487,14 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     // in the same relation as the right predicate
     for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
+            if(it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newRightColumnInfo.size;
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
+            if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
         }
