@@ -1,7 +1,9 @@
 #include <bitset>
 #include <unordered_set>
 #include <math.h>
+
 #include "QueryPlan.hpp"
+#include "parallel_radix_join.h"
 
 using namespace std;
 

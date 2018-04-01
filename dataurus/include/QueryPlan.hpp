@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 #include <math.h>
+
 #include "Joiner.hpp"
 #include "Parser.hpp"
 
