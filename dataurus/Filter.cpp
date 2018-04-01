@@ -84,6 +84,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     //     a[i].new_row_ids_matrix = new_row_ids_matrix;
     //     a[i].rels_number = rels_number;
     //     a[i].new_tbi = 0;
+    //     a[i].min_new_tbi = -1;
     //     job_scheduler1.Schedule(new JobSelfJoinFindSize(a[i]));
     // }
     // job_scheduler1.Barrier();
@@ -93,16 +94,26 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     //     new_tbi += a[i].new_tbi;
     // }
     //
+    // cerr << "A" << endl;
+    //
     // // malloc new values
     // new_row_ids_matrix = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rels_number);
+    // unsigned tbi_accum = 0;
     // for (size_t i = 0; i < THREAD_NUM; i++) {
     //     a[i].new_row_ids_matrix = new_row_ids_matrix;
+    //     if (i == 0) a[i].min_new_tbi = 0;
+    //     else {
+    //         tbi_accum +=  a[i-1].new_tbi;
+    //         a[i].min_new_tbi = tbi_accum;
+    //     }
     //     a[i].new_tbi = 0;
     //     job_scheduler1.Schedule(new JobSelfJoin(a[i]));
     // }
     // job_scheduler1.Barrier();
     //
     // new_table->row_ids = new_row_ids_matrix;
+
+    // cerr << "B" << endl;
 
     for (unsigned i = 0; i < rows_number; i++) {
         /* Apply the predicate: In case of success add to new table */

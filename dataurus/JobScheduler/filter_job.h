@@ -30,6 +30,7 @@ struct self_join_arg {
     unsigned * new_row_ids_matrix;
     unsigned rels_number;
     unsigned new_tbi;
+    unsigned min_new_tbi;
 };
 
 // struct self_join_arg {
