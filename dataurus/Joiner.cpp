@@ -14,20 +14,14 @@
 #include "generator.h"
 #include "QueryPlan.hpp"
 #include "Joiner.hpp"
-#include "tbb_parallel_types.hpp"
 
-
-using namespace tbb;
 using namespace std;
-
-//#define TIME_DETAILS
-//#include <sstream>
-//string timeDetStr = "";
 
 bool done_testing = false;
 
 /* Timing variables */
 extern double timeSelfJoin;
+extern double timeSCSelfJoin;
 extern double timeSelectFilter;
 extern double timeEqualFilter;
 extern double timeLessFilter;
@@ -187,8 +181,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             job_scheduler1.Schedule(new JobCreateInterRel(a[i]));
         }
         job_scheduler1.Barrier();
-        //RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
-        //parallel_for(blocked_range<size_t>(0,size), rct);
 
         #ifdef time
         struct timeval end;
@@ -214,9 +206,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             job_scheduler1.Schedule(new JobCreateNonInterRel(a[i]));
         }
         job_scheduler1.Barrier();
-
-        // RelationNonIntermediateCT rct( new_relation->tuples, values );
-        // parallel_for(blocked_range<size_t>(0,size), rct);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -286,18 +275,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
 
         }
 
-        // std::cerr << "Pairs in R (" << distinctPairs_in_R.empty() << "):";
-        // for (size_t i = 0; i < distinctPairs_in_R.size(); i++) {
-        //     std::cerr << distinctPairs_in_R[i].colId << "." << distinctPairs_in_R[i].index << ' ';
-        // }
-        // std::cerr << '\n';
-        // std::cerr << "Pairs in S (" << distinctPairs_in_S.empty() << ") :";
-        // for (size_t i = 0; i < distinctPairs_in_S.size(); i++) {
-        //     std::cerr << distinctPairs_in_S[i].colId << "." << distinctPairs_in_S[i].index << ' ';
-        // }
-        // std::cerr << '\n';
-
-        size_t range = THREAD_NUM;  // always eqyal with threads of radix
+        size_t range = THREAD_NUM_1CPU;  // always eqyal with threads of radix
         vector<uint64_t> sum(distinctPairs_in_R.size() + distinctPairs_in_S.size(), 0);
         vector<uint64_t*> sums(range);
         for (size_t i = 0; i < sums.size(); i++) {
@@ -430,423 +408,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
         #endif
 }
 
-//#define tbb
-#ifdef tbb
-table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
-#ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-#endif
-
-    /* Cut the unused relations */
-    unordered_map<unsigned, unsigned>::iterator itr;
-    vector<unsigned> help_v_r;
-    vector<unsigned> help_v_s;
-    vector<unordered_map<unsigned, unsigned>::iterator> victimized_r;
-    vector<unordered_map<unsigned, unsigned>::iterator> victimized_s;
-    bool victimize = true;
-    int  index     = -1;
-    int left_removed = 0, right_removed = 0;
-
-    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
-        victimize = true;
-        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == itr->first) {
-                victimize = false;
-                help_v_r.push_back(itr->second);
-                break;
-            }
-        }
-        if (victimize) {
-            victimized_r.push_back(itr);
-            left_removed++;
-        }
-    }
-
-    // const unsigned size1 = table_r->relations_bindings.size();
-    // ParallelVictimizeT vic1( table_r, cmap );
-    // parallel_reduce(blocked_range<size_t>(0,size1,GRAINSIZE), vic1);
-    // help_v_r.insert( help_v_r.end(), vic1.help_v.begin(), vic1.help_v.end() );
-    // victimized_r.insert( victimized_r.end(), vic1.victimized.begin(), vic1.victimized.end() );
-    // left_removed += vic1.removed;
-
-    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
-        victimize = true;
-        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            if (it->first.binding == itr->first) {
-                victimize = false;
-                help_v_s.push_back(itr->second);
-                break;
-            }
-        }
-        if (victimize) {
-            victimized_s.push_back(itr);
-            right_removed++;
-        }
-    }
-
-    // const unsigned size2 = table_s->relations_bindings.size();
-    // ParallelVictimizeT vic2( table_s, cmap );
-    // parallel_reduce(blocked_range<size_t>(0,size2,GRAINSIZE), vic2);
-    // help_v_s.insert( help_v_s.end(), vic2.help_v.begin(), vic2.help_v.end() );
-    // victimized_s.insert( victimized_s.end(), vic2.victimized.begin(), vic2.victimized.end() );
-    // right_removed += vic2.removed;
-
-    /* Erase Victimized */
-    for (size_t i = 0; i < victimized_r.size(); i++) {
-        table_r->relations_bindings.erase(victimized_r[i]);
-    }
-    for (size_t i = 0; i < victimized_s.size(); i++) {
-        table_s->relations_bindings.erase(victimized_s[i]);
-    }
-
-    /* sort the un-victimized helping arrays */
-    std::sort(help_v_r.begin(), help_v_r.end());
-    std::sort(help_v_s.begin(), help_v_s.end());
-
-    /* The num of relations for the two tables */
-    const unsigned relnum_r = table_r->relations_bindings.size();
-    const unsigned relnum_s = table_s->relations_bindings.size();
-
-    /* Create - Initialize the new table_t */
-    uint32_t num_relations = table_r->relations_bindings.size() + table_s->relations_bindings.size();
-    table_t * new_table = new table_t;
-    new_table->intermediate_res = true;
-    new_table->column_j = new column_t;
-    new_table->tups_num = result->totalresults;
-    new_table->rels_num = num_relations;
-    new_table->row_ids = (unsigned *) malloc(sizeof(unsigned) * num_relations * result->totalresults);
-
-    /* Create the new maping vector */
-    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
-        (itr->second >= left_removed)
-        ? new_table->relations_bindings.insert(make_pair(itr->first, itr->second - left_removed))
-        : new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
-    }
-
-    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
-        (itr->second >= right_removed)
-        ? new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second - right_removed))
-        : new_table->relations_bindings.insert(make_pair(itr->first, relnum_r + itr->second));
-    }
-
-    /* PRINTS
-    std::cerr << endl << "New mapping ";
-    for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
-        std::cerr << itr->first << "." << itr->second << " ";
-    }
-    std::cerr << '\n';
-    /* PRINTS
-    std::cerr << endl << "New mapping ";
-    for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
-        std::cerr << itr->first << "." << itr->second << " ";
-    }
-    std::cerr << '\n';
-    std::cerr << "Helper v R ";
-    for (size_t i = 0; i < help_v_r.size(); i++) {
-        cerr << help_v_r[i] << " ";
-    }
-    std::cerr << endl << "Helper v S ";
-    for (size_t i = 0; i < help_v_s.size(); i++) {
-        cerr << help_v_s[i] << " ";
-    }
-    std::cerr << '\n';
-    */
-
-    /* Get the 3 row_ids matrixes in referances */
-    unsigned * rids_res = new_table->row_ids;
-    unsigned * rids_r   = table_r->row_ids;
-    unsigned * rids_s   = table_s->row_ids;
-
-    /* Get the chained buffer */
-    unordered_map<unsigned, unsigned> & relB_r = table_r->relations_bindings;
-    unordered_map<unsigned, unsigned> & relB_s = table_s->relations_bindings;
-    const unsigned old_relnum_r = table_r->rels_num;
-    const unsigned old_relnum_s = table_s->rels_num;
-
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
-
-
-    uint32_t idx = 0;  // POints to the right index on the res
-    uint32_t tup_i;
-
-    // unsigned * a = new unsigned[1];
-    // for (int th = 0; th < THREAD_NUM; th++) {
-    //     chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-    //
-    //     /* Get the touples form the results */
-    //     tuplebuffer_t * tb = cb->buf;
-    //     uint32_t numbufs = cb->numbufs;
-    //     uint32_t row_i;
-    //
-    //     /* Parallelize first buffer */
-    //     for (size_t i = 0; i < cb->writepos; i++) {
-    //         row_i = tb->tuples[i].key;
-    //         for (size_t j = 0; j < help_v_r.size(); j++) {
-    //             *a = row_i;
-    //         }
-    //
-    //         row_i = tb->tuples[i].payload;
-    //         for (size_t j = 0; j < help_v_s.size(); j++) {
-    //             *a = row_i;
-    //         }
-    //     }
-    //
-    //     /* Run the other buffers */
-    //     tb = tb->next;
-    //     for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-    //         for (size_t i = 0; i < CHAINEDBUFF_NUMTUPLESPERBUF; i++) {
-    //             row_i = tb->tuples[i].key;
-    //             for (size_t j = 0; j < help_v_r.size(); j++) {
-    //                 *a = row_i;
-    //             }
-    //
-    //             row_i = tb->tuples[i].payload;
-    //             for (size_t j = 0; j < help_v_s.size(); j++) {
-    //                 *a = row_i;
-    //             }
-    //         }
-    //         tb = tb->next;
-    //     }
-    // }
-    // #ifdef time
-    //     gettimeofday(&end, NULL);
-    //     timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    // #endif
-
-    /* Depending on tables choose what to pass */
-    if (table_r->intermediate_res && table_s->intermediate_res) {
-
-        for (int th = 0; th < THREAD_NUM; th++) {
-            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-
-            /* Get the touples form the results */
-            tuplebuffer_t * tb = cb->buf;
-            uint32_t numbufs = cb->numbufs;
-            uint32_t row_i;
-
-            #ifdef time
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Parallelize first buffer */
-            TableAllIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Run the other buffers */
-            tb = tb->next;
-            idx += cb->writepos;
-            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-                TableAllIntermediateCT tct
-                (
-                    tb->tuples,
-                    rids_res, rids_r, rids_s,
-                    &help_v_r, &help_v_s,
-                    idx, old_relnum_r, old_relnum_s, num_relations
-                );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
-
-                /* Go the the next buffer */
-                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
-                tb = tb->next;
-            }
-            /* Free cb */
-            chainedtuplebuffer_free(cb);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            #endif
-        }
-    }
-    else if (table_r->intermediate_res) {
-
-        for (int th = 0; th < THREAD_NUM; th++) {
-            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-
-            /* Get the touples form the results */
-            tuplebuffer_t * tb = cb->buf;
-            uint32_t numbufs = cb->numbufs;
-            uint32_t row_i;
-
-            #ifdef time
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Parallelize first buffer */
-            TableRIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Run the other buffers */
-            tb = tb->next;
-            idx += cb->writepos;
-            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-                TableRIntermediateCT tct
-                (
-                    tb->tuples,
-                    rids_res, rids_r, rids_s,
-                    &help_v_r, &help_v_s,
-                    idx, old_relnum_r, old_relnum_s, num_relations
-                );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
-
-                /* Go the the next buffer */
-                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
-                tb = tb->next;
-            }
-            /* Free cb */
-            chainedtuplebuffer_free(cb);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            #endif
-        }
-
-    }
-    else if (table_s->intermediate_res) {
-
-        for (int th = 0; th < THREAD_NUM; th++) {
-            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-
-            /* Get the touples form the results */
-            tuplebuffer_t * tb = cb->buf;
-            uint32_t numbufs = cb->numbufs;
-            uint32_t row_i;
-
-            #ifdef time
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Parallelize first buffer */
-            TableSIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Run the other buffers */
-            tb = tb->next;
-            idx += cb->writepos;
-            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-                TableSIntermediateCT tct
-                (
-                    tb->tuples,
-                    rids_res, rids_r, rids_s,
-                    &help_v_r, &help_v_s,
-                    idx, old_relnum_r, old_relnum_s, num_relations
-                );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
-                /* Go the the next buffer */
-                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
-                tb = tb->next;
-            }
-            /* Free cb */
-            chainedtuplebuffer_free(cb);
-        }
-
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-    }
-    else {
-        for (int th = 0; th < THREAD_NUM; th++) {
-            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-
-            /* Get the touples form the results */
-            tuplebuffer_t * tb = cb->buf;
-            uint32_t numbufs = cb->numbufs;
-            uint32_t row_i;
-
-            #ifdef time
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Parallelize first buffer */
-            TableNoneIntermediateCT tct
-            (
-                tb->tuples,
-                rids_res, rids_r, rids_s,
-                &help_v_r, &help_v_s,
-                idx, old_relnum_r, old_relnum_s, num_relations
-            );
-            parallel_for(blocked_range<size_t>(0,cb->writepos), tct);
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCT1bucket += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            gettimeofday(&start, NULL);
-            #endif
-
-            /* Run the other buffers */
-            tb = tb->next;
-            idx += cb->writepos;
-            for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-                TableNoneIntermediateCT tct
-                (
-                    tb->tuples,
-                    rids_res, rids_r, rids_s,
-                    &help_v_r, &help_v_s,
-                    idx, old_relnum_r, old_relnum_s, num_relations
-                );
-                parallel_for(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), tct);
-                /* Go the the next buffer */
-                idx += CHAINEDBUFF_NUMTUPLESPERBUF;
-                tb = tb->next;
-            }
-            /* Free cb */
-            chainedtuplebuffer_free(cb);
-        }
-
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeCTMoreBuckets += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
-    }
-
-    return new_table;
-}
-
-#else
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
 #ifdef time
@@ -920,26 +482,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         else
             new_table->relations_bindings.insert(make_pair(itr->first, itr->second + rel_num_r - rem));
     }
-
-    // /* PRINTS */
-    // std::cerr << "Table r ";
-    // for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
-    //     std::cerr << itr->first << "." << itr->second << " ";
-    // }
-    // /* PRINTS */
-    // std::cerr << endl << "Table s ";
-    // for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
-    //     std::cerr << itr->first << "." << itr->second << " ";
-    // }
-    // /* PRINTS */
-    // std::cerr << endl << "New mapping ";
-    // for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
-    //     std::cerr << itr->first << "." << itr->second << " ";
-    // }
-    // std::cerr << '\n';
-
-
-    /* PRINTS */
 
     /* Get the 3 row_ids matrixes in referances */
     unsigned * rids_res = new_table->row_ids;
@@ -1086,7 +628,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
 
     return new_table;
 }
-#endif
 
 /* =================================== */
 
@@ -1177,6 +718,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
 
     //HERE WE CHECK FOR CACHED PARTITIONS
     Cacheinf c;
+    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
     Selection left(pred_info.left);
     Selection right(pred_info.right);
@@ -1191,7 +733,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         else {
 
             r1 = CreateRelationT(table_r, pred_info.left);
-            c.R = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
+            c.R = (cached_t *) calloc(threads, sizeof(cached_t));
         }
     } else {
 
@@ -1207,14 +749,14 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         }
         else {
             r2 = CreateRelationT(table_s, pred_info.right);
-            c.S = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));;
+            c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
         }
     } else {
         r2 = CreateRelationT(table_s, pred_info.right);
         c.S = NULL;
     }
 
-    result_t * res  = PRO(r1, r2, THREAD_NUM, c);
+    result_t * res  = PRO(r1, r2, threads, c);
 
     if (leafs&1) {
         free(r1);
@@ -1257,41 +799,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     free(res);
 
     return temp;
-}
-
-//CHECK SUM FUNCTION
-std::string Joiner::check_sum(SelectInfo &sel_info, table_t *table) {
-    AddColumnToTableT(sel_info, table);
-
-    #ifdef prints
-    std::cerr << "IN checksum" << '\n';
-    flush(cerr);
-    #endif
-
-    uint64_t* col = table->column_j->values;
-    int  tbi = table->column_j->table_index;
-    unsigned * row_ids = table->row_ids;
-    unsigned   rels_num = table->rels_num;
-    unsigned   size = table->tups_num;
-    uint64_t sum = 0;
-
-    if (size == 0) {
-        return "NULL";
-    }
-    // else if (size < GRAINSIZE) {
-    //     for (uint64_t i = 0 ; i < size; i++) {
-    //         sum += col[row_ids[i*rels_num + tbi]];
-    //     }
-    //
-    //     return to_string(sum);
-    // }
-    else {
-        /* Create the Sum obj */
-        CheckSumT cs( col, row_ids, rels_num, tbi );
-        parallel_reduce( blocked_range<size_t>(0, size, GRAINSIZE), cs );
-
-        return to_string( cs.my_sum );
-    }
 }
 
 // Loads a relation from disk
@@ -1342,8 +849,6 @@ int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     #endif
 
-    // Create threads
-    task_scheduler_init init(THREAD_NUM);
 
     // Create scheduler NUMA REG 0
     joiner.job_scheduler1.Init(THREAD_NUM_1CPU, 0);
@@ -1394,54 +899,13 @@ int main(int argc, char* argv[]) {
         bool stop = false;
         table_t* result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str, &stop);
 
+        // Print the result
+        std::cout << result_str << endl;
+
         #ifdef time
         gettimeofday(&end, NULL);
         timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-
-        if (result_str.empty()) {
-            #ifdef time
-            gettimeofday(&start, NULL);
-            #endif
-
-            //Compute the selection predicates
-            string result_str;
-            uint64_t checksum = 0;
-            unordered_map<string, string> cached_sums;
-            vector<SelectInfo> &selections = i.selections;
-            for (size_t i = 0; i < selections.size(); i++) {
-                // Check if checksum is cached
-                string key = to_string(selections[i].binding) + to_string(selections[i].colId);
-                unordered_map<string, string>::const_iterator got = cached_sums.find(key);
-                if (got != cached_sums.end()) {
-                    result_str += got->second;
-                } else {
-                    //string str = joiner.check_sum(selections[i], result, pool, futures);
-                    string str = joiner.check_sum(selections[i], result);
-                    cached_sums.insert(make_pair(key, str));
-                    result_str += str;
-                }
-
-                // Create the write check sum
-                if (i != selections.size() - 1) {
-                    result_str +=  " ";
-                }
-            }
-
-            free(result->row_ids);
-            delete result;
-
-            #ifdef time
-            gettimeofday(&end, NULL);
-            timeCheckSum += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-            #endif
-
-            // Print the result
-            std::cout << result_str << endl;
-            //std::cerr << result_str << endl;
-        } else {
-            std::cout << result_str << endl;
-        }
     }
 
 #ifdef time

@@ -2,14 +2,29 @@
 
 #include "job_scheduler.h"
 #include "tuple_buffer.h"
-#include "tbb_ontheflyChecksums_types.hpp"
 #include "types.h"
 
 using namespace std;
 
+struct checksumST {
+    unsigned colId;
+    unsigned index;
+    unsigned binding;
+    uint64_t * values;
+};
 
-
-// Args for Non intermediate functions
+struct selfJoinSum_arg {
+    vector<struct checksumST> * distinctPairs;
+    uint64_t * column_values_l;
+    uint64_t * column_values_r;
+    uint64_t * priv_checsums;
+    unsigned * row_ids_matrix;
+    unsigned low;
+    unsigned high;
+    int relations_num;
+    int index_l;
+    int index_r;
+};
 
 // Args for intermediate functions
 struct interInterSum_arg {
@@ -60,6 +75,19 @@ public:
     virtual int Run()=0;
 };
 
+
+class JobCheckSumSelfJoin : public JobChechkSum {
+public:
+    struct selfJoinSum_arg & args_;
+
+    JobCheckSumSelfJoin(struct selfJoinSum_arg & args)
+    :args_(args)
+    {}
+
+    ~JobCheckSumSelfJoin() {};
+
+    int Run();
+};
 
 class JobCheckSumInterInter : public JobChechkSum {
 public:

@@ -33,18 +33,6 @@ struct self_join_arg {
     unsigned prefix;
 };
 
-// struct self_join_arg {
-//     unsigned low;
-//     unsigned high;
-//     uint64_t * column_values_l;
-//     uint64_t * column_values_r;
-//     unsigned * row_ids_matrix;
-//     unsigned * new_row_ids_matrix;
-//     unsigned rels_number;
-//     unsigned new_tbi;
-//     size_t i;
-// };
-
 // Args for No Construct Self Join Find Indexes
 struct no_constr_self_join_find_idx_arg {
     unsigned low;

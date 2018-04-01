@@ -14,9 +14,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread
 include_directories(include ~/tbb/tbb2018_20171205oss/include JobScheduler)
 
 set(JS_SOURCE_FILES JobScheduler/filter_job.cpp JobScheduler/create_job.cpp JobScheduler/checksum_job.cpp)
+set(RJ_SOURCE_FILES parallel_radix_join.cpp cpu_mapping.cpp generator.cpp)
 
-
-add_library(database QueryPlan.cpp Relation.cpp Filter.cpp sys.cpp treegen.cpp sys.cpp  parallel_radix_join.cpp cpu_mapping.cpp generator.cpp Parser.cpp Utils.cpp)
+add_library(database QueryPlan.cpp Relation.cpp Filter.cpp treegen.cpp  Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -27,8 +27,8 @@ if (CMAKE_BUILD_TYPE MATCHES "[Dd][Ee][Bb][Uu][Gg]" OR FORCE_TESTS)
     add_subdirectory(test)
 endif()
 
-set(SOURCE_FILES QueryPlan.cpp treegen.cpp sys.cpp parallel_radix_join.cpp cpu_mapping.cpp generator.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
-add_executable(Joiner Joiner.cpp ${SOURCE_FILES} ${JS_SOURCE_FILES})
+set(SOURCE_FILES QueryPlan.cpp treegen.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
+add_executable(Joiner Joiner.cpp ${SOURCE_FILES} ${JS_SOURCE_FILES} ${RJ_SOURCE_FILES})
 target_link_libraries(Joiner tbb database)
 
 

@@ -3,32 +3,13 @@
 #include "filter_job.h"
 
 double timeSelfJoin = 0;
+double timeCSSelfJoin = 0;
 double timeSelectFilter = 0;
 double timeIntermediateFilters = 0;
 double timeNonIntermediateFilters = 0;
 double timeEqualFilter = 0;
 double timeLessFilter  = 0;
 double timeGreaterFilter = 0;
-
-// struct self_join_arg {
-//     unsigned low;
-//     unsigned high;
-//     uint64_t * column_values_l;
-//     uint64_t * column_values_r;
-//     unsigned * row_ids_matrix;
-//     unsigned * new_row_ids_matrix;
-//     unsigned rels_number;
-//     unsigned new_tbi;
-//     size_t i;
-// };
-
-// void * parallelSelfJoin(void * args) {
-//     struct self_join_arg * a = (struct self_join_arg *) args;
-//     //if (a->prefix == 0) std::cerr << "HERE" << '\n';
-//     for (size_t relation = a->low; relation < a->high; relation++) {
-//         a->new_row_ids_matrix[a->new_tbi*a->rels_number + relation] = a->row_ids_matrix[a->i*a->rels_number + relation];
-//     }
-// }
 
 /* The self Join Function */
 table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap) {
@@ -44,7 +25,6 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     new_table->intermediate_res   = true;
     new_table->column_j           = new column_t;
     new_table->rels_num           = table->rels_num;
-    new_table->row_ids  = /*NULL;*/(unsigned *) malloc(sizeof(unsigned) * table->rels_num * table->tups_num);
 
     /* Get the 2 relation rows ids vectors in referances */
     unsigned * row_ids_matrix       = table->row_ids;
@@ -65,12 +45,12 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     index_l = table->relations_bindings.find(predicate_ptr->left.binding)->second;
     index_r = table->relations_bindings.find(predicate_ptr->right.binding)->second;
 
-    if (index_l == -1 || index_r == -1) std::cerr << "Error in SelfJoin: No mapping found for predicates" << '\n';
+    //if (index_l == -1 || index_r == -1) std::cerr << "Error in SelfJoin: No mapping found for predicates" << '\n';
 
     /* Loop all the row_ids and keep the one's matching the predicate */
     unsigned rows_number = table->tups_num;
     unsigned rels_number = table->rels_num;
-    unsigned new_tbi = 0;
+    unsigned new_size = 0;
 
     size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
     struct self_join_arg a[range];
@@ -90,17 +70,15 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     }
     job_scheduler1.Barrier();
 
-
-
     /* Calculate the prefix sums */
     unsigned temp = 0;
     for (size_t i = 0; i < range; i++) {
         a[i].prefix += temp;
         temp += a[i].size;
     }
-    new_tbi = temp;
+    new_size = temp;
 
-    unsigned tbi_accum = 0;
+    new_row_ids_matrix = (unsigned *) malloc(sizeof(unsigned) * rels_number * new_size);
     for (size_t i = 0; i < range; i++) {
         if (a[i].size == 0) continue;
         a[i].new_row_ids_matrix = new_row_ids_matrix;
@@ -109,69 +87,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     job_scheduler1.Barrier();
 
     new_table->row_ids = new_row_ids_matrix;
-
-
-    // Serial
-    // new_tbi=0;
-    // for (unsigned i = 0; i < rows_number; i++) {
-    //     /* Apply the predicate: In case of success add to new table */
-    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-    //         /* Add this row_id to all the relations */
-    //         for (ssize_t relation = 0; relation < rels_number; relation++) {
-    //             new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
-    //         }
-    //         new_tbi++;
-    //     }
-    // }
-
-
-    // for (unsigned i = 0; i < rows_number; i++) {
-    //     /* Apply the predicate: In case of success add to new table */
-    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-    //         /* Add this row_id to all the relations */
-    //
-    //         struct self_join_arg a[THREAD_NUM];
-    //         for (size_t j = 0; j < THREAD_NUM; j++) {
-    //             a[j].low   = (j < rels_number % THREAD_NUM) ? j * (rels_number / THREAD_NUM) + j : j * (rels_number / THREAD_NUM) + rels_number % THREAD_NUM;
-    //             a[j].high  = (j < rels_number % THREAD_NUM) ? a[j].low + rels_number / THREAD_NUM + 1 :  a[j].low + rels_number / THREAD_NUM;
-    //             a[j].column_values_l = column_values_l;
-    //             a[j].column_values_r = column_values_r;
-    //             a[j].row_ids_matrix = row_ids_matrix;
-    //             a[j].new_row_ids_matrix = new_row_ids_matrix;
-    //             a[j].rels_number = rels_number;
-    //             a[j].new_tbi = new_tbi;
-    //             a[j].i = i;
-    //             job_scheduler1.Schedule(new JobSelfJoin(a[j]));
-    //         }
-    //         job_scheduler1.Barrier();
-    //
-    //         new_tbi++;
-    //     }
-    // }
-
-    // for (unsigned i = 0; i < rows_number; i++) {
-    //     /* Apply the predicate: In case of success add to new table */
-    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-    //         /* Add this row_id to all the relations */
-    //
-    //         ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, i );
-    //         parallel_reduce(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
-    //
-    //         memcpy(new_row_ids_matrix + new_tbi*rels_number, psjut.new_matrix, rels_number * sizeof(unsigned));
-    //
-    //         new_tbi++;
-    //     }
-    // }
-
-    // ParallelSelfJoinT psjt( row_ids_matrix, new_row_ids_matrix, column_values_l, column_values_r, index_l, index_r, rels_number );
-    // parallel_reduce(blocked_range<size_t>(0,rows_number,GRAINSIZE), psjt);
-    // // new_row_ids_matrix = psjt.new_row_ids_matrix;
-    // new_tbi = psjt.new_tbi;
-
-    // ParallelSelfJoinUtilityT psjut( row_ids_matrix, new_row_ids_matrix, rels_number, new_tbi, 1 );
-    // parallel_for(blocked_range<size_t>(0,rels_number,GRAINSIZE), psjut);
-
-    new_table->tups_num = new_tbi;
+    new_table->tups_num = new_size;
 
     /*Delete old table_t */
     free(table->row_ids);
@@ -183,20 +99,20 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     timeSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
+
     return new_table;
 }
 
 /* The self Join Function */
-void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections, string& result_str) {
+table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str) {
 
-#ifdef hot
 #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
 #endif
 
     /* Get the 2 relation rows ids vectors in referances */
-    matrix &row_ids_matrix       = *(table->relations_row_ids);
+    unsigned * row_ids_matrix       = table->row_ids;
 
     /* Get the 2 relations */
     Relation & relation_l        = getRelation(predicate_ptr->left.relId);
@@ -206,141 +122,97 @@ void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, s
     uint64_t *column_values_l    = relation_l.columns[predicate_ptr->left.colId];
     uint64_t *column_values_r    = relation_r.columns[predicate_ptr->right.colId];
 
-    /* Get their column's sizes */
-    int column_size_l            = relation_l.size;
-    int column_size_r            = relation_r.size;
-
-    /* Find the indexes of the raltions in the table's */
+    /* Fint the indexes of the raltions in the table's */
     int index_l                  = -1;
     int index_r                  = -1;
-    int relations_num            = table->relations_bindings.size();
 
-    struct no_constr_self_join_find_idx_arg a[THREAD_NUM];
-    for (size_t i = 0; i < THREAD_NUM; i++) {
-        a[i].low   = (i < relations_num % THREAD_NUM) ? i * (relations_num / THREAD_NUM) + i : i * (relations_num / THREAD_NUM) + relations_num % THREAD_NUM;
-        a[i].high  = (i < relations_num % THREAD_NUM) ? a[i].low + relations_num / THREAD_NUM + 1 :  a[i].low + relations_num / THREAD_NUM;
-        a[i].table = table;
-        a[i].predicate_ptr = predicate_ptr;
-        a[i].index_l = index_l;
-        a[i].index_r = index_r;
-        job_scheduler1.Schedule(new JobNoConstrSelfJoinFindIdx(a[i]));
+    index_l = table->relations_bindings.find(predicate_ptr->left.binding)->second;
+    index_r = table->relations_bindings.find(predicate_ptr->right.binding)->second;
+
+    //if (index_l == -1 || index_r == -1) std::cerr << "Error in SelfJoin: No mapping found for predicates" << '\n';
+    unsigned rows_number = table->tups_num;
+    unsigned rels_number = table->rels_num;
+
+    /* Crete a vector for the pairs Column, Index in relationR/S */
+    vector<struct checksumST> distinctPairs;
+    struct checksumST st;
+
+    /* take the distinct columns in a vector */
+    unordered_map<unsigned, unsigned>::iterator itr;
+    unsigned index = 0;
+    for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+        index = -1;
+        itr = table->relations_bindings.find(it->first.binding);
+        if (itr != table->relations_bindings.end()) {
+            st.colId = it->first.colId;
+            st.binding = it->first.binding;
+            st.index = itr->second;
+            st.values = getRelation(it->first.relId).columns[st.colId];
+            distinctPairs.push_back(st);
+        }
     }
-    job_scheduler1.Barrier();
 
-    /* Calculate the prefix sums */
-    unsigned temp;
-    for (size_t i = 0; i < THREAD_NUM; i++) {
-        if (a[i].index_l != -1) index_l = a[i].index_l;
-        if (a[i].index_r != -1) index_l = a[i].index_r;
-        if (index_l != -1 && index_r != -1) break;
-    }
-
-    // for (ssize_t index = 0; index < relations_num ; index++) {
-    //     if (predicate_ptr->left.binding == table->relations_bindings[index]) {
-    //         index_l = index;
-    //     }
-    //     if (predicate_ptr->right.binding == table->relations_bindings[index]){
-    //         index_r = index;
-    //     }
-    //     if (index_l != -1 && index_r != -1) break;
-    // }
-
-    if (index_l == -1 || index_r == -1) std::cerr << "Error in SelfJoin: No mapping found for predicates" << '\n';
+    // Range for chunking
+    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
     /* Calculate check sums on the fly , if its the last query */
-    vector<uint64_t>  checksums(selections.size(), 0);
-    //columns.resize(selections->size());
-    //indexing.resize(selections->size());
-    // for (SelectInfo sel: *selections) {
-    //     if(table->relations_bindings[relation] == sel.binding) {
-    //         uint64_t * col = getRelation(sel.relId).columns[sel.colId];
-    //     }
-    // }
+    vector<uint64_t> sum(distinctPairs.size(), 0);
+    vector<uint64_t*> sums(range);
+    for (size_t i = 0; i < sums.size(); i++) {
+        sums[i] = (uint64_t *) calloc (sum.size(), sizeof(uint64_t));
+    }
 
-    /* Loop all the row_ids and keep the one's matching the predicate */
-    int rows_number = table->relations_row_ids->operator[](0).size();
-
-    struct no_constr_self_join_keep_rowids a[THREAD_NUM];
-    for (size_t i = 0; i < THREAD_NUM; i++) {
-        a[i].low   = (i < rows_number % THREAD_NUM) ? i * (rows_number / THREAD_NUM) + i : i * (rows_number / THREAD_NUM) + rows_number % THREAD_NUM;
-        a[i].high  = (i < rows_number % THREAD_NUM) ? a[i].low + rows_number / THREAD_NUM + 1 :  a[i].low + rows_number / THREAD_NUM;
+    struct selfJoinSum_arg a[range];
+    for (size_t i = 0; i < range; i++) {
+        a[i].low   = (i < rows_number % range) ? i * (rows_number / range) + i : i * (rows_number / range) + rows_number % range;
+        a[i].high  = (i < rows_number % range) ? a[i].low + rows_number / range + 1 :  a[i].low + rows_number / range;
         a[i].column_values_l = column_values_l;
         a[i].column_values_r = column_values_r;
         a[i].row_ids_matrix = row_ids_matrix;
         a[i].index_l = index_l;
         a[i].index_r = index_r;
-        a[i].relations_num = relations_num;
-        a[i].selections = selections;
-        a[i].table = table;
-        a[i].checksums = checksums;
-        a[i].joinerPtr = this;
-        job_scheduler1.Schedule(new JobNoConstrSelfJoinKeepRowIds(a[i]));
+        a[i].relations_num = rels_number;
+        a[i].priv_checsums = sums[i];
+        a[i].distinctPairs = &distinctPairs;
+        job_scheduler1.Schedule(new JobCheckSumSelfJoin(a[i]));
     }
     job_scheduler1.Barrier();
 
-    // for (ssize_t i = 0; i < rows_number; i++) {
-    //
-    //     /* Apply the predicate: In case of success add to new table */
-    //     if (column_values_l[row_ids_matrix[index_l][i]] == column_values_r[row_ids_matrix[index_r][i]]) {
-    //
-    //         /* Add this row_id to all the relations */
-    //         for (ssize_t relation = 0; relation < relations_num; relation++) {
-    //
-    //             /* Create checksums */
-    //             int j = 0;
-    //             for (SelectInfo sel: selections) {
-    //                 if(table->relations_bindings[relation] == sel.binding) {
-    //                     uint64_t * col = getRelation(sel.relId).columns[sel.colId];
-    //                     checksums[j] += col[row_ids_matrix[relation][i]];
-    //                 }
-    //                 j++;
-    //             }
-    //         }
-    //     }
-    // }
 
-    /* Print the checksum */
-    string result_str;
-
-    size_t size = checksums.size();
-    struct no_constr_self_join_checksum a[THREAD_NUM];
-    for (size_t i = 0; i < THREAD_NUM; i++) {
-        a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-        a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
-        a[i].checksums = checksums;
-        a[i].local_result_str = "";
-        job_scheduler1.Schedule(new JobNoConstrSelfJoinChecksum(a[i]));
-    }
-    job_scheduler1.Barrier();
-
-    /* Calculate the whole checksum string */
-    unsigned temp;
-    for (size_t i = 0; i < THREAD_NUM; i++) {
-        result_str += a[i].local_result_str;
+    /* Create the checksum */
+    for (size_t j = 0; j < sum.size(); j++) {
+        for (size_t i = 0; i < sums.size(); i++) {
+            sum[j] += sums[i][j];
+        }
     }
 
-    // for (size_t i = 0; i < checksums.size(); i++) {
-    //
-    //     if (checksums[i] != 0)
-    //         result_str += to_string(checksums[i]);
-    //     else
-    //         result_str += "NULL";
-    //
-    //     // Create the write check sum
-    //     if (i != checksums.size() - 1)
-    //         result_str +=  " ";
-    // }
+    /* Construct the checksums in the right way */
+    for (size_t i = 0; i < selections.size(); i++) {
 
-    cout << result_str << endl;
+        // Look up the check sum int the array
+        for (size_t j = 0; j < distinctPairs.size(); j++) {
+            if (selections[i].colId == distinctPairs[j].colId
+                && selections[i].binding == distinctPairs[j].binding)
+            {
+                (sum[j] == 0) ? result_str += "NULL" : result_str += to_string(sum[j]);
+                break;
+            }
+        }
+
+        // Create the write check sum
+        if (i != selections.size() - 1) {
+            result_str +=  " ";
+        }
+    }
 
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeCSSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
-#endif
-    return;
+    return NULL;
+
 }
 
 
@@ -363,15 +235,16 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
 
+    size_t range = THREAD_NUM_1CPU;
     /* Intermediate result */
     if (inter_res) {
 
     }
     else {
-        struct allfilters_arg a[THREAD_NUM];
-        for (size_t i = 0; i < THREAD_NUM; i++) {
-            a[i].low   = (i < size % THREAD_NUM) ? i * (size / THREAD_NUM) + i : i * (size / THREAD_NUM) + size % THREAD_NUM;
-            a[i].high  = (i < size % THREAD_NUM) ? a[i].low + size / THREAD_NUM + 1 :  a[i].low + size / THREAD_NUM;
+        struct allfilters_arg a[range];
+        for (size_t i = 0; i < range; i++) {
+            a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+            a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].columns = & columns;
             a[i].filterPtrs = & filterPtrs;
             a[i].prefix = 0;
@@ -382,7 +255,7 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
-        for (size_t i = 1; i < THREAD_NUM; i++) {
+        for (size_t i = 1; i < range; i++) {
             a[i].prefix = a[i-1].size;
             //std::cerr << "Prefix is :" << a[i].prefix << '\n';
             new_tbi += a[i].size;
@@ -390,37 +263,12 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
 
         // malloc new values
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
-        for (size_t i = 0; i < THREAD_NUM; i++) {
+        for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
             job_scheduler1.Schedule(new JobAllNonInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
     }
-
-
-    /* Loop for the relation size */
-    // unsigned index = 0;
-    // for (unsigned i = 0; i < size; i++) {
-    //
-    //     /* Loop for all the predicates */
-    //     bool pass;
-    //     for (auto filter : filterPtrs) {
-    //         pass = false;
-    //
-    //         /* If it passes all the filter */
-    //         if ((*filter).comparison == FilterInfo::Comparison::Equal)
-    //             pass = (columns[(*filter).filterColumn.colId][i] == (*filter).constant) ? true : false;
-    //         else if ((*filter).comparison == FilterInfo::Comparison::Less)
-    //             pass = (columns[(*filter).filterColumn.colId][i] < (*filter).constant) ? true : false;
-    //         else
-    //             pass = (columns[(*filter).filterColumn.colId][i] > (*filter).constant) ? true : false;
-    //
-    //         if (!pass) break;
-    //     }
-    //
-    //     /* Add it if pass == true */
-    //     if (pass) new_row_ids[index++] = i;
-    // }
 
     /* Swap the old vector with the new one */
     (table->intermediate_res) ? (free(old_row_ids)) : ((void)0);
@@ -474,7 +322,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);
+    unsigned * new_row_ids = NULL;
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
@@ -528,19 +376,6 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
-        // TBB praralle loop
-        // ParallelItermediateEqualFilterT pft( values, old_row_ids, rel_num, table_index, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
-        // new_row_ids = pft.rids;
-        // new_tbi = pft.new_tbi;
-
-        // Serial Loop
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index*rel_num + table_index]] == filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
-        //         new_tbi++;
-        //     }
-        // }
     }
     else {
 
@@ -585,19 +420,6 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
-        // Parallel tbi
-        // ParallelNonItermediateEqualFilterT pft( values, old_row_ids, filter);
-        // parallel_reduce(blocked_range<size_t>(0,size), pft);
-        // new_row_ids = pft.rids;
-        // new_tbi = pft.new_tbi;
-
-        // Serial
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[index] == filter) {
-        //         new_row_ids[new_tbi] = index;
-        //         new_tbi++;
-        //     }
-        // }
     }
 
     /* Swap the old vector with the new one */
@@ -665,20 +487,9 @@ void Joiner::SelectGreater(table_t *table, int filter){
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);
-        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
 
-        // ParallelItermediateGreaterFilterT pft( values, old_row_ids, rel_num, table_index, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size,GRAINSIZE), pft);
-        // new_row_ids = pft.rids;
-        // new_tbi = pft.new_tbi;
-
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index*rel_num + table_index]] > filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
-        //         new_tbi++;
-        //     }
-        // }
     }
     else {
 
@@ -723,12 +534,6 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&end, NULL);
         timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[index] > filter) {
-        //         new_row_ids[new_tbi] = index;
-        //         new_tbi++;
-        //     }
-        // }
     }
 
     /* Swap the old vector with the new one */
@@ -746,7 +551,7 @@ void Joiner::SelectLess(table_t *table, int filter){
     const unsigned size = table->tups_num;
 
     unsigned * old_row_ids = table->row_ids;
-    unsigned * new_row_ids = NULL; //(unsigned *) malloc(sizeof(unsigned) * size);
+    unsigned * new_row_ids = NULL;
 
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
@@ -794,19 +599,8 @@ void Joiner::SelectLess(table_t *table, int filter){
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);
-        timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        timeIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-        // ParallelItermediateLessFilterT pft( values, old_row_ids, rel_num, table_index, filter );
-        // parallel_reduce(blocked_range<size_t>(0,size), pft);
-        // new_row_ids = pft.rids;
-        // new_tbi = pft.new_tbi;
-
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[old_row_ids[index*rel_num + table_index]] < filter) {
-        //         new_row_ids[new_tbi] = old_row_ids[index*rel_num + table_index];
-        //         new_tbi++;
-        //     }
-        // }
     }
     else {
         #ifdef time
@@ -849,12 +643,6 @@ void Joiner::SelectLess(table_t *table, int filter){
         gettimeofday(&end, NULL);
         timeNonIntermediateFilters += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
-        // for (size_t index = 0; index < size; index++) {
-        //     if (values[index] < filter) {
-        //         new_row_ids[new_tbi] = index;
-        //         new_tbi++;
-        //     }
-        // }
     }
 
     /* Swap the old vector with the new one */

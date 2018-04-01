@@ -5,6 +5,32 @@
 /* NON INTERMEDIATE CHECKSUMS FUNCTIONS  */
 /*+++++++++++++++++++++++++++++++++++++++*/
 
+int JobCheckSumSelfJoin::Run() {
+
+    unsigned   relnum = args_.relations_num;
+    unsigned * rids = args_.row_ids_matrix;
+    uint64_t * column_l = args_.column_values_l;
+    uint64_t * column_r = args_.column_values_r;
+    uint64_t * csums   = args_.priv_checsums;
+
+    /* Get the checksums for table R */
+    int index = 0;
+    for (struct checksumST & p: *(args_.distinctPairs)) {
+        unsigned   idx    = p.index;
+        uint64_t * values = p.values;
+
+        /* Loop the 2d array to find checksums */
+        for (size_t i = args_.low; i < args_.high; i++) {
+            if (column_l[rids[i*relnum + args_.index_l]] == column_r[rids[i*relnum + args_.index_r]])
+                csums[index] += values[rids[i*relnum + idx]];
+        }
+        index++;
+    }
+}
+
+
+
+
 int JobCheckSumInterInter::Run () {
     chainedtuplebuffer_t * cb = args_.cb;
 

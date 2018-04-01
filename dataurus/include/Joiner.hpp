@@ -1,33 +1,32 @@
 #pragma once
+#include <unordered_map>
+#include <sys/time.h>
+#include <string.h>
+#include <algorithm>
+#include <array>
+#include <cstdio>
+#include <iostream>
+#include <thread>
 #include <vector>
 #include <cstdint>
 #include <string>
 #include <map>
-#include <unordered_map>
-#include <sys/time.h>
-#include <string.h>
+
 #include "Relation.hpp"
 #include "Parser.hpp"
 #include "table_t.hpp"
 #include "parallel_radix_join.h"
 #include "tuple_buffer.h"
 #include "prj_params.h"
-//#include "job_scheduler.h"
 #include "create_job.h"
 #include "checksum_job.h"
 
 /* THread pool Includes */
-#include <algorithm>
-#include <array>
-#include <cstdio>
-#include <iostream>
-#include <thread>
 /*----------------*/
 
 #define time
 //#define prints
-#define THREAD_NUM      4
-#define THREAD_NUM_1CPU 4
+#define THREAD_NUM_1CPU 20
 #define THREAD_NUM_2CPU 0
 
 using namespace std;
@@ -53,9 +52,6 @@ class Joiner {
     JobScheduler job_scheduler1;
     JobScheduler job_scheduler2;
 
-    /* do the checksum */
-    //std::string check_sum(SelectInfo &sel_info, table_t *table, threadpool11::Pool & p, std::array<std::future<uint64_t>, THREAD_NUM> & f);
-    std::string check_sum(SelectInfo &sel_info, table_t *table);
 
     /* Initialize the row_id Array */
     void RowIdArrayInit(QueryInfo &query_info);
@@ -84,20 +80,18 @@ class Joiner {
     void SelectLess(table_t *table, int filter);
 
     // Joins a given set of relations
-    void join(QueryInfo& i);
     table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int, string &);
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
-
-    void noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections);
+    table_t* SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str);
 
     //caching info
     std::map<Selection, cached_t*> idxcache;
 
-
     Cacheinf newcf() {
         Cacheinf c;
-        c.S = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
-        c.R = (cached_t *) calloc(THREAD_NUM, sizeof(cached_t));
+        size_t   threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+        c.S = (cached_t *) calloc(threads, sizeof(cached_t));
+        c.R = (cached_t *) calloc(threads, sizeof(cached_t));
         return c;
     }
 };

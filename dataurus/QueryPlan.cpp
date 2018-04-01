@@ -2,10 +2,8 @@
 #include <unordered_set>
 #include <math.h>
 #include "QueryPlan.hpp"
-#include "tbb_parallel_types.hpp"
 
 using namespace std;
-using namespace tbb;
 
 //#define prints
 
@@ -927,7 +925,15 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         return res;
     }
     else {
-        return joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        if (joinTreeNodePtr->parent == NULL) {
+            res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
+                                                  ,queryInfo.selections, result_str);
+        }
+        else {
+            res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        }
+        return res;
+
     }
 }
 
@@ -1028,7 +1034,8 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
     }
 
     // Get the statistics of every column
-    StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(THREAD_NUM * sizeof(StatisticsThreadArgs));
+    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+    StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(threads * sizeof(StatisticsThreadArgs));
     int range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
     for (int i = 0; i < range; i++) {
         args[i].low = (i < allColumns % range) ? i * (allColumns / range) + i : i * (allColumns / range) + allColumns % range;
