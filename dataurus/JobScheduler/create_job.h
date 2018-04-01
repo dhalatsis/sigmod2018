@@ -1,4 +1,5 @@
 #include "job_scheduler.h"
+#include "tuple_buffer.h"
 #include "types.h"
 
 
@@ -21,6 +22,58 @@ struct interRel_arg {
     unsigned table_index;
 };
 
+// Args for inter R inter S Table create
+struct interInterTable_arg {
+    tuplebuffer_t * tb;
+    unsigned   start_index;
+    unsigned   rel_num_all;
+    unsigned   rel_num_r;
+    unsigned   rel_num_s;
+    unsigned * rids_res;
+    unsigned * rids_r;
+    unsigned * rids_s;
+    unsigned   index;
+    unsigned   size;
+    char       where;  // 1 is on R 2 is on S (victimized rel)
+};
+
+// Args for inter R non inter S Table create
+struct interNoninterTable_arg {
+    tuplebuffer_t * tb;
+    unsigned   start_index;
+    unsigned   rel_num_all;
+    unsigned   rel_num_r;
+    unsigned * rids_res;
+    unsigned * rids_r;
+    unsigned   index;
+    unsigned   size;
+    char       where;  // 1 is on R 2 is on S (victimized rel)
+};
+
+// Args for inter R non inter S Table create
+struct noninterInterTable_arg {
+    tuplebuffer_t * tb;
+    unsigned   start_index;
+    unsigned   rel_num_all;
+    unsigned   rel_num_s;
+    unsigned * rids_res;
+    unsigned * rids_s;
+    unsigned   index;
+    unsigned   size;
+    char       where;  // 1 is on R 2 is on S (victimized rel)
+};
+
+// Args for inter R non inter S Table create
+struct noninterNoninterTable_arg {
+    tuplebuffer_t * tb;
+    unsigned   start_index;
+    unsigned   rel_num_all;
+    unsigned * rids_res;
+    unsigned   index;
+    unsigned   size;
+    char       where;  // 1 is on R 2 is on S (victimized rel)
+};
+
 class CreateJob : public Job {
 public:
     CreateJob() {}
@@ -30,7 +83,67 @@ public:
     virtual int Run()=0;
 };
 
+// Create Table T R is inter S is inter
+class JobCreateInterInterTable : public CreateJob {
+public:
+    struct interInterTable_arg & args_;
 
+    JobCreateInterInterTable(struct interInterTable_arg & args)
+    :args_(args)
+    {}
+
+    ~JobCreateInterInterTable() {};
+
+    int Run();
+};
+
+// Create Table T R is inter S is non inter
+class JobCreateInterNonInterTable : public CreateJob {
+public:
+    struct interNoninterTable_arg & args_;
+
+    JobCreateInterNonInterTable(struct interNoninterTable_arg & args)
+    :args_(args)
+    {}
+
+    ~JobCreateInterNonInterTable() {};
+
+    int Run();
+};
+
+// Create Table T R is non inter S is inter
+class JobCreateNonInterInterTable : public CreateJob {
+public:
+    struct noninterInterTable_arg & args_;
+
+    JobCreateNonInterInterTable(struct noninterInterTable_arg & args)
+    :args_(args)
+    {}
+
+    ~JobCreateNonInterInterTable() {};
+
+    int Run();
+};
+
+// Create Table T R is non inter S is non inter
+class JobCreateNonInterNonInterTable : public CreateJob {
+public:
+    struct noninterNoninterTable_arg & args_;
+
+    JobCreateNonInterNonInterTable(struct noninterNoninterTable_arg & args)
+    :args_(args)
+    {}
+
+    ~JobCreateNonInterNonInterTable() {};
+
+    int Run();
+};
+
+/*+++++++++++++++++++++++++++*/
+/*  RELATIONS CREATION JOBS  */
+/*+++++++++++++++++++++++++++*/
+
+// Create Non intermediate realtion
 class JobCreateNonInterRel : public CreateJob {
 public:
     struct noninterRel_arg & args_;
@@ -44,6 +157,7 @@ public:
     int Run();
 };
 
+// Create intermediate realtion
 class JobCreateInterRel : public CreateJob {
 public:
     struct interRel_arg & args_;

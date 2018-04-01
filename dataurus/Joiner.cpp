@@ -148,6 +148,7 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     /* Get the relation from joiner */
     Relation &rel = getRelation(sel_info.relId);
     uint64_t * values = rel.columns.at(sel_info.colId);
+    uint64_t s = rel.size;
 
     /* Create the relation_t */
     relation_t * new_relation = gen_rel(table->tups_num);
@@ -186,7 +187,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             job_scheduler1.Schedule(new JobCreateInterRel(a[i]));
         }
         job_scheduler1.Barrier();
-
         //RelationIntermediateCT rct( new_relation->tuples, values, row_ids, rel_num, table_index );
         //parallel_for(blocked_range<size_t>(0,size), rct);
 
@@ -430,6 +430,8 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
         #endif
 }
 
+//#define tbb
+#ifdef tbb
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
 #ifdef time
@@ -535,8 +537,6 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         std::cerr << itr->first << "." << itr->second << " ";
     }
     std::cerr << '\n';
-
-
     /* PRINTS
     std::cerr << endl << "New mapping ";
     for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
@@ -846,6 +846,248 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     return new_table;
 }
 
+#else
+table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
+
+#ifdef time
+    struct timeval start;
+    gettimeofday(&start, NULL);
+#endif
+
+    /* Only one relation can be victimized */
+    unsigned rel_num_r = table_r->relations_bindings.size();
+    unsigned rel_num_s = table_s->relations_bindings.size();
+    unordered_map<unsigned, unsigned>::iterator itr;
+    bool victimize = true;
+    int  index     = -1;
+    char where     =  0;  // 1 is table R and 2 is table S
+    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
+        victimize = true;
+        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+            if (it->first.binding == itr->first) {
+                victimize = false;
+                break;
+            }
+        }
+        if (victimize) {
+            index = itr->second;
+            where = 1;
+        }
+    }
+
+    // If it was not found sarch the other relation
+    if (index != -1)
+        for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
+            victimize = true;
+            for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+                if (it->first.binding == itr->first) {
+                    victimize = false;
+                    break;
+                }
+            }
+            if (victimize) {
+                index = itr->second;
+                where = 2;
+            }
+        }
+
+    /* Create - Initialize the new table_t */
+    unsigned num_relations = (index == -1) ? rel_num_r + rel_num_s : rel_num_r + rel_num_s - 1;
+    table_t * new_table = new table_t;
+    new_table->intermediate_res = true;
+    new_table->column_j = new column_t;
+    new_table->tups_num = result->totalresults;
+    new_table->rels_num = num_relations;
+    new_table->row_ids = (unsigned *) malloc(sizeof(unsigned) * num_relations * result->totalresults);
+
+    /* Create the new maping vector */
+    int rem = 0;
+    for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
+        if (where == 1 && index == itr->second){
+            rem = 1;
+            continue;
+        }else if (where == 1 && index < itr->second)
+            new_table->relations_bindings.insert(make_pair(itr->first, itr->second - 1));
+        else
+            new_table->relations_bindings.insert(make_pair(itr->first, itr->second));
+    }
+
+    for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
+        if (where == 2 && index == itr->second)
+            continue;
+        else if (where == 2 && index < itr->second)
+            new_table->relations_bindings.insert(make_pair(itr->first, itr->second + rel_num_r - 1));
+        else
+            new_table->relations_bindings.insert(make_pair(itr->first, itr->second + rel_num_r - rem));
+    }
+
+    // /* PRINTS */
+    // std::cerr << "Table r ";
+    // for (itr = table_r->relations_bindings.begin(); itr != table_r->relations_bindings.end(); itr++) {
+    //     std::cerr << itr->first << "." << itr->second << " ";
+    // }
+    // /* PRINTS */
+    // std::cerr << endl << "Table s ";
+    // for (itr = table_s->relations_bindings.begin(); itr != table_s->relations_bindings.end(); itr++) {
+    //     std::cerr << itr->first << "." << itr->second << " ";
+    // }
+    // /* PRINTS */
+    // std::cerr << endl << "New mapping ";
+    // for (itr = new_table->relations_bindings.begin(); itr != new_table->relations_bindings.end(); itr++) {
+    //     std::cerr << itr->first << "." << itr->second << " ";
+    // }
+    // std::cerr << '\n';
+
+
+    /* PRINTS */
+
+    /* Get the 3 row_ids matrixes in referances */
+    unsigned * rids_res = new_table->row_ids;
+    unsigned * rids_r   = table_r->row_ids;
+    unsigned * rids_s   = table_s->row_ids;
+
+#ifdef time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
+
+    uint32_t idx = 0;  // POints to the right index on the res
+    uint32_t tup_i;
+    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+
+    /* Find jobs number */
+    int jobs_num = 0;
+    for (size_t th = 0; th < range; th++) {
+        chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+        jobs_num += cb->numbufs;
+    }
+
+    if (table_r->intermediate_res && table_s->intermediate_res) {
+        //struct interInterTable_arg a[jobs_num];
+        unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
+        tuplebuffer_t * tb;
+
+        /* Loop all the buffers */
+        for (int th = 0; th < range ; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+            inner_prefix = 0;
+            tb = cb->buf;
+            for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                struct interInterTable_arg * a =new interInterTable_arg;
+                a->start_index = inner_prefix + prefix;
+                a->rel_num_all = num_relations;
+                a->rel_num_r = rel_num_r;
+                a->rel_num_s = rel_num_s;
+                a->rids_res  = rids_res;
+                a->rids_r = rids_r;
+                a->rids_s = rids_s;
+                a->index  = index;
+                a->where  = where;
+                a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                a->tb = tb;
+                job_scheduler1.Schedule(new JobCreateInterInterTable(*a));
+                inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
+            }
+            buffs_prefix += cb->numbufs;
+            prefix += result->resultlist[th].nresults;
+        }
+        job_scheduler1.Barrier();
+    }
+    else if (table_r->intermediate_res) {
+        //struct interNoninterTable_arg a[jobs_num];
+        unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
+        tuplebuffer_t * tb;
+
+        /* Loop all the buffers */
+        for (int th = 0; th < range ; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+            inner_prefix = 0;
+            tb = cb->buf;
+            for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                struct interNoninterTable_arg * a = new interNoninterTable_arg;
+                a->start_index = inner_prefix + prefix;
+                a->rel_num_all = num_relations;
+                a->rel_num_r = rel_num_r;
+                a->rids_res  = rids_res;
+                a->rids_r = rids_r;
+                a->index  = index;
+                a->where  = where;
+                a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                a->tb = tb;
+                job_scheduler1.Schedule(new JobCreateInterNonInterTable(*a));
+                inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
+            }
+            buffs_prefix += cb->numbufs;
+            prefix += result->resultlist[th].nresults;
+        }
+        job_scheduler1.Barrier();
+    }
+    else if (table_s->intermediate_res) {
+        //struct noninterInterTable_arg a[jobs_num];
+        unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
+        tuplebuffer_t * tb;
+
+        /* Loop all the buffers */
+        for (int th = 0; th < range ; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+            inner_prefix = 0;
+            tb = cb->buf;
+            for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                struct noninterInterTable_arg * a =new noninterInterTable_arg;
+                a->start_index = inner_prefix + prefix;
+                a->rel_num_all = num_relations;
+                a->rel_num_s = rel_num_s;
+                a->rids_res  = rids_res;
+                a->rids_s = rids_s;
+                a->index  = index;
+                a->where  = where;
+                a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                a->tb = tb;
+                job_scheduler1.Schedule(new JobCreateNonInterInterTable(*a));
+                inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
+            }
+            buffs_prefix += cb->numbufs;
+            prefix += result->resultlist[th].nresults;
+        }
+        job_scheduler1.Barrier();
+    }
+    else {
+        //struct noninterNoninterTable_arg a[jobs_num];
+        unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
+        tuplebuffer_t * tb;
+
+        /* Loop all the buffers */
+        for (int th = 0; th < range ; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+            inner_prefix = 0;
+            tb = cb->buf;
+            for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                struct noninterNoninterTable_arg * a =new noninterNoninterTable_arg;
+                a->start_index = inner_prefix + prefix;
+                a->rel_num_all = num_relations;
+                a->rids_res  = rids_res;
+                a->index  = index;
+                a->where  = where;
+                a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                a->tb = tb;
+                job_scheduler1.Schedule(new JobCreateNonInterNonInterTable(*a));
+                inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                tb = tb->next;
+            }
+            buffs_prefix += cb->numbufs;
+            prefix += result->resultlist[th].nresults;
+        }
+        job_scheduler1.Barrier();
+    }
+
+    return new_table;
+}
+#endif
+
 /* =================================== */
 
 /* +---------------------+
@@ -972,7 +1214,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         c.S = NULL;
     }
 
-
     result_t * res  = PRO(r1, r2, THREAD_NUM, c);
 
     if (leafs&1) {
@@ -998,7 +1239,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     } else {
         temp = CreateTableT(res, table_r, table_s, cmap);
     }
-
 
     #ifdef time
     gettimeofday(&end, NULL);
@@ -1131,7 +1371,7 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        std::cerr << q_counter  << ":" << line << '\n';
+        //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         q_counter++;
