@@ -41,11 +41,15 @@ struct cached_t {
 };
 
 struct Cacheinf {
-
 	cached_t *S;
 	cached_t *R;
-
 };
+
+void 
+cache_partition_0(relation_t *r0, int nthreads, struct Cacheinf &cinf);
+
+void 
+cache_partition_01(relation_t *r0, relation_t *r1, int nthreads, struct Cacheinf &cinf);
 
 /**
  * PRO: Parallel Radix Join Optimized.

@@ -126,6 +126,7 @@ class Selection {
     RelationId relId; // Relation id
     unsigned colId; // Column id
 
+    //Selection(const RelationId rel, const unsigned col): relId(rel), colId(col){};
     Selection(const SelectInfo& si) : relId(si.relId), colId(si.colId){};
 };
 

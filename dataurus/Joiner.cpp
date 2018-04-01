@@ -1246,6 +1246,7 @@ void PrintColumn(column_t *column) {
     }
 }
 
+/* --------------------------------MAIN-------------------------------*/
 int main(int argc, char* argv[]) {
     Joiner joiner;
 
@@ -1276,6 +1277,8 @@ int main(int argc, char* argv[]) {
     // Get the needed info of every column
     queryPlan.fillColumnInfo(joiner);
 
+    // We do the Pre_Caching of each ralations collumns 0,1
+    queryPlan.Pre_Caching01(joiner, THREAD_NUM);
 
     #ifdef time
     struct timeval end;

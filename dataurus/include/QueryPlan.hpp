@@ -115,6 +115,9 @@ struct QueryPlan {
 
     // Fills the columnInfo matrix with the data of every column
     void fillColumnInfo(Joiner& joiner);
+
+    //Cache 01 cols for all the rels
+    void Pre_Caching01(Joiner& joiner, int threads);
 };
 
 // Arguments needed for every thread during
