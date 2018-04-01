@@ -30,6 +30,7 @@ int JobSelfJoin::Run() {
             args_.prefix++;
         }
     }
+    // free(&args_);
 }
 
 // int JobSelfJoin::Run() {
@@ -103,6 +104,7 @@ int JobLessInterFilter::Run() {
         }
     }
 
+    // free(&args_);
 }
 
 // Greater Intermediate Filter functions
@@ -122,6 +124,8 @@ int JobGreaterInterFilter::Run() {
             args_.prefix++;
         }
     }
+
+    // free(&args_);
 }
 
 // Equal Intermediate Filter functions
@@ -142,6 +146,7 @@ int JobEqualInterFilter::Run() {
         }
     }
 
+    // free(&args_);
 }
 
 
@@ -197,6 +202,8 @@ int JobAllNonInterFilter::Run() {
         /* Add it if pass == true */
         if (pass) args_.new_array[args_.prefix++] = i;
     }
+
+    // free(&args_);
 }
 
 
@@ -214,6 +221,8 @@ int JobLessNonInterFilter::Run() {
         if (args_.values[i] < args_.filter)
             args_.new_array[args_.prefix++] = i;
     }
+
+    // free(&args_);
 }
 
 // Greater filter Run functions
@@ -230,6 +239,8 @@ int JobGreaterNonInterFilter::Run() {
         if (args_.values[i] > args_.filter)
             args_.new_array[args_.prefix++] = i;
     }
+
+    // free(&args_);
 }
 
 // Equal filter Run functions
@@ -245,4 +256,6 @@ int JobEqualNonInterFilter::Run() {
         if (args_.values[i] == args_.filter)
             args_.new_array[args_.prefix++] = i;
     }
+
+    // free(&args_);
 }

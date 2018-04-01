@@ -26,6 +26,8 @@ int JobCheckSumSelfJoin::Run() {
         }
         index++;
     }
+
+    // free(&args_);
 }
 
 

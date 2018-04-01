@@ -913,29 +913,29 @@ int main(int argc, char* argv[]) {
     }
 
 #ifdef time
-    std::cerr << "timePreparation:     " << (long)(timePreparation * 1000) << endl;
-    std::cerr << "timeTreegen:         " << (long)(timeTreegen * 1000) << endl;
-    std::cerr << "timeSelectFilter:    " << (long)(timeSelectFilter * 1000) << endl;
-    std::cerr << "(a)timeNonIntFilters:" << (long)(timeNonIntermediateFilters * 1000) << endl;
-    std::cerr << "(b)timeIntFilters:   " << (long)(timeIntermediateFilters * 1000) << endl;
-    // std::cerr << "--timeGreaterFilter: " << (long)(timeGreaterFilter * 1000) << endl;
-    // std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
-    // std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
-    std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
-    std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
-    std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
-    std::cerr << "--timeCreateRelI:    " << (long)(timeCreateRelI * 1000) << endl;
-    std::cerr << "--timeCreateRelNonI: " << (long)(timeCreateRelNonI * 1000) << endl;
-    std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
-    std::cerr << "--timeCSsOnTheFly:   " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
-    std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;
-    std::cerr << "--timeCT1bucket:     " << (long)(timeCT1bucket * 1000) << endl;
-    std::cerr << "--timeCTMoreBuckets: " << (long)(timeCTMoreBuckets * 1000) << endl;
-    std::cerr << "timeRadixJoin:       " << (long)(timeRadixJoin * 1000) << endl;
-    std::cerr << "timeCheckSum:        " << (long)(timeCheckSum * 1000) << endl;
-    std::cerr << "timeCleanQuery:      " << (long)(timeCleanQuery * 1000) << endl;
-    std::cerr << "timeExecute:         " << (long)(timeExecute * 1000) << endl;
-    flush(std::cerr);
+    // std::cerr << "timePreparation:     " << (long)(timePreparation * 1000) << endl;
+    // std::cerr << "timeTreegen:         " << (long)(timeTreegen * 1000) << endl;
+    // std::cerr << "timeSelectFilter:    " << (long)(timeSelectFilter * 1000) << endl;
+    // std::cerr << "(a)timeNonIntFilters:" << (long)(timeNonIntermediateFilters * 1000) << endl;
+    // std::cerr << "(b)timeIntFilters:   " << (long)(timeIntermediateFilters * 1000) << endl;
+    // // std::cerr << "--timeGreaterFilter: " << (long)(timeGreaterFilter * 1000) << endl;
+    // // std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
+    // // std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
+    // std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
+    // std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
+    // std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
+    // std::cerr << "--timeCreateRelI:    " << (long)(timeCreateRelI * 1000) << endl;
+    // std::cerr << "--timeCreateRelNonI: " << (long)(timeCreateRelNonI * 1000) << endl;
+    // std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
+    // std::cerr << "--timeCSsOnTheFly:   " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
+    // std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;
+    // std::cerr << "--timeCT1bucket:     " << (long)(timeCT1bucket * 1000) << endl;
+    // std::cerr << "--timeCTMoreBuckets: " << (long)(timeCTMoreBuckets * 1000) << endl;
+    // std::cerr << "timeRadixJoin:       " << (long)(timeRadixJoin * 1000) << endl;
+    // std::cerr << "timeCheckSum:        " << (long)(timeCheckSum * 1000) << endl;
+    // std::cerr << "timeCleanQuery:      " << (long)(timeCleanQuery * 1000) << endl;
+    // std::cerr << "timeExecute:         " << (long)(timeExecute * 1000) << endl;
+    // flush(std::cerr);
 #endif
 
     return 0;

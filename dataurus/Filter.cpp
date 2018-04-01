@@ -54,6 +54,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
 
     size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
     struct self_join_arg a[range];
+    // struct self_join_arg * a = (self_join_arg *) malloc(range * sizeof(self_join_arg));
     for (size_t i = 0; i < range; i++) {
         a[i].low   = (i < rows_number % range) ? i * (rows_number / range) + i : i * (rows_number / range) + rows_number % range;
         a[i].high  = (i < rows_number % range) ? a[i].low + rows_number / range + 1 :  a[i].low + rows_number / range;
@@ -163,6 +164,7 @@ table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predic
     }
 
     struct selfJoinSum_arg a[range];
+    // struct selfJoinSum_arg * a = (selfJoinSum_arg *) malloc(range * sizeof(selfJoinSum_arg));
     for (size_t i = 0; i < range; i++) {
         a[i].low   = (i < rows_number % range) ? i * (rows_number / range) + i : i * (rows_number / range) + rows_number % range;
         a[i].high  = (i < rows_number % range) ? a[i].low + rows_number / range + 1 :  a[i].low + rows_number / range;
@@ -242,6 +244,7 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
     }
     else {
         struct allfilters_arg a[range];
+        // struct allfilters_arg * a = (allfilters_arg *) malloc(range * sizeof(allfilters_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -268,6 +271,8 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
             job_scheduler1.Schedule(new JobAllNonInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
+
+        // free(a);    // TODO reconsider
     }
 
     /* Swap the old vector with the new one */
@@ -339,6 +344,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         #endif
 
         struct inter_arg a[range];
+        // struct inter_arg * a = (inter_arg *) malloc(range * sizeof(inter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -385,6 +391,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         #endif
 
         struct noninter_arg a[range];
+        // struct noninter_arg * a = (noninter_arg *) malloc(range * sizeof(noninter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -413,6 +420,8 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             job_scheduler1.Schedule(new JobEqualNonInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
+
+        // free(a);    // TODO reconsider
 
         #ifdef time
         struct timeval end;
@@ -452,6 +461,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
         #endif
 
         struct inter_arg a[range];
+        // struct inter_arg * a = (inter_arg *) malloc(range * sizeof(inter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -498,8 +508,8 @@ void Joiner::SelectGreater(table_t *table, int filter){
         gettimeofday(&start, NULL);
         #endif
 
-
         struct noninter_arg a[range];
+        // struct noninter_arg * a = (noninter_arg *) malloc(range * sizeof(noninter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -528,6 +538,8 @@ void Joiner::SelectGreater(table_t *table, int filter){
             job_scheduler1.Schedule(new JobGreaterNonInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
+
+        // free(a);    // TODO reconsider
 
         #ifdef time
         struct timeval end;
@@ -564,6 +576,7 @@ void Joiner::SelectLess(table_t *table, int filter){
         #endif
 
         struct inter_arg a[range];
+        // struct inter_arg * a = (inter_arg *) malloc(range * sizeof(inter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -609,6 +622,7 @@ void Joiner::SelectLess(table_t *table, int filter){
         #endif
 
         struct noninter_arg a[range];
+        // struct noninter_arg * a = (noninter_arg *) malloc(range * sizeof(noninter_arg));
         for (size_t i = 0; i < range; i++) {
             a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
@@ -637,6 +651,8 @@ void Joiner::SelectLess(table_t *table, int filter){
             job_scheduler1.Schedule(new JobLessNonInterFilter(a[i]));
         }
         job_scheduler1.Barrier();
+
+        // free(a);    // TODO reconsider
 
         #ifdef time
         struct timeval end;
