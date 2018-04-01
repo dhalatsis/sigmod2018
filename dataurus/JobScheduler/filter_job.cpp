@@ -14,20 +14,20 @@ int getRange(int threads, unsigned size) {
 // Self Join functions
 int JobSelfJoinFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
-        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]])
-            args_.new_tbi++;
+        if (args_.column_values_l[args_.row_ids_matrix[i*(args_.rels_number) + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*(args_.rels_number) + args_.index_r]])
+            args_.size++;
     }
 }
 
 int JobSelfJoin::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         /* Apply the predicate: In case of success add to new table */
-        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]]) {
+        if (args_.column_values_l[args_.row_ids_matrix[i*(args_.rels_number) + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*(args_.rels_number) + args_.index_r]]) {
             /* Add this row_id to all the relations */
-            for (ssize_t relation = 0; relation < args_.rels_number; relation++) {
-                args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[i*args_.rels_number + relation];
+            for (size_t relation = 0; relation < args_.rels_number; relation++) {
+                args_.new_row_ids_matrix[(args_.prefix)*(args_.rels_number) + relation] = args_.row_ids_matrix[i*(args_.rels_number) + relation];
             }
-            args_.new_tbi++;
+            args_.prefix++;
         }
     }
 }

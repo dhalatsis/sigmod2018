@@ -72,48 +72,58 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     unsigned rels_number = table->rels_num;
     unsigned new_tbi = 0;
 
-    // struct self_join_arg a[THREAD_NUM];
-    // for (size_t i = 0; i < THREAD_NUM; i++) {
-    //     a[i].low   = (i < rows_number % THREAD_NUM) ? i * (rows_number / THREAD_NUM) + i : i * (rows_number / THREAD_NUM) + rows_number % THREAD_NUM;
-    //     a[i].high  = (i < rows_number % THREAD_NUM) ? a[i].low + rows_number / THREAD_NUM + 1 :  a[i].low + rows_number / THREAD_NUM;
-    //     a[i].column_values_l = column_values_l;
-    //     a[i].column_values_r = column_values_r;
-    //     a[i].index_l = index_l;
-    //     a[i].index_r = index_r;
-    //     a[i].row_ids_matrix = row_ids_matrix;
-    //     a[i].new_row_ids_matrix = new_row_ids_matrix;
-    //     a[i].rels_number = rels_number;
-    //     a[i].new_tbi = 0;
-    //     job_scheduler1.Schedule(new JobSelfJoinFindSize(a[i]));
-    // }
-    // job_scheduler1.Barrier();
-    //
-    // /* Calculate the prefix sums */
-    // for (size_t i = 0; i < THREAD_NUM; i++) {
-    //     new_tbi += a[i].new_tbi;
-    // }
-    //
-    // // malloc new values
-    // new_row_ids_matrix = (unsigned *) malloc(sizeof(unsigned) * new_tbi * rels_number);
-    // for (size_t i = 0; i < THREAD_NUM; i++) {
-    //     a[i].new_row_ids_matrix = new_row_ids_matrix;
-    //     a[i].new_tbi = 0;
-    //     job_scheduler1.Schedule(new JobSelfJoin(a[i]));
-    // }
-    // job_scheduler1.Barrier();
-    //
-    // new_table->row_ids = new_row_ids_matrix;
-
-    for (unsigned i = 0; i < rows_number; i++) {
-        /* Apply the predicate: In case of success add to new table */
-        if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
-            /* Add this row_id to all the relations */
-            for (ssize_t relation = 0; relation < rels_number; relation++) {
-                new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
-            }
-            new_tbi++;
-        }
+    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+    struct self_join_arg a[range];
+    for (size_t i = 0; i < range; i++) {
+        a[i].low   = (i < rows_number % range) ? i * (rows_number / range) + i : i * (rows_number / range) + rows_number % range;
+        a[i].high  = (i < rows_number % range) ? a[i].low + rows_number / range + 1 :  a[i].low + rows_number / range;
+        a[i].column_values_l = column_values_l;
+        a[i].column_values_r = column_values_r;
+        a[i].index_l = index_l;
+        a[i].index_r = index_r;
+        a[i].row_ids_matrix = row_ids_matrix;
+        a[i].new_row_ids_matrix = new_row_ids_matrix;
+        a[i].rels_number = rels_number;
+        a[i].prefix = 0;
+        a[i].size = 0;
+        job_scheduler1.Schedule(new JobSelfJoinFindSize(a[i]));
     }
+    job_scheduler1.Barrier();
+
+
+
+    /* Calculate the prefix sums */
+    unsigned temp = 0;
+    for (size_t i = 0; i < range; i++) {
+        a[i].prefix += temp;
+        temp += a[i].size;
+    }
+    new_tbi = temp;
+
+    unsigned tbi_accum = 0;
+    for (size_t i = 0; i < range; i++) {
+        if (a[i].size == 0) continue;
+        a[i].new_row_ids_matrix = new_row_ids_matrix;
+        job_scheduler1.Schedule(new JobSelfJoin(a[i]));
+    }
+    job_scheduler1.Barrier();
+
+    new_table->row_ids = new_row_ids_matrix;
+
+
+    // Serial
+    // new_tbi=0;
+    // for (unsigned i = 0; i < rows_number; i++) {
+    //     /* Apply the predicate: In case of success add to new table */
+    //     if (column_values_l[row_ids_matrix[i*rels_number + index_l]] == column_values_r[row_ids_matrix[i*rels_number + index_r]]) {
+    //         /* Add this row_id to all the relations */
+    //         for (ssize_t relation = 0; relation < rels_number; relation++) {
+    //             new_row_ids_matrix[new_tbi*rels_number + relation] = row_ids_matrix[i*rels_number + relation];
+    //         }
+    //         new_tbi++;
+    //     }
+    // }
+
 
     // for (unsigned i = 0; i < rows_number; i++) {
     //     /* Apply the predicate: In case of success add to new table */
@@ -177,7 +187,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
 }
 
 /* The self Join Function */
-void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections) {
+void Joiner::noConstructSelfJoin(table_t *table, PredicateInfo *predicate_ptr, std::vector<SelectInfo> & selections, string& result_str) {
 
 #ifdef hot
 #ifdef time

@@ -29,7 +29,8 @@ struct self_join_arg {
     unsigned * row_ids_matrix;
     unsigned * new_row_ids_matrix;
     unsigned rels_number;
-    unsigned new_tbi;
+    unsigned size;
+    unsigned prefix;
 };
 
 // struct self_join_arg {
