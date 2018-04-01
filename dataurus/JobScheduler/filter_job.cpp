@@ -12,11 +12,31 @@ int getRange(int threads, unsigned size) {
 
 
 // Self Join functions
-int JobSelfJoin::Run() {
-    for (size_t relation = args_.low; relation < args_.high; relation++) {
-        args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
+int JobSelfJoinFindSize::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]])
+            args_.new_tbi++;
     }
 }
+
+int JobSelfJoin::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        /* Apply the predicate: In case of success add to new table */
+        if (args_.column_values_l[args_.row_ids_matrix[i*args_.rels_number + args_.index_l]] == args_.column_values_r[args_.row_ids_matrix[i*args_.rels_number + args_.index_r]]) {
+            /* Add this row_id to all the relations */
+            for (ssize_t relation = 0; relation < args_.rels_number; relation++) {
+                args_.new_row_ids_matrix[(args_.min_new_tbi + args_.new_tbi)*args_.rels_number + relation] = args_.row_ids_matrix[i*args_.rels_number + relation];
+            }
+            args_.new_tbi++;
+        }
+    }
+}
+
+// int JobSelfJoin::Run() {
+//     for (size_t relation = args_.low; relation < args_.high; relation++) {
+//         args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
+//     }
+// }
 
 // No Construct Self Join functions
 int JobNoConstrSelfJoinFindIdx::Run() {
@@ -69,7 +89,7 @@ int JobNoConstrSelfJoinChecksum::Run() {
 int JobLessInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] < args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -89,7 +109,7 @@ int JobLessInterFilter::Run() {
 int JobGreaterInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] > args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -108,7 +128,7 @@ int JobGreaterInterFilter::Run() {
 int JobEqualInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[args_.old_rids[i*args_.rel_num + args_.table_index]] == args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -185,7 +205,7 @@ int JobLessNonInterFindSize::Run() {
 
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] < args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
@@ -200,12 +220,13 @@ int JobLessNonInterFilter::Run() {
 int JobGreaterNonInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] > args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 
 int JobGreaterNonInterFilter::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
+        //std::cerr << "Index is " << args_.prefix << '\n';
         if (args_.values[i] > args_.filter)
             args_.new_array[args_.prefix++] = i;
     }
@@ -215,7 +236,7 @@ int JobGreaterNonInterFilter::Run() {
 int JobEqualNonInterFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] == args_.filter)
-            args_.prefix++;
+            args_.size++;
     }
 }
 

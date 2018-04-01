@@ -64,7 +64,7 @@ struct JoinTreeNode {
     ColumnInfo estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo);
 
     // Execute a Join Tree
-    table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str);
+    table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str, bool* stop);
 
     // Estimates the cost of a given Plan Tree Node
     void cost(PredicateInfo& predicateInfo);

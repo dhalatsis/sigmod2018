@@ -16,6 +16,7 @@
 #include "Joiner.hpp"
 #include "tbb_parallel_types.hpp"
 
+
 using namespace tbb;
 using namespace std;
 
@@ -296,254 +297,95 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
         // }
         // std::cerr << '\n';
 
+        size_t range = THREAD_NUM;  // always eqyal with threads of radix
         vector<uint64_t> sum(distinctPairs_in_R.size() + distinctPairs_in_S.size(), 0);
+        vector<uint64_t*> sums(range);
+        for (size_t i = 0; i < sums.size(); i++) {
+            sums[i] = (uint64_t *) calloc (sum.size(), sizeof(uint64_t));
+        }
+
         if (table_r->intermediate_res && table_s->intermediate_res) {
-            for (int th = 0; th < THREAD_NUM; th++) {
-                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
-                /* Get the touples form the results */
-                tuplebuffer_t * tb = cb->buf;
-                uint32_t numbufs = cb->numbufs;
-
-                /* Parallelize first buffer */
-                if (!distinctPairs_in_R.empty()) {
-                    CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i] += crt.checksums[i];
-                    }
-                }
-
-                if (!distinctPairs_in_S.empty()) {
-                    CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                    }
-                }
-
-                /* Run the other buffers */
-                affinity_partitioner ap;
-                tb = tb->next;
-                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
-                    if (!distinctPairs_in_R.empty()) {
-                        CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i] += crt.checksums[i];
-                        }
-                    }
-
-                    if (!distinctPairs_in_S.empty()) {
-                        CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                        }
-                    }
-
-                    /* Go the the next buffer */
-                    tb = tb->next;
-                }
-                /* Free cb */
-                //chainedtuplebuffer_free(cb);
+            struct interInterSum_arg a[range];
+            for (int th = 0; th < range ; th++) {
+                a[th].priv_checsums = sums[th];
+                a[th].distinctPairs_r = &distinctPairs_in_R;
+                a[th].distinctPairs_s = &distinctPairs_in_S;
+                a[th].rel_num_r = table_r->rels_num;
+                a[th].rel_num_s = table_s->rels_num;
+                a[th].rids_r  = table_r->row_ids;
+                a[th].rids_s  = table_s->row_ids;
+                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                job_scheduler1.Schedule(new JobCheckSumInterInter(a[th]));
             }
+            job_scheduler1.Barrier();
 
-            // ThreadsParallelT tt(result->resultlist, table_r, table_s, &distinctPairs_in_R, &distinctPairs_in_S);
-            // parallel_reduce(blocked_range<size_t>(0, THREAD_NUM), tt);
-            // for (size_t i = 0; i < sum.size(); i++) {
-            //     sum[i] = tt.checksums[i];
-            // }
+            /* Create the checksum */
+            for (size_t j = 0; j < sum.size(); j++) {
+                for (size_t i = 0; i < sums.size(); i++) {
+                    sum[j] += sums[i][j];
+                }
+            }
         }
         else if (table_r->intermediate_res) {
-            // std::cerr << "HERE" << '\n';
-            for (int th = 0; th < THREAD_NUM; th++) {
-                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
-                /* Get the touples form the results */
-                tuplebuffer_t * tb = cb->buf;
-                uint32_t numbufs = cb->numbufs;
+            struct interNoninterSum_arg a[range];
+            for (int th = 0; th < range ; th++) {
+                a[th].priv_checsums = sums[th];
+                a[th].distinctPairs_r = &distinctPairs_in_R;
+                a[th].distinctPairs_s = &distinctPairs_in_S;
+                a[th].rel_num_r = table_r->rels_num;
+                a[th].rids_r  = table_r->row_ids;
+                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                job_scheduler1.Schedule(new JobCheckSumInterNonInter(a[th]));
+            }
+            job_scheduler1.Barrier();
 
-                /* Parallelize first buffer */
-                if (!distinctPairs_in_R.empty()) {
-                    CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i] += crt.checksums[i];
-                    }
+            /* Create the checksum */
+            for (size_t j = 0; j < sum.size(); j++) {
+                for (size_t i = 0; i < sums.size(); i++) {
+                    sum[j] += sums[i][j];
                 }
-
-                if (!distinctPairs_in_S.empty()) {
-                    CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                    }
-                }
-
-                /* Run the other buffers */
-                affinity_partitioner ap;
-                tb = tb->next;
-                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
-                    if (!distinctPairs_in_R.empty()) {
-                        CheckSumIntermediateRT crt(tb->tuples, table_r->row_ids, &distinctPairs_in_R, table_r->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i] += crt.checksums[i];
-                        }
-                    }
-
-                    if (!distinctPairs_in_S.empty()) {
-                        CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                        }
-                    }
-
-                    /* Go the the next buffer */
-                    tb = tb->next;
-                }
-                /* Free cb */
-                //chainedtuplebuffer_free(cb);
             }
         }
         else if (table_s->intermediate_res) {
-            for (int th = 0; th < THREAD_NUM; th++) {
-                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
-                /* Get the touples form the results */
-                tuplebuffer_t * tb = cb->buf;
-                uint32_t numbufs = cb->numbufs;
+            struct noninterInterSum_arg a[range];
+            for (int th = 0; th < range ; th++) {
+                a[th].priv_checsums = sums[th];
+                a[th].distinctPairs_r = &distinctPairs_in_R;
+                a[th].distinctPairs_s = &distinctPairs_in_S;
+                a[th].rel_num_s = table_s->rels_num;
+                a[th].rids_s  = table_s->row_ids;
+                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                job_scheduler1.Schedule(new JobCheckSumNonInterInter(a[th]));
+            }
+            job_scheduler1.Barrier();
 
-                /* Parallelize first buffer */
-                if (!distinctPairs_in_R.empty()) {
-                    CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i] += crt.checksums[i];
-                    }
+            /* Create the checksum */
+            for (size_t j = 0; j < sum.size(); j++) {
+                for (size_t i = 0; i < sums.size(); i++) {
+                    sum[j] += sums[i][j];
                 }
-
-                if (!distinctPairs_in_S.empty()) {
-                    CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                    }
-                }
-
-                /* Run the other buffers */
-                affinity_partitioner ap;
-                tb = tb->next;
-                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
-                    if (!distinctPairs_in_R.empty()) {
-                        CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* keep track of the sum */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i] += crt.checksums[i];
-                        }
-                    }
-
-                    if (!distinctPairs_in_S.empty()) {
-                        CheckSumIntermediateST crt(tb->tuples, table_s->row_ids, &distinctPairs_in_S, table_s->rels_num);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                        }
-                    }
-
-                    /* Go the the next buffer */
-                    tb = tb->next;
-                }
-                /* Free cb */
-                //chainedtuplebuffer_free(cb);
             }
         }
         else {
-            for (int th = 0; th < THREAD_NUM; th++) {
-                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
 
-                /* Get the touples form the results */
-                tuplebuffer_t * tb = cb->buf;
-                uint32_t numbufs = cb->numbufs;
+            struct noninterNoninterSum_arg a[range];
+            for (int th = 0; th < range ; th++) {
+                a[th].priv_checsums = sums[th];
+                a[th].distinctPairs_r = &distinctPairs_in_R;
+                a[th].distinctPairs_s = &distinctPairs_in_S;
+                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                job_scheduler1.Schedule(new JobCheckSumNonInterNonInter(a[th]));
+            }
+            job_scheduler1.Barrier();
 
-                /* Parallelize first buffer */
-                if (!distinctPairs_in_R.empty()) {
-                    CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i] += crt.checksums[i];
-                    }
+            /* Create the checksum */
+            for (size_t j = 0; j < sum.size(); j++) {
+                for (size_t i = 0; i < sums.size(); i++) {
+                    sum[j] += sums[i][j];
                 }
-
-                if (!distinctPairs_in_S.empty()) {
-                    CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                    parallel_reduce(blocked_range<size_t>(0,cb->writepos), crt);
-
-                    /* Keep track of the checsums */
-                    for (size_t i = 0; i < crt.checksums.size(); i++) {
-                        sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                    }
-                }
-
-                /* Run the other buffers */
-                affinity_partitioner ap;
-                tb = tb->next;
-                for (uint32_t buf_i = 0; buf_i < numbufs - 1; buf_i++) {
-
-                    if (!distinctPairs_in_R.empty()) {
-                        CheckSumNonIntermediateRT crt(tb->tuples, &distinctPairs_in_R);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i] += crt.checksums[i];
-                        }
-                    }
-
-                    if (!distinctPairs_in_S.empty()) {
-                        CheckSumNonIntermediateST crt(tb->tuples, &distinctPairs_in_S);
-                        parallel_reduce(blocked_range<size_t>(0,CHAINEDBUFF_NUMTUPLESPERBUF), crt, ap);
-
-                        /* Keep track of the checsums */
-                        for (size_t i = 0; i < crt.checksums.size(); i++) {
-                            sum[i + distinctPairs_in_R.size()] += crt.checksums[i];
-                        }
-                    }
-
-                    /* Go the the next buffer */
-                    tb = tb->next;
-                }
-                /* Free cb */
-                //chainedtuplebuffer_free(cb);
             }
         }
 
@@ -1098,7 +940,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     Selection right(pred_info.right);
 
     /* Debug orest */
-
     if (leafs&1) {
         if (idxcache.find(left) != idxcache.end()) {
             r1 = (relation_t *)malloc(sizeof(relation_t));
@@ -1293,9 +1134,7 @@ int main(int argc, char* argv[]) {
         if (line == "F") continue; // End of a batch
 
         // Parse the query
-        #ifdef prints
-        std::cerr << q_counter  << ":" << line << '\n';
-        #endif
+        // std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
         q_counter++;
@@ -1306,6 +1145,7 @@ int main(int argc, char* argv[]) {
 
         JoinTree* optimalJoinTree;
         optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
+        //optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -1314,8 +1154,8 @@ int main(int argc, char* argv[]) {
         #endif
 
         string result_str;
-        table_t * result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str);
-
+        bool stop = false;
+        table_t* result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str, &stop);
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -1333,7 +1173,6 @@ int main(int argc, char* argv[]) {
             unordered_map<string, string> cached_sums;
             vector<SelectInfo> &selections = i.selections;
             for (size_t i = 0; i < selections.size(); i++) {
-
                 // Check if checksum is cached
                 string key = to_string(selections[i].binding) + to_string(selections[i].colId);
                 unordered_map<string, string>::const_iterator got = cached_sums.find(key);

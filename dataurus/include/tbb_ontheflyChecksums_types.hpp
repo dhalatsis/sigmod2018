@@ -1,4 +1,3 @@
-
 #pragma once
 #include "tbb/tbb.h"
 #include "tbb/parallel_reduce.h"
@@ -19,10 +18,6 @@ using namespace tbb;
 using namespace std;
 
 /* Struct for prarallel check sum */
-
-
-
-
 
 // Struct for Intermediate S table
 struct CheckSumIntermediateRT {

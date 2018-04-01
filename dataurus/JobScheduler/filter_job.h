@@ -11,6 +11,7 @@ struct allfilters_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     vector<uint64_t*> * columns;
     vector<FilterInfo*> * filterPtrs;
     unsigned * new_array;
@@ -23,12 +24,26 @@ struct self_join_arg {
     unsigned high;
     uint64_t * column_values_l;
     uint64_t * column_values_r;
+    int index_l;
+    int index_r;
     unsigned * row_ids_matrix;
     unsigned * new_row_ids_matrix;
     unsigned rels_number;
     unsigned new_tbi;
-    size_t i;
+    unsigned min_new_tbi;
 };
+
+// struct self_join_arg {
+//     unsigned low;
+//     unsigned high;
+//     uint64_t * column_values_l;
+//     uint64_t * column_values_r;
+//     unsigned * row_ids_matrix;
+//     unsigned * new_row_ids_matrix;
+//     unsigned rels_number;
+//     unsigned new_tbi;
+//     size_t i;
+// };
 
 // Args for No Construct Self Join Find Indexes
 struct no_constr_self_join_find_idx_arg {
@@ -69,6 +84,7 @@ struct inter_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     uint64_t filter;
     uint64_t * values;
     unsigned * new_array;
@@ -82,6 +98,7 @@ struct noninter_arg {
     unsigned low;
     unsigned high;
     unsigned prefix;
+    unsigned size;
     uint64_t filter;
     uint64_t * values;
     unsigned * new_array;
@@ -92,6 +109,19 @@ public:
   virtual int Run() = 0;
   JobJoin() {}
   ~JobJoin() {};
+};
+
+class JobSelfJoinFindSize: public JobJoin {
+public:
+    struct self_join_arg & args_;
+
+  JobSelfJoinFindSize(struct self_join_arg & args)
+  :args_(args)
+  {}
+
+  ~JobSelfJoinFindSize() {};
+
+  int Run();
 };
 
 class JobSelfJoin: public JobJoin {
