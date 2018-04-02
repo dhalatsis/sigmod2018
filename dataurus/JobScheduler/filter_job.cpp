@@ -11,6 +11,75 @@ int getRange(int threads, unsigned size) {
 }
 
 
+// ------- BIT MAP FILTERING -----------
+int JobBitMapNonInterLessFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.values[i] < args_.filter) {
+            args_.size++;
+            args_.bitmap[i] = true;
+        }
+    }
+}
+int JobBitMapNonInterGreaterFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.values[i] > args_.filter) {
+            args_.size++;
+            args_.bitmap[i] = true;
+        }
+    }
+}
+int JobBitMapNonInterEqualFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        if (args_.values[i] == args_.filter) {
+            args_.size++;
+            args_.bitmap[i] = true;
+        }
+    }
+}
+// - - - - - Intermediate functions - - - - - -
+int JobBitMapInterLessFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        // check ti bitmap first
+        if (args_.bitmap[i]) {
+            if (args_.values[i] < args_.filter) {
+                args_.size++;
+            }
+            else {
+                args_.bitmap[i] = false;   // change the bitmap
+            }
+        }
+    }
+}
+int JobBitMapInterGreaterFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        // check ti bitmap first
+        if (args_.bitmap[i]) {
+            if (args_.values[i] > args_.filter) {
+                args_.size++;
+            }
+            else {
+                args_.bitmap[i] = false;   // change the bitmap
+            }
+        }
+    }
+}
+int JobBitMapInterEqualFiter::Run() {
+    for (size_t i = args_.low; i < args_.high; i++) {
+        // check ti bitmap first
+        if (args_.bitmap[i]) {
+            if (args_.values[i] == args_.filter) {
+                args_.size++;
+            }
+            else {
+                args_.bitmap[i] = false;   // change the bitmap
+            }
+        }
+    }
+}
+//-----------------------------
+
+
+
 // Self Join functions
 int JobSelfJoinFindSize::Run() {
     for (size_t i = args_.low; i < args_.high; i++) {
@@ -31,58 +100,6 @@ int JobSelfJoin::Run() {
         }
     }
     // free(&args_);
-}
-
-// int JobSelfJoin::Run() {
-//     for (size_t relation = args_.low; relation < args_.high; relation++) {
-//         args_.new_row_ids_matrix[args_.new_tbi*args_.rels_number + relation] = args_.row_ids_matrix[args_.i*args_.rels_number + relation];
-//     }
-// }
-
-// No Construct Self Join functions
-int JobNoConstrSelfJoinFindIdx::Run() {
-    for (ssize_t index = args_.low; index < args_.high; index++) {
-        if (args_.predicate_ptr->left.binding == args_.table->relations_bindings[index]) {
-            args_.index_l = index;
-        }
-        if (args_.predicate_ptr->right.binding == args_.table->relations_bindings[index]){
-            args_.index_r = index;
-        }
-        if (args_.index_l != -1 && args_.index_r != -1) break;
-    }
-}
-
-int JobNoConstrSelfJoinKeepRowIds::Run() {
-    for (ssize_t i = args_.low; i < args_.high; i++) {
-        /* Apply the predicate: In case of success add to new table */
-        if (args_.column_values_l[args_.row_ids_matrix[args_.index_l][i]] == args_.column_values_r[args_.row_ids_matrix[args_.index_r][i]]) {
-            /* Add this row_id to all the relations */
-            for (ssize_t relation = 0; relation < args_.relations_num; relation++) {
-                /* Create checksums */
-                int j = 0;
-                for (SelectInfo sel: args_.selections) {
-                    if(args_.table->relations_bindings[relation] == sel.binding) {
-                        uint64_t * col = args_.joinerPtr->getRelation(sel.relId).columns[sel.colId];
-                        args_.checksums[j] += col[args_.row_ids_matrix[relation][i]];
-                    }
-                    j++;
-                }
-            }
-        }
-    }
-}
-
-int JobNoConstrSelfJoinChecksum::Run() {
-    for (size_t i = args_.low; i < args_.high; i++) {
-        if (args_.checksums[i] != 0)
-            args_.local_result_str += to_string(args_.checksums[i]);
-        else
-            args_.local_result_str += "NULL";
-
-        // Create the write check sum
-        if (i != args_.checksums.size() - 1)
-            args_.local_result_str +=  " ";
-    }
 }
 
 
@@ -209,7 +226,6 @@ int JobAllNonInterFilter::Run() {
 
 // Less filter Run functions
 int JobLessNonInterFindSize::Run() {
-
     for (size_t i = args_.low; i < args_.high; i++) {
         if (args_.values[i] < args_.filter)
             args_.size++;

@@ -1,10 +1,23 @@
 #pragma once
 #include <stdint.h>
+#include <vector>
 #include "Joiner.hpp"
 #include "job_scheduler.h"
 
+using namespace std;
 
 int getRange(int threads, unsigned size);
+
+// Filters arg
+struct filters_arg {
+    unsigned low;
+    unsigned high;
+    unsigned prefix;
+    unsigned size;
+    uint64_t filter;
+    uint64_t * values;
+    bool *   bitmap;
+};
 
 // Args for allthefilters function
 struct allfilters_arg {
@@ -31,40 +44,6 @@ struct self_join_arg {
     unsigned rels_number;
     unsigned size;
     unsigned prefix;
-};
-
-// Args for No Construct Self Join Find Indexes
-struct no_constr_self_join_find_idx_arg {
-    unsigned low;
-    unsigned high;
-    table_t * table;
-    PredicateInfo * predicate_ptr;
-    int index_l;
-    int index_r;
-};
-
-// Args for No Construct Self Join add row_id to all the relations
-struct no_constr_self_join_keep_rowids {
-    unsigned low;
-    unsigned high;
-    uint64_t * column_values_l;
-    uint64_t * column_values_r;
-    std::vector<std::vector<uint64_t>> & row_ids_matrix;
-    int index_l;
-    int index_r;
-    int relations_num;
-    std::vector<SelectInfo> & selections;
-    table_t * table;
-    vector<uint64_t>  & checksums;
-    Joiner * joinerPtr;
-};
-
-// Args for No Construct Self Join check sum printing
-struct no_constr_self_join_checksum {
-    unsigned low;
-    unsigned high;
-    vector<uint64_t>  & checksums;
-    string local_result_str;
 };
 
 // Args for intermediate functions
@@ -125,51 +104,58 @@ public:
   int Run();
 };
 
-class JobNoConstrSelfJoinFindIdx: public JobJoin {
-public:
-    struct no_constr_self_join_find_idx_arg & args_;
-
-  JobNoConstrSelfJoinFindIdx(struct no_constr_self_join_find_idx_arg & args)
-  :args_(args)
-  {}
-
-  ~JobNoConstrSelfJoinFindIdx() {};
-
-  int Run();
-};
-
-class JobNoConstrSelfJoinKeepRowIds: public JobJoin {
-public:
-    struct no_constr_self_join_keep_rowids & args_;
-
-  JobNoConstrSelfJoinKeepRowIds(struct no_constr_self_join_keep_rowids & args)
-  :args_(args)
-  {}
-
-  ~JobNoConstrSelfJoinKeepRowIds() {};
-
-  int Run();
-};
-
-class JobNoConstrSelfJoinChecksum: public JobJoin {
-public:
-    struct no_constr_self_join_checksum & args_;
-
-  JobNoConstrSelfJoinChecksum(struct no_constr_self_join_checksum & args)
-  :args_(args)
-  {}
-
-  ~JobNoConstrSelfJoinChecksum() {};
-
-  int Run();
-};
-
 class JobFilter: public Job {
 public:
   virtual int Run() = 0;
   JobFilter() {}
   ~JobFilter() {};
 };
+
+// Bitmap filtering this will fill the bitmap
+class JobBitMapNonInterLessFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapNonInterLessFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapNonInterLessFiter() {}
+    int Run();
+};
+class JobBitMapNonInterGreaterFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapNonInterGreaterFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapNonInterGreaterFiter() {}
+    int Run();
+};
+class JobBitMapNonInterEqualFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapNonInterEqualFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapNonInterEqualFiter() {}
+    int Run();
+};
+// - - - - - Intermediate functions - - - - - -
+class JobBitMapInterLessFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapInterLessFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapInterLessFiter() {}
+    int Run();
+};
+class JobBitMapInterGreaterFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapInterGreaterFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapInterGreaterFiter() {}
+    int Run();
+};
+class JobBitMapInterEqualFiter : public JobFilter {
+public:
+    struct filters_arg & args_;
+    JobBitMapInterEqualFiter(struct filters_arg & args) :args_(args){}
+    ~JobBitMapInterEqualFiter() {}
+    int Run();
+};
+//------------------------------
 
 
 // ALL filters class

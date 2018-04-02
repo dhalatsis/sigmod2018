@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include "filter_job.h"
 
 
 typedef struct table_t table_t;
@@ -23,6 +24,10 @@ struct table_t {
 
     /* use the binfing to map the relations */
     std::unordered_map<unsigned, unsigned> relations_bindings;
+
+    /* Bool map for the filtering */
+    bool * bitmap;
+    struct filters_arg * args;
 
     /* Intermediate result falg */
     bool intermediate_res;
