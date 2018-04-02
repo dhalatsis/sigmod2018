@@ -1036,7 +1036,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
     }
 
     // Get the statistics of every column
-    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+    size_t threads = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
     StatisticsThreadArgs* args = (StatisticsThreadArgs*) malloc(threads * sizeof(StatisticsThreadArgs));
     int range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
     for (int i = 0; i < range; i++) {
@@ -1046,7 +1046,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         args[i].columnTuples = &columnTuples;
         args[i].columnInfosVector = &columnInfosVector;
         //if (i % 2 == 0)
-        joiner.job_scheduler1.Schedule(new StatisticsJob(&args[i]));
+            joiner.job_scheduler1.Schedule(new StatisticsJob(&args[i]));
         //else
         //    joiner.job_scheduler2.Schedule(new StatisticsJob(&args[i]));
     }

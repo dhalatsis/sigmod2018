@@ -14,6 +14,7 @@
 #define PARALLEL_RADIX_JOIN_H
 
 #include "types.h" /* relation_t */
+#include "job_scheduler.h"
 
 /* not timing */
 #define NO_TIMING
@@ -45,10 +46,10 @@ struct Cacheinf {
 	cached_t *R;
 };
 
-void 
+void
 cache_partition_0(relation_t *r0, int nthreads, struct Cacheinf &cinf);
 
-void 
+void
 cache_partition_01(relation_t *r0, relation_t *r1, int nthreads, struct Cacheinf &cinf);
 
 /**
@@ -67,5 +68,5 @@ cache_partition_01(relation_t *r0, relation_t *r1, int nthreads, struct Cacheinf
  * @return number of result tuples
  */
 result_t *
-PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf&);
+PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
 #endif /* PARALLEL_RADIX_JOIN_H */

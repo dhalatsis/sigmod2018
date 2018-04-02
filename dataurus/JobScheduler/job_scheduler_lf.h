@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include "cpu_mapping.h"
 
 #define DISALLOW_COPY_AND_ASSIGN(TypeName)      \
   TypeName(const TypeName&);                    \

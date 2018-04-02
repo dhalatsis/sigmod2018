@@ -524,7 +524,7 @@ prj_thread(void * param)
             part.relidx       = 0;
 
             parallel_radix_partition(&part);
-            
+
             args->outR->tmp = (void *) args->tmpR;
             args->outR->hist = args->histR;
             args->outR->output = outputR;
@@ -537,7 +537,7 @@ prj_thread(void * param)
             outputR           = args->outR->output;
             args->numR        = args->outR->num_tuples;
             args->totalR      = args->outR->total_tuples;
-            
+
         }
     } else {
             part.rel = args->relR;
@@ -610,7 +610,7 @@ prj_thread(void * param)
             if(ntupR > 0 && ntupS > 0) {
                 /* Determine the NUMA node of each partition: */
                 void * ptr = (void*)&((args->tmpR + outputR[i])[0]);
-                
+
                 /* TODO:when we do the 2cpu NUMA change it */
                 //int pq_idx = get_numa_node_of_address(ptr);
                 int pq_idx = 0;
@@ -727,6 +727,21 @@ prj_thread(void * param)
 
 // # JIM/GEORGE
 
+
+// # TEO / ORESTIS
+class RadixJob : public Job {
+public:
+    void * arg_;
+    RadixJob(void * arg) :arg_(arg) {}
+
+    ~RadixJob() {}
+    int Run() {
+        // Run the thread function
+        prj_thread(arg_);
+    }
+};
+
+
 /**
  * The template function for different joins: Basically each parallel radix join
  * has a initialization step, partitioning step and build-probe steps. All our
@@ -737,7 +752,7 @@ prj_thread(void * param)
  * - PRO,  Parallel Radix Join Optimized --> bucket_chaining_join()
  */
 result_t *
-join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads, struct Cacheinf& cinf)
+join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads, struct Cacheinf& cinf, JobScheduler& js)
 {
     int i, rv;
     pthread_t tid[nthreads];
@@ -816,9 +831,9 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
 
         DEBUGMSG(1, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
         //fprintf(stderr, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-        CPU_ZERO(&set);
-        CPU_SET(cpu_idx, &set);
-        pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);  //TODO CHANGE
+        // CPU_ZERO(&set);
+        // CPU_SET(cpu_idx, &set);
+        // pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);  //TODO CHANGE
 
         args[i].relR = relR->tuples + i * numperthr[0];
         args[i].tmpR = tmpRelR;
@@ -855,16 +870,21 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
         else
             args[i].outS = &(cinf.S[i]);
 
-        rv = pthread_create(&tid[i], &attr, prj_thread, (void*)&args[i]);
-        if (rv){
-            fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
-            exit(-1);
-        }
+        // # TEO/ORESTIS
+        js.Schedule(new RadixJob((void*)&args[i]));
+        // rv = pthread_create(&tid[i], &attr, prj_thread, (void*)&args[i]);
+        // if (rv){
+        //     fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
+        //     exit(-1);
+        // }
     }
+
+    // # TEO/ORESTIS
+    js.Barrier();
 
     /* wait for threads to finish */
     for(i = 0; i < nthreads; i++){
-        pthread_join(tid[i], NULL);
+        //pthread_join(tid[i], NULL);
         result += args[i].result;
     }
     joinresult->totalresults = result;
@@ -883,7 +903,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
 
     free(histR);
     free(histS);
-    
+
 
     for(i = 0; i < numnuma; i++){
         task_queue_free(part_queue[i]);
@@ -905,9 +925,9 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
 // # JIM/GEORGE
 /** \copydoc PRO */
 result_t *
-PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf &cinf)
+PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf &cinf, JobScheduler& js)
 {
-    return join_init_run(relR, relS, bucket_chaining_join, nthreads, cinf);
+    return join_init_run(relR, relS, bucket_chaining_join, nthreads, cinf, js);
 }
 /** @} */
 
@@ -961,7 +981,7 @@ prj_thread_partition_0(void * param)
             part.relidx       = 0;
 
             parallel_radix_partition(&part);
-            
+
             args->outR->tmp = (void *) args->tmpR;
             args->outR->hist = args->histR;
             args->outR->output = outputR;
@@ -974,7 +994,7 @@ prj_thread_partition_0(void * param)
             outputR           = args->outR->output;
             args->numR        = args->outR->num_tuples;
             args->totalR      = args->outR->total_tuples;
-            
+
         }
     } else {
         part.rel = args->relR;
@@ -1020,7 +1040,7 @@ void cache_partition_0(relation_t *relR, int nthreads, struct Cacheinf &cinf) {
 
     /* first assign chunks of relR & relS for each thread */
     numperthr[0] = relR->num_tuples / nthreads;
-    
+
      for(i = 0; i < nthreads; i++){
         int cpu_idx = get_cpu_id(i);
 
@@ -1033,7 +1053,7 @@ void cache_partition_0(relation_t *relR, int nthreads, struct Cacheinf &cinf) {
 
         args[i].relR = relR->tuples + i * numperthr[0];
         args[i].tmpR = tmpRelR;
-        
+
         args[i].histR = histR;
 
         args[i].numR = (i == (nthreads-1)) ?
@@ -1070,7 +1090,7 @@ void cache_partition_0(relation_t *relR, int nthreads, struct Cacheinf &cinf) {
             free(histR[i]);
         }
     free(histR);
-    
+
     if (cinf.R == NULL)
         free(tmpRelR);
 }
@@ -1127,7 +1147,7 @@ prj_thread_partition_01(void * param)
             part.relidx       = 0;
 
             parallel_radix_partition(&part);
-            
+
             args->outR->tmp = (void *) args->tmpR;
             args->outR->hist = args->histR;
             args->outR->output = outputR;
@@ -1140,7 +1160,7 @@ prj_thread_partition_01(void * param)
             outputR           = args->outR->output;
             args->numR        = args->outR->num_tuples;
             args->totalR      = args->outR->total_tuples;
-            
+
         }
     } else {
             part.rel = args->relR;
@@ -1297,7 +1317,7 @@ void cache_partition_01(relation_t *relR, relation_t *relS, int nthreads, struct
 
     free(histR);
     free(histS);
-    
+
 // # JIM/GEORGE
     if (cinf.R == NULL)
         free(tmpRelR);

@@ -30,40 +30,44 @@ struct selfJoinSum_arg {
 struct interInterSum_arg {
     vector<struct checksumST> * distinctPairs_r;
     vector<struct checksumST> * distinctPairs_s;
-    chainedtuplebuffer_t * cb;
+    tuplebuffer_t * tb;
     uint64_t * priv_checsums;
     unsigned   rel_num_r;
     unsigned   rel_num_s;
     unsigned * rids_r;
     unsigned * rids_s;
+    unsigned   size;
 };
 
 // R inter S non Inter
 struct interNoninterSum_arg {
     vector<struct checksumST> * distinctPairs_r;
     vector<struct checksumST> * distinctPairs_s;
-    chainedtuplebuffer_t * cb;
+    tuplebuffer_t * tb;
     uint64_t * priv_checsums;
     unsigned   rel_num_r;
     unsigned * rids_r;
+    unsigned   size;
 };
 
 // R non inter S inter
 struct noninterInterSum_arg {
     vector<struct checksumST> * distinctPairs_r;
     vector<struct checksumST> * distinctPairs_s;
-    chainedtuplebuffer_t * cb;
+    tuplebuffer_t * tb;
     uint64_t * priv_checsums;
     unsigned   rel_num_s;
     unsigned * rids_s;
+    unsigned   size;
 };
 
 // R non inter S inter
 struct noninterNoninterSum_arg {
     vector<struct checksumST> * distinctPairs_r;
     vector<struct checksumST> * distinctPairs_s;
-    chainedtuplebuffer_t * cb;
+    tuplebuffer_t * tb;
     uint64_t * priv_checsums;
+    unsigned   size;
 };
 
 class JobChechkSum : public Job {

@@ -276,96 +276,130 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
         }
 
         size_t range = THREAD_NUM_1CPU;  // always eqyal with threads of radix
+        int jobs_num = 0;
+        void * job_args  = NULL;
+        for (size_t th = 0; th < range; th++) {
+            chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+            jobs_num += cb->numbufs;
+        }
+
         vector<uint64_t> sum(distinctPairs_in_R.size() + distinctPairs_in_S.size(), 0);
-        vector<uint64_t*> sums(range);
+        vector<uint64_t*> sums(jobs_num);
         for (size_t i = 0; i < sums.size(); i++) {
             sums[i] = (uint64_t *) calloc (sum.size(), sizeof(uint64_t));
         }
 
         if (table_r->intermediate_res && table_s->intermediate_res) {
 
-            struct interInterSum_arg a[range];
-            for (int th = 0; th < range ; th++) {
-                a[th].priv_checsums = sums[th];
-                a[th].distinctPairs_r = &distinctPairs_in_R;
-                a[th].distinctPairs_s = &distinctPairs_in_S;
-                a[th].rel_num_r = table_r->rels_num;
-                a[th].rel_num_s = table_s->rels_num;
-                a[th].rids_r  = table_r->row_ids;
-                a[th].rids_s  = table_s->row_ids;
-                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-                job_scheduler1.Schedule(new JobCheckSumInterInter(a[th]));
-            }
-            job_scheduler1.Barrier();
+            //struct interInterTable_arg a[jobs_num];
+            tuplebuffer_t * tb;
+            struct interInterSum_arg * ja = (struct interInterSum_arg *) malloc(sizeof(struct interInterSum_arg) * jobs_num);
 
-            /* Create the checksum */
-            for (size_t j = 0; j < sum.size(); j++) {
-                for (size_t i = 0; i < sums.size(); i++) {
-                    sum[j] += sums[i][j];
+            /* Loop all the buffers */
+            int idx = 0;
+            for (int th = 0; th < range ; th++) {
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                tb = cb->buf;
+                for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                    struct interInterSum_arg * a = ja + idx;//new interInterSum_arg;
+                    a->priv_checsums   = sums[idx++];
+                    a->distinctPairs_r = &distinctPairs_in_R;
+                    a->distinctPairs_s = &distinctPairs_in_S;
+                    a->rel_num_r = table_r->rels_num;
+                    a->rel_num_s = table_s->rels_num;
+                    a->rids_r = table_r->row_ids;
+                    a->rids_s = table_s->row_ids;
+                    a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                    a->tb = tb;
+                    job_scheduler1.Schedule(new JobCheckSumInterInter(*a));
+                    tb = tb->next;
                 }
             }
+            job_args = (void *) ja;
         }
         else if (table_r->intermediate_res) {
-
-            struct interNoninterSum_arg a[range];
+            tuplebuffer_t * tb;
+            struct interNoninterSum_arg * ja = (struct interNoninterSum_arg *) malloc(sizeof(struct interNoninterSum_arg) * jobs_num);
+            /* Loop all the buffers */
+            int idx = 0;
             for (int th = 0; th < range ; th++) {
-                a[th].priv_checsums = sums[th];
-                a[th].distinctPairs_r = &distinctPairs_in_R;
-                a[th].distinctPairs_s = &distinctPairs_in_S;
-                a[th].rel_num_r = table_r->rels_num;
-                a[th].rids_r  = table_r->row_ids;
-                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-                job_scheduler1.Schedule(new JobCheckSumInterNonInter(a[th]));
-            }
-            job_scheduler1.Barrier();
-
-            /* Create the checksum */
-            for (size_t j = 0; j < sum.size(); j++) {
-                for (size_t i = 0; i < sums.size(); i++) {
-                    sum[j] += sums[i][j];
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                tb = cb->buf;
+                for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                    struct interNoninterSum_arg * a = ja + idx;
+                    a->priv_checsums   = sums[idx++];
+                    a->distinctPairs_r = &distinctPairs_in_R;
+                    a->distinctPairs_s = &distinctPairs_in_S;
+                    a->rel_num_r = table_r->rels_num;
+                    a->rids_r = table_r->row_ids;
+                    a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                    a->tb = tb;
+                    job_scheduler1.Schedule(new JobCheckSumInterNonInter(*a));
+                    tb = tb->next;
                 }
             }
+            job_args = (void *) ja;
         }
         else if (table_s->intermediate_res) {
-
-            struct noninterInterSum_arg a[range];
+            tuplebuffer_t * tb;
+            struct noninterInterSum_arg * ja = (struct noninterInterSum_arg *) malloc(sizeof(struct noninterInterSum_arg) * jobs_num);
+            /* Loop all the buffers */
+            int idx = 0;
             for (int th = 0; th < range ; th++) {
-                a[th].priv_checsums = sums[th];
-                a[th].distinctPairs_r = &distinctPairs_in_R;
-                a[th].distinctPairs_s = &distinctPairs_in_S;
-                a[th].rel_num_s = table_s->rels_num;
-                a[th].rids_s  = table_s->row_ids;
-                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-                job_scheduler1.Schedule(new JobCheckSumNonInterInter(a[th]));
-            }
-            job_scheduler1.Barrier();
-
-            /* Create the checksum */
-            for (size_t j = 0; j < sum.size(); j++) {
-                for (size_t i = 0; i < sums.size(); i++) {
-                    sum[j] += sums[i][j];
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                tb = cb->buf;
+                for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                    struct noninterInterSum_arg * a = ja + idx;//new noninterInterSum_arg;
+                    a->priv_checsums   = sums[idx++];
+                    a->distinctPairs_r = &distinctPairs_in_R;
+                    a->distinctPairs_s = &distinctPairs_in_S;
+                    a->rel_num_s = table_s->rels_num;
+                    a->rids_s = table_s->row_ids;
+                    a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                    a->tb = tb;
+                    job_scheduler1.Schedule(new JobCheckSumNonInterInter(*a));
+                    tb = tb->next;
                 }
             }
+            job_args = (void *) ja;
         }
         else {
-
-            struct noninterNoninterSum_arg a[range];
+            tuplebuffer_t * tb;
+            struct noninterNoninterSum_arg * ja = (struct noninterNoninterSum_arg *) malloc(sizeof(struct noninterNoninterSum_arg) * jobs_num);
+            /* Loop all the buffers */
+            int idx = 0;
             for (int th = 0; th < range ; th++) {
-                a[th].priv_checsums = sums[th];
-                a[th].distinctPairs_r = &distinctPairs_in_R;
-                a[th].distinctPairs_s = &distinctPairs_in_S;
-                a[th].cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
-                job_scheduler1.Schedule(new JobCheckSumNonInterNonInter(a[th]));
-            }
-            job_scheduler1.Barrier();
-
-            /* Create the checksum */
-            for (size_t j = 0; j < sum.size(); j++) {
-                for (size_t i = 0; i < sums.size(); i++) {
-                    sum[j] += sums[i][j];
+                chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
+                tb = cb->buf;
+                for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
+                    struct noninterNoninterSum_arg * a = ja + idx;//new noninterNoninterSum_arg;
+                    a->priv_checsums   = sums[idx++];
+                    a->distinctPairs_r = &distinctPairs_in_R;
+                    a->distinctPairs_s = &distinctPairs_in_S;
+                    a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
+                    a->tb = tb;
+                    job_scheduler1.Schedule(new JobCheckSumNonInterNonInter(*a));
+                    tb = tb->next;
                 }
             }
+            job_args = (void *) ja;
         }
+
+        /* free cb maybe */
+
+
+        /* Barrier here */
+        job_scheduler1.Barrier();
+        /* Create the checksum */
+        for (size_t j = 0; j < sum.size(); j++) {
+            for (size_t i = 0; i < sums.size(); i++) {
+                sum[j] += sums[i][j];
+            }
+        }
+
+        /* Free args */
+        free(job_args);
+
 
         /* Construct the checksums in the right way */
         bool found = false;
@@ -488,18 +522,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     unsigned * rids_r   = table_r->row_ids;
     unsigned * rids_s   = table_s->row_ids;
 
-#ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeCTPrepear += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-#endif
-
     uint32_t idx = 0;  // POints to the right index on the res
     uint32_t tup_i;
     size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
     /* Find jobs number */
     int jobs_num = 0;
+    void * job_args = NULL;
     for (size_t th = 0; th < range; th++) {
         chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
         jobs_num += cb->numbufs;
@@ -509,14 +538,15 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
         //struct interInterTable_arg a[jobs_num];
         unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
         tuplebuffer_t * tb;
-
+        struct interInterTable_arg * ja = (struct interInterTable_arg *) malloc(sizeof(struct interInterTable_arg ) * jobs_num);
+        job_args = (void *) ja;
         /* Loop all the buffers */
         for (int th = 0; th < range ; th++) {
             chainedtuplebuffer_t * cb = (chainedtuplebuffer_t *) result->resultlist[th].results;
             inner_prefix = 0;
             tb = cb->buf;
             for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
-                struct interInterTable_arg * a =new interInterTable_arg;
+                struct interInterTable_arg * a = ja++;//new interInterTable_arg;
                 a->start_index = inner_prefix + prefix;
                 a->rel_num_all = num_relations;
                 a->rel_num_r = rel_num_r;
@@ -535,12 +565,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             buffs_prefix += cb->numbufs;
             prefix += result->resultlist[th].nresults;
         }
-        job_scheduler1.Barrier();
     }
     else if (table_r->intermediate_res) {
         //struct interNoninterTable_arg a[jobs_num];
         unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
         tuplebuffer_t * tb;
+        struct interNoninterTable_arg * ja = (struct interNoninterTable_arg *) malloc(sizeof(struct interNoninterTable_arg ) * jobs_num);
+        job_args = (void *) ja;
 
         /* Loop all the buffers */
         for (int th = 0; th < range ; th++) {
@@ -548,7 +579,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             inner_prefix = 0;
             tb = cb->buf;
             for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
-                struct interNoninterTable_arg * a = new interNoninterTable_arg;
+                struct interNoninterTable_arg * a = ja++;
                 a->start_index = inner_prefix + prefix;
                 a->rel_num_all = num_relations;
                 a->rel_num_r = rel_num_r;
@@ -565,12 +596,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             buffs_prefix += cb->numbufs;
             prefix += result->resultlist[th].nresults;
         }
-        job_scheduler1.Barrier();
     }
     else if (table_s->intermediate_res) {
         //struct noninterInterTable_arg a[jobs_num];
         unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
         tuplebuffer_t * tb;
+        struct noninterInterTable_arg * ja = (struct noninterInterTable_arg *) malloc(sizeof(struct noninterInterTable_arg ) * jobs_num);
+        job_args = (void *) ja;
 
         /* Loop all the buffers */
         for (int th = 0; th < range ; th++) {
@@ -578,7 +610,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             inner_prefix = 0;
             tb = cb->buf;
             for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
-                struct noninterInterTable_arg * a =new noninterInterTable_arg;
+                struct noninterInterTable_arg * a = ja++;//new noninterInterTable_arg;
                 a->start_index = inner_prefix + prefix;
                 a->rel_num_all = num_relations;
                 a->rel_num_s = rel_num_s;
@@ -595,12 +627,13 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             buffs_prefix += cb->numbufs;
             prefix += result->resultlist[th].nresults;
         }
-        job_scheduler1.Barrier();
     }
     else {
         //struct noninterNoninterTable_arg a[jobs_num];
         unsigned prefix = 0, inner_prefix = 0, buffs_prefix = 0;
         tuplebuffer_t * tb;
+        struct noninterNoninterTable_arg * ja = (struct noninterNoninterTable_arg *) malloc(sizeof(struct noninterNoninterTable_arg ) * jobs_num);
+        job_args = (void *) ja;
 
         /* Loop all the buffers */
         for (int th = 0; th < range ; th++) {
@@ -608,7 +641,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             inner_prefix = 0;
             tb = cb->buf;
             for (int buff = 0; buff < cb->numbufs && result->resultlist[th].nresults != 0; buff++) {
-                struct noninterNoninterTable_arg * a =new noninterNoninterTable_arg;
+                struct noninterNoninterTable_arg * a = ja++;//new noninterNoninterTable_arg;
                 a->start_index = inner_prefix + prefix;
                 a->rel_num_all = num_relations;
                 a->rids_res  = rids_res;
@@ -623,8 +656,18 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
             buffs_prefix += cb->numbufs;
             prefix += result->resultlist[th].nresults;
         }
-        job_scheduler1.Barrier();
     }
+
+    /* Barrier here */
+    job_scheduler1.Barrier();
+    /* free */
+    free(job_args);
+
+#ifdef time
+   struct timeval end;
+   gettimeofday(&end, NULL);
+   timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+#endif
 
     return new_table;
 }
@@ -756,7 +799,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         c.S = NULL;
     }
 
-    result_t * res  = PRO(r1, r2, threads, c);
+    result_t * res  = PRO(r1, r2, threads, c, job_scheduler1);
 
     if (leafs&1) {
         free(r1);
@@ -771,7 +814,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     #ifdef time
     gettimeofday(&end, NULL);
     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    gettimeofday(&start, NULL);
     #endif
 
     table_t *temp = NULL;
@@ -781,11 +823,6 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     } else {
         temp = CreateTableT(res, table_r, table_s, cmap);
     }
-
-    #ifdef time
-    gettimeofday(&end, NULL);
-    timeCreateTableT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    #endif
 
 
     /* Free the tables and the result of radix */
@@ -856,7 +893,7 @@ int main(int argc, char* argv[]) {
     joiner.job_scheduler1.Init(THREAD_NUM_1CPU, 0);
 
     // Create scheduler NUMA REG 1
-    //joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 1);
+    joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 1);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
@@ -865,7 +902,7 @@ int main(int argc, char* argv[]) {
     queryPlan.fillColumnInfo(joiner);
 
     // We do the Pre_Caching of each ralations collumns 0,1
-    queryPlan.Pre_Caching01(joiner, threads);
+    //queryPlan.Pre_Caching01(joiner, threads);
 
     #ifdef time
     struct timeval end;
@@ -922,15 +959,13 @@ int main(int argc, char* argv[]) {
     // std::cerr << "--timeLessFilter:    " << (long)(timeLessFilter * 1000) << endl;
     // std::cerr << "--timeEqualFilter:   " << (long)(timeEqualFilter * 1000) << endl;
     std::cerr << "timeSelfJoin:        " << (long)(timeSelfJoin * 1000) << endl;
+    std::cerr << "timeSelfJoinCheckSum:" << (long)(timeSCSelfJoin * 1000) << endl;
     std::cerr << "timeAddColumn:       " << (long)(timeAddColumn * 1000) << endl;
     std::cerr << "timeCreateRelationT: " << (long)(timeCreateRelationT * 1000) << endl;
     std::cerr << "--timeCreateRelI:    " << (long)(timeCreateRelI * 1000) << endl;
     std::cerr << "--timeCreateRelNonI: " << (long)(timeCreateRelNonI * 1000) << endl;
     std::cerr << "timeCreateTableT:    " << (long)(timeCreateTableT * 1000) << endl;
-    std::cerr << "--timeCSsOnTheFly:   " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
-    std::cerr << "--timeCTPrepear:     " << (long)(timeCTPrepear * 1000) << endl;
-    std::cerr << "--timeCT1bucket:     " << (long)(timeCT1bucket * 1000) << endl;
-    std::cerr << "--timeCTMoreBuckets: " << (long)(timeCTMoreBuckets * 1000) << endl;
+    std::cerr << "timeCSsOnTheFly:     " << (long)(timeCheckSumsOnTheFly * 1000) << endl;
     std::cerr << "timeRadixJoin:       " << (long)(timeRadixJoin * 1000) << endl;
     std::cerr << "timeCheckSum:        " << (long)(timeCheckSum * 1000) << endl;
     std::cerr << "timeCleanQuery:      " << (long)(timeCleanQuery * 1000) << endl;

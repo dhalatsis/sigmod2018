@@ -3,7 +3,7 @@
 #include "filter_job.h"
 
 double timeSelfJoin = 0;
-double timeCSSelfJoin = 0;
+double timeSCSelfJoin = 0;
 double timeSelectFilter = 0;
 double timeIntermediateFilters = 0;
 double timeNonIntermediateFilters = 0;
@@ -208,7 +208,7 @@ table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predic
 #ifdef time
     struct timeval end;
     gettimeofday(&end, NULL);
-    timeCSSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    timeSCSelfJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
 #endif
 
     return NULL;
