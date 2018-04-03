@@ -124,11 +124,9 @@ struct QueryPlan {
 // Arguments needed for every thread during
 // the computation of statistics
 struct StatisticsThreadArgs {
-    unsigned low;
-    unsigned high;
-    vector<uint64_t*>* columnPtrs;
-    vector<uint64_t>* columnTuples;
-    vector<ColumnInfo>* columnInfosVector;
+    uint64_t*   columnPtr;
+    uint64_t    columnTuples;
+    ColumnInfo* columnInfo;
 };
 
 // Job that collects all the stats in parallel
@@ -140,41 +138,39 @@ public:
     virtual ~StatisticsJob() {}
 
     int Run() {
-        for (unsigned col = myArg->low; col < myArg->high; col++) {
-            uint64_t minimum = numeric_limits<uint64_t>::max();
-            uint64_t maximum = 0;
-            uint64_t tuples  = (*myArg->columnTuples)[col];
-            uint64_t element;
+        uint64_t minimum = numeric_limits<uint64_t>::max();
+        uint64_t maximum = 0;
+        uint64_t tuples  = myArg->columnTuples;
+        uint64_t element;
 
-            // One pass for the min and max
-            for (int i = 0; i < tuples; i++) {
-                element = (*myArg->columnPtrs)[col][i];
-                if (element > maximum) maximum = element;
-                if (element < minimum) minimum = element;
-            }
-
-            // One pass for the distinct elements
-            vector<bool> distinctElements(maximum - minimum + 1, false);
-            uint64_t distinctCounter = 0;
-
-            for (int i = 0; i < tuples; i++) {
-                element = (*myArg->columnPtrs)[col][i];
-                if (distinctElements[element - minimum] == false) {
-                    distinctCounter++;
-                    distinctElements[element - minimum] = true;
-                }
-            }
-
-            // Save the infos
-            (*myArg->columnInfosVector)[col].min      = minimum;
-            (*myArg->columnInfosVector)[col].max      = maximum;
-            (*myArg->columnInfosVector)[col].size     = tuples;
-            (*myArg->columnInfosVector)[col].distinct = distinctCounter;
-            (*myArg->columnInfosVector)[col].n        = maximum - minimum + 1;
-            (*myArg->columnInfosVector)[col].spread   = (((double) (maximum - minimum + 1)) / ((double) ((*myArg->columnInfosVector)[col].distinct)));
-
-            (*myArg->columnInfosVector)[col].counter = 0;
-            (*myArg->columnInfosVector)[col].isSelectionColumn = false;
+        // One pass for the min and max
+        for (int i = 0; i < tuples; i++) {
+            element = (myArg->columnPtr)[i];
+            if (element > maximum) maximum = element;
+            if (element < minimum) minimum = element;
         }
+
+        // One pass for the distinct elements
+        vector<bool> distinctElements(maximum - minimum + 1, false);
+        uint64_t distinctCounter = 0;
+
+        for (int i = 0; i < tuples; i++) {
+            element = (myArg->columnPtr)[i];
+            if (distinctElements[element - minimum] == false) {
+                distinctCounter++;
+                distinctElements[element - minimum] = true;
+            }
+        }
+
+        // Save the infos
+        myArg->columnInfo->min      = minimum;
+        myArg->columnInfo->max      = maximum;
+        myArg->columnInfo->size     = tuples;
+        myArg->columnInfo->distinct = distinctCounter;
+        myArg->columnInfo->n        = maximum - minimum + 1;
+        myArg->columnInfo->spread   = (((double) (maximum - minimum + 1)) / ((double) (distinctCounter)));
+
+        myArg->columnInfo->counter = 0;
+        myArg->columnInfo->isSelectionColumn = false;
     }
 };
