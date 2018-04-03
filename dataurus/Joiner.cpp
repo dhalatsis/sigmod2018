@@ -742,101 +742,101 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
-table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> selections, int leafs, string & result_str) {
-
-    #ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-    #endif
-
-    relation_t * r1;
-    relation_t * r2;
-
-    #ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    gettimeofday(&start, NULL);
-    #endif
-
-    //HERE WE CHECK FOR CACHED PARTITIONS
-    Cacheinf c;
-    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
-
-    Selection left(pred_info.left);
-    Selection right(pred_info.right);
-
-    /* Debug orest */
-    if (leafs&1) {
-        if (idxcache.find(left) != idxcache.end()) {
-            r1 = (relation_t *)malloc(sizeof(relation_t));
-            r1->num_tuples = table_r->tups_num;
-            c.R = idxcache[left];
-        }
-        else {
-
-            r1 = CreateRelationT(table_r, pred_info.left);
-            c.R = (cached_t *) calloc(threads, sizeof(cached_t));
-        }
-    } else {
-
-        r1 = CreateRelationT(table_r, pred_info.left);
-        c.R = NULL;
-    }
-
-    if (leafs&2) {
-        if (idxcache.find(right) != idxcache.end()) {
-            r2 = (relation_t *)malloc(sizeof(relation_t));
-            r2->num_tuples = table_s->tups_num;
-            c.S = idxcache[right];
-        }
-        else {
-            r2 = CreateRelationT(table_s, pred_info.right);
-            c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
-        }
-    } else {
-        r2 = CreateRelationT(table_s, pred_info.right);
-        c.S = NULL;
-    }
-
-    result_t * res  = PRO(r1, r2, threads, c, job_scheduler1);
-
-    if (leafs&1) {
-        free(r1);
-        idxcache[left] = c.R;
-    }
-    if (leafs&2) {
-        free(r2);
-        idxcache[right] = c.S;
-    }
-
-
-    #ifdef time
-    gettimeofday(&end, NULL);
-    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    #endif
-
-    table_t *temp = NULL;
-    // On root dont create a resilting table just get the checksums
-    if (isRoot) {
-        CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
-    } else {
-        temp = CreateTableT(res, table_r, table_s, cmap);
-    }
-
-
-    /* Free the tables and the result of radix */
-    free(table_r->row_ids);
-    delete table_r->column_j;
-    delete table_r;
-    free(table_s->row_ids);
-    delete table_s->column_j;
-    delete table_s;
-    free(res->resultlist);
-    free(res);
-
-    return temp;
-}
+// table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
+//
+//     #ifdef time
+//     struct timeval start;
+//     gettimeofday(&start, NULL);
+//     #endif
+//
+//     relation_t * r1;
+//     relation_t * r2;
+//
+//     #ifdef time
+//     struct timeval end;
+//     gettimeofday(&end, NULL);
+//     timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+//     gettimeofday(&start, NULL);
+//     #endif
+//
+//     //HERE WE CHECK FOR CACHED PARTITIONS
+//     Cacheinf c;
+//     size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+//
+//     Selection left(pred_info.left);
+//     Selection right(pred_info.right);
+//
+//     /* Debug orest */
+//     if (leafs&1) {
+//         if (idxcache.find(left) != idxcache.end()) {
+//             r1 = (relation_t *)malloc(sizeof(relation_t));
+//             r1->num_tuples = table_r->tups_num;
+//             c.R = idxcache[left];
+//         }
+//         else {
+//
+//             r1 = CreateRelationT(table_r, pred_info.left);
+//             c.R = (cached_t *) calloc(threads, sizeof(cached_t));
+//         }
+//     } else {
+//
+//         r1 = CreateRelationT(table_r, pred_info.left);
+//         c.R = NULL;
+//     }
+//
+//     if (leafs&2) {
+//         if (idxcache.find(right) != idxcache.end()) {
+//             r2 = (relation_t *)malloc(sizeof(relation_t));
+//             r2->num_tuples = table_s->tups_num;
+//             c.S = idxcache[right];
+//         }
+//         else {
+//             r2 = CreateRelationT(table_s, pred_info.right);
+//             c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
+//         }
+//     } else {
+//         r2 = CreateRelationT(table_s, pred_info.right);
+//         c.S = NULL;
+//     }
+//
+//     result_t * res  = PRO(r1, r2, threads, c, job_scheduler1);
+//
+//     if (leafs&1) {
+//         free(r1);
+//         idxcache[left] = c.R;
+//     }
+//     if (leafs&2) {
+//         free(r2);
+//         idxcache[right] = c.S;
+//     }
+//
+//
+//     #ifdef time
+//     gettimeofday(&end, NULL);
+//     timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+//     #endif
+//
+//     table_t *temp = NULL;
+//     // On root dont create a resilting table just get the checksums
+//     if (isRoot) {
+//         CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
+//     } else {
+//         temp = CreateTableT(res, table_r, table_s, cmap);
+//     }
+//
+//
+//     /* Free the tables and the result of radix */
+//     free(table_r->row_ids);
+//     delete table_r->column_j;
+//     delete table_r;
+//     free(table_s->row_ids);
+//     delete table_s->column_j;
+//     delete table_s;
+//     free(res->resultlist);
+//     free(res);
+//
+//     return temp;
+// }
 
 // Loads a relation from disk
 void Joiner::addRelation(const char* fileName) {
