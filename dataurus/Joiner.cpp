@@ -435,10 +435,6 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                 }
             }
 
-            if (found == false) {
-                std::cerr << "NOT FOUND SELECTIONS " << selections[i].binding << "." << selections[i].colId << '\n';
-            }
-
             /* Flag for the next loop */
             found = false;
 
@@ -897,7 +893,7 @@ int main(int argc, char* argv[]) {
     gettimeofday(&startAll, NULL);
 
     /* Initialize the mutex */
-    pthread_mutex_init(&cache_mtx, 0);    
+    pthread_mutex_init(&cache_mtx, 0);
 
     //Joiner joiner;
     JobSchedulerMaster main_js;
@@ -981,7 +977,7 @@ int main(int argc, char* argv[]) {
         cleanQuery(*i);
 
         // Create the tree
-        JoinTree * optimalJT = queryPlan.joinTreePtr->build(*i, queryPlan.columnInfos, query_no);
+        JoinTree * optimalJT = queryPlan.joinTreePtr->build(*i, queryPlan.columnInfos);
 
         //Create job on runtime
         JobMain * job = new JobMain(i, line, optimalJT, query_no);

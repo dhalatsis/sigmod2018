@@ -105,7 +105,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
 }
 
 /* The self Join Function */
-table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str, int qn) {
+table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str) {
 
 #ifdef time
     struct timeval start;
@@ -143,11 +143,6 @@ table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predic
     unsigned index = 0;
     for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
         index = -1;
-
-        if (qn == 121 && this->getRelationsCount() > 31) {
-            std::cerr << "Check sum :" << it->first.binding << "." << it->first.colId << '\n';
-        }
-
         itr = table->relations_bindings.find(it->first.binding);
         if (itr != table->relations_bindings.end()) {
             st.colId = it->first.colId;

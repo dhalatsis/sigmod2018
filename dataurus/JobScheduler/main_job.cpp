@@ -52,7 +52,7 @@ int JobMain::Run(Joiner & joiner) {
 
     // Execute the JoinTree
     bool stop = false;
-    table_t* result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop, query_no_);
+    table_t* result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop);
 
     // Count query time
     struct timeval end;

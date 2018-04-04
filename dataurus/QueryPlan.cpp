@@ -510,7 +510,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
 }
 
 // Construct a JoinTree from a set of relations
-JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn) {
+JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     // Maps every possible set of relations to its respective best plan tree
     unordered_map< vector<bool>, JoinTree* > BestTree;
     int relationsCount = queryInfo.relationIds.size();
@@ -875,7 +875,7 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
 //#define prints
 
 // Execute the plan described by a JoinTree
-table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop, int qn) {
+table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop) {
     JoinTreeNode *left  = joinTreeNodePtr->left;
     JoinTreeNode *right = joinTreeNodePtr->right;
     table_t *table_l;
@@ -901,7 +901,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 
     // Go left
-    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo, result_str, stop, qn);
+    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo, result_str, stop);
 
     // Return without executing the rest of the tree
     if (*stop == true) {
@@ -910,14 +910,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
     // This is an intermediate node (join)
     if (right != NULL) {
-        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo, result_str, stop, qn);
+        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo, result_str, stop);
 
         // If either column has no tuples stop the execution
         if ((table_l->tups_num == 0) || (table_r->tups_num == 0)) {
             *stop = true;
-
-            if (qn == 121 && joiner.getRelationsCount() > 31)
-                std::cerr << "In strange cutting" << '\n';
 
             for (size_t i = 0; i < queryInfo.selections.size(); i++) {
                 result_str += "NULL";
@@ -987,14 +984,8 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
     else {
         if (joinTreeNodePtr->parent == NULL) {
-            // if (qn == 121) {
-            //     for (columnInfoMap::iterator it=joinTreeNodePtr->usedColumnInfos.begin(); it != joinTreeNodePtr->usedColumnInfos.end(); it++) {
-            //         //if (it->second.isSelectionColumn)
-            //         std::cerr << "Colinfo: " <<  it->first.binding << "." << it->first.colId << " sel? " << it->second.isSelectionColumn <<'\n';
-            //     }
-            // }
             res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
-                                                  ,queryInfo.selections, result_str, qn);
+                                                  ,queryInfo.selections, result_str);
         }
         else {
             res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
@@ -1182,7 +1173,7 @@ void QueryPlan::destroy(Joiner& joiner) {
 
 /* -----------------------CACHING--------------------------------*/
 // cache(sleep time) the partitions of 0,1 columns for all relations
-// TODO CHAGE IT 
+// TODO CHAGE IT
 void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
     /*size_t relationColumns; // Number of columns of a single relation
 
