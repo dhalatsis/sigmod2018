@@ -785,10 +785,10 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
 
     // Initialise the new JoinTreeNode
     joinTreeNodePtr->nodeId = -1; // This is an intermediate node
-    joinTreeNodePtr->treeCost = 0;
     joinTreeNodePtr->left = leftTree->root;
     joinTreeNodePtr->right = NULL;
     joinTreeNodePtr->parent = NULL;
+    joinTreeNodePtr->treeCost = joinTreeNodePtr->left->treeCost + joinTreeNodePtr->left->usedColumnInfos[predicateInfo->left].size;
     joinTreeNodePtr->predicatePtr = predicateInfo;
     joinTreeNodePtr->usedColumnInfos = joinTreeNodePtr->left->usedColumnInfos;
 
@@ -957,7 +957,7 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
     int depth = 0;
 
     while (joinTreeNodePtr->nodeId == -1) {
-        for (int i=0; i < depth; i++) fprintf(stderr,"    ");
+        for (int i=0; i < depth; i++) fprintf(stderr, "    ");
         //fprintf(stderr, "In node with predicate: ");
         fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.binding,
             joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.binding,

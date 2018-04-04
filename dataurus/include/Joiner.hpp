@@ -24,7 +24,7 @@
 /* THread pool Includes */
 /*----------------*/
 
-#define time
+//#define time
 //#define prints
 #define THREAD_NUM_1CPU 4 //20
 #define THREAD_NUM_2CPU 0

@@ -920,7 +920,7 @@ int main(int argc, char* argv[]) {
         //std::cerr << q_counter  << ":" << line << '\n';
         i.parseQuery(line);
         cleanQuery(i);
-        q_counter++;
+        //q_counter++;
 
         #ifdef time
         gettimeofday(&start, NULL);
