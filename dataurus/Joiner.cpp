@@ -12,8 +12,11 @@
 #include <pthread.h>
 
 #include "generator.h"
-#include "QueryPlan.hpp"
 #include "Joiner.hpp"
+#include "tuple_buffer.h"
+#include "js_master.h"
+#include "main_job.h"
+#include "queryFill_job.h"
 
 using namespace std;
 
@@ -21,6 +24,7 @@ bool done_testing = false;
 
 /* Timing variables */
 extern double timeSelfJoin;
+extern double timeMMap;
 extern double timeSCSelfJoin;
 extern double timeSelectFilter;
 extern double timeEqualFilter;
@@ -30,6 +34,7 @@ extern double timeIntermediateFilters;
 extern double timeNonIntermediateFilters;
 
 double timeAddColumn = 0;
+double timeInitMasterjs = 0;
 double timeCreateTable = 0;
 double timeTreegen = 0;
 double timeCheckSum = 0;
@@ -178,9 +183,9 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             a[i].rids = row_ids;
             a[i].rel_num = rel_num;
             a[i].table_index = table_index;
-            job_scheduler1.Schedule(new JobCreateInterRel(a[i]));
+            job_scheduler.Schedule(new JobCreateInterRel(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         #ifdef time
         struct timeval end;
@@ -203,9 +208,9 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
             a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
             a[i].values = values;
             a[i].tups = new_relation->tuples;
-            job_scheduler1.Schedule(new JobCreateNonInterRel(a[i]));
+            job_scheduler.Schedule(new JobCreateNonInterRel(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         #ifdef time
         gettimeofday(&end, NULL);
@@ -232,9 +237,9 @@ relation_t * Joiner::CreateRowRelationT(uint64_t * column, unsigned size) {
         a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
         a[i].values = column;
         a[i].tups = new_relation->tuples;
-        job_scheduler1.Schedule(new JobCreateNonInterRel(a[i]));
+        job_scheduler.Schedule(new JobCreateNonInterRel(a[i]));
     }
-    job_scheduler1.Barrier();
+    job_scheduler.Barrier();
 
     return new_relation;
 }
@@ -311,7 +316,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                     a->rids_s = table_s->row_ids;
                     a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                     a->tb = tb;
-                    job_scheduler1.Schedule(new JobCheckSumInterInter(*a));
+                    job_scheduler.Schedule(new JobCheckSumInterInter(*a));
                     tb = tb->next;
                 }
             }
@@ -334,7 +339,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                     a->rids_r = table_r->row_ids;
                     a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                     a->tb = tb;
-                    job_scheduler1.Schedule(new JobCheckSumInterNonInter(*a));
+                    job_scheduler.Schedule(new JobCheckSumInterNonInter(*a));
                     tb = tb->next;
                 }
             }
@@ -357,7 +362,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                     a->rids_s = table_s->row_ids;
                     a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                     a->tb = tb;
-                    job_scheduler1.Schedule(new JobCheckSumNonInterInter(*a));
+                    job_scheduler.Schedule(new JobCheckSumNonInterInter(*a));
                     tb = tb->next;
                 }
             }
@@ -378,7 +383,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                     a->distinctPairs_s = &distinctPairs_in_S;
                     a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                     a->tb = tb;
-                    job_scheduler1.Schedule(new JobCheckSumNonInterNonInter(*a));
+                    job_scheduler.Schedule(new JobCheckSumNonInterNonInter(*a));
                     tb = tb->next;
                 }
             }
@@ -389,7 +394,7 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
 
 
         /* Barrier here */
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
         /* Create the checksum */
         for (size_t j = 0; j < sum.size(); j++) {
             for (size_t i = 0; i < sums.size(); i++) {
@@ -558,7 +563,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 a->where  = where;
                 a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 a->tb = tb;
-                job_scheduler1.Schedule(new JobCreateInterInterTable(*a));
+                job_scheduler.Schedule(new JobCreateInterInterTable(*a));
                 inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 tb = tb->next;
             }
@@ -589,7 +594,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 a->where  = where;
                 a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 a->tb = tb;
-                job_scheduler1.Schedule(new JobCreateInterNonInterTable(*a));
+                job_scheduler.Schedule(new JobCreateInterNonInterTable(*a));
                 inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 tb = tb->next;
             }
@@ -620,7 +625,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 a->where  = where;
                 a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 a->tb = tb;
-                job_scheduler1.Schedule(new JobCreateNonInterInterTable(*a));
+                job_scheduler.Schedule(new JobCreateNonInterInterTable(*a));
                 inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 tb = tb->next;
             }
@@ -649,7 +654,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
                 a->where  = where;
                 a->size   = (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 a->tb = tb;
-                job_scheduler1.Schedule(new JobCreateNonInterNonInterTable(*a));
+                job_scheduler.Schedule(new JobCreateNonInterNonInterTable(*a));
                 inner_prefix += (buff == 0) ? cb->writepos : CHAINEDBUFF_NUMTUPLESPERBUF;
                 tb = tb->next;
             }
@@ -659,7 +664,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     }
 
     /* Barrier here */
-    job_scheduler1.Barrier();
+    job_scheduler.Barrier();
     /* free */
     free(job_args);
 
@@ -799,7 +804,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
         c.S = NULL;
     }
 
-    result_t * res  = PRO(r1, r2, threads, c, job_scheduler1);
+    result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
 
     if (leafs&1) {
         free(r1);
@@ -872,34 +877,42 @@ void PrintColumn(column_t *column) {
 }
 
 /* --------------------------------MAIN-------------------------------*/
+#define MASTER_THREADS 2
 int main(int argc, char* argv[]) {
     Joiner joiner;
+    JobSchedulerMaster main_js;
 
     // Read join relations
     string line;
+    std::vector<string> file_names;
     while (getline(cin, line)) {
         if (line == "Done") break;
-        joiner.addRelation(line.c_str());
+        file_names.push_back(line);
     }
+
+    main_js.Init(file_names, MASTER_THREADS);
+
+
 
     #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
     #endif
 
-    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
     // Create scheduler NUMA REG 0
-    joiner.job_scheduler1.Init(THREAD_NUM_1CPU, 0);
+    //joiner.job_scheduler.Init(THREAD_NUM_1CPU, 0);
 
     // Create scheduler NUMA REG 1
-    joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 1);
+    //joiner.job_scheduler2.Init(THREAD_NUM_2CPU, 1);
 
     // Preparation phase (not timed)
     QueryPlan queryPlan;
+    main_js.Schedule(new JobFillQueryPlan(queryPlan));  // MAYBE BARREIR IN THE FUTURE
 
+    // THis will become a job
     // Get the needed info of every column
-    queryPlan.fillColumnInfo(joiner);
+    //queryPlan.fillColumnInfo(joiner);
 
     // We do the Pre_Caching of each ralations collumns 0,1
     //queryPlan.Pre_Caching01(joiner, threads);
@@ -913,43 +926,53 @@ int main(int argc, char* argv[]) {
     // The test harness will send the first query after 1 second.
     QueryInfo i;
     int q_counter = 0;
+    std::vector<JobMain*> jobs;
+
+    int bcount = 0;
+    int query_no = 0;
     while (getline(cin, line)) {
-        if (line == "F") continue; // End of a batch
 
-        // Parse the query
-        //std::cerr << q_counter  << ":" << line << '\n';
-        i.parseQuery(line);
-        cleanQuery(i);
-        q_counter++;
+        if (query_no == 0) sleep(3);
+        query_no++;
+
 
         #ifdef time
         gettimeofday(&start, NULL);
         #endif
 
-        JoinTree* optimalJoinTree;
-        optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
-        //optimalJoinTree->root->print(optimalJoinTree->root);
+        // If bacth ended
+        if (line == "F"){
+            main_js.Barrier();
+            for (size_t i = 0; i < jobs.size(); i++) {
+                /* code */
+                std::cout << jobs[i]->result_ << '\n';
+                delete jobs[i];
+            }
+            // Destroy The Vector queue
+            jobs.clear();
+            continue;
+        }
+
+        //std::cerr << "Bfore call " << line << '\n';
+
+        // Create job on runtime
+        JobMain * job = new JobMain(queryPlan, line);
+        // Keep them in a vector
+        jobs.push_back(job);
+        // Schedule the job by the master JS
+        main_js.Schedule(job);
 
         #ifdef time
         gettimeofday(&end, NULL);
-        timeTreegen += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        gettimeofday(&start, NULL);
-        #endif
-
-        string result_str;
-        bool stop = false;
-        table_t* result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str, &stop);
-
-        // Print the result
-        std::cout << result_str << endl;
-
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        timeInitMasterjs += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
         #endif
     }
 
+
+
 #ifdef time
+    std::cerr << "timeMMap:            " << (long)(timeMMap * 1000) << endl;
+    std::cerr << "timeInitMasterjs:    " << (long)(timeInitMasterjs * 1000) << endl;
     std::cerr << "timePreparation:     " << (long)(timePreparation * 1000) << endl;
     std::cerr << "timeTreegen:         " << (long)(timeTreegen * 1000) << endl;
     std::cerr << "timeSelectFilter:    " << (long)(timeSelectFilter * 1000) << endl;

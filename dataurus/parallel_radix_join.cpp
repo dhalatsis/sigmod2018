@@ -488,7 +488,7 @@ prj_thread(void * param)
     int64_t * outputS = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
     //MALLOC_CHECK((outputR && outputS));
 
-    int numaid = get_numa_id(my_tid);
+    int numaid = 0; //get_numa_id(my_tid);   # GEO / TEO
     //int numaid = get_numa_region_id(my_tid);
     part_queue = args->part_queue[numaid];
     join_queue = args->join_queue[numaid];
@@ -767,7 +767,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     int64_t result = 0;
 
     /* task_queue_t * part_queue, * join_queue; */
-    int numnuma = get_num_numa_regions();
+    int numnuma = 1; // get_num_numa_regions();  # GEO / TEO
     task_queue_t * part_queue[numnuma];
     task_queue_t * join_queue[numnuma];
 
@@ -827,9 +827,10 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     numperthr[0] = relR->num_tuples / nthreads;
     numperthr[1] = relS->num_tuples / nthreads;
     for(i = 0; i < nthreads; i++){
-        int cpu_idx = get_cpu_id(i);
+
 
         DEBUGMSG(1, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
+        //int cpu_idx = get_cpu_id(i);
         //fprintf(stderr, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
         // CPU_ZERO(&set);
         // CPU_SET(cpu_idx, &set);

@@ -13,9 +13,11 @@
 
 
 /*-------------------------------ALWAYS REMEBERRRRRRRRRRRRRRRRRR -------------*/
-#define MY_PC
-// #define SIGMOD_1CPU 1
-//#define SIGMOD_2CPU 1
+//#define MY_PC
+//#define MY_PC2
+//#define SIGMOD_1CPU
+#define SIGMOD_2CPU
+//#define SIGMOD_2CPU2
 
 /**
  * Returns SMT aware logical to physical CPU mapping for a given thread id.

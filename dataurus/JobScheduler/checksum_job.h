@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "job_scheduler.h"
+#include "job.h"
 #include "tuple_buffer.h"
 #include "types.h"
 

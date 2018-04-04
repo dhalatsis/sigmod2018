@@ -23,7 +23,7 @@
 
 /** number of probe items for prefetching: must be a power of 2 */
 #ifndef PROBE_BUFFER_SIZE
-#define PROBE_BUFFER_SIZE 4
+#define PROBE_BUFFER_SIZE 4  // MAYBE 8
 #endif
 
 /**

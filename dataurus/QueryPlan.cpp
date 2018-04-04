@@ -1046,13 +1046,13 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         args[i].columnTuples = &columnTuples;
         args[i].columnInfosVector = &columnInfosVector;
         //if (i % 2 == 0)
-            joiner.job_scheduler1.Schedule(new StatisticsJob(&args[i]));
+            joiner.job_scheduler.Schedule(new StatisticsJob(&args[i]));
         //else
         //    joiner.job_scheduler2.Schedule(new StatisticsJob(&args[i]));
     }
 
     // Wait for the threads to finish
-    joiner.job_scheduler1.Barrier();
+    joiner.job_scheduler.Barrier();
     //joiner.job_scheduler2.Barrier();
 
     //for (int i = 0; i < allColumns; i++) columnInfosVector[i].print();

@@ -1,8 +1,9 @@
 #pragma once
 #include <stdint.h>
 #include <vector>
-#include "Joiner.hpp"
-#include "job_scheduler.h"
+
+#include "Parser.hpp"
+#include "job.h"
 
 using namespace std;
 

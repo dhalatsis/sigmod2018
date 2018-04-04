@@ -9,14 +9,9 @@
 #include <queue>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#include "job.h"
 #include "cpu_mapping.h"
-
-#define DISALLOW_COPY_AND_ASSIGN(TypeName)      \
-  TypeName(const TypeName&);                    \
-  void operator=(const TypeName&)
-
-///    Job ID type
-typedef unsigned int JobID;
+#include "defn.h"
 
 using std::queue;
 
@@ -24,6 +19,10 @@ using std::queue;
 //int numa[][4] = {0,1,2,3};
 #ifdef MY_PC
 extern int numa[][4];
+#endif
+
+#ifdef MY_PC2
+extern int numa[][2];
 #endif
 
 #ifdef SIGMOD_1CPU/*<---------------------------ALWAYS DEFIEND IT BEFORE UPLOAD-------------------*/
@@ -34,22 +33,9 @@ extern int numa[][20];
 extern int numa[][20];
 #endif
 
-// Class Job - Abstract
-class Job {
- public:
-  Job() = default;
-  virtual ~Job() {}
-
-  // This method should be implemented by subclasses.
-  virtual int Run() = 0;
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(Job);
-};
-
-// Chunking policy
-
-
+#ifdef SIGMOD_2CPU2
+extern int numa[][10];
+#endif
 
 
 // Class JobScheduler
@@ -94,7 +80,7 @@ class JobScheduler {
       pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);
 
       // Create bounded threads
-      executors_[i]->Create(&attr);
+      executors_[i]->Create(&attr, numa_region);
     }
 
     return true;
@@ -185,7 +171,7 @@ private:
 
     virtual ~JobExecutor() {}
 
-    bool Create(pthread_attr_t * attr) {
+    bool Create(pthread_attr_t * attr, int numa) {
       int r = pthread_create(&thread_id_, attr, CallThrFn, this);
       /* Check affinity */
       // int cpus = get_nprocs();
@@ -194,7 +180,7 @@ private:
       // pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
       // for (int j = 0; j < cpus; j++)
       //     if (CPU_ISSET(j, &set))
-      //         fprintf(stderr,"[TID] -->  CPU %d\n", j);
+      //         fprintf(stderr,"[SimpleTID] From:%d -->  PhysicalThread %d\n", numa, j);
       return !r;
   }
 

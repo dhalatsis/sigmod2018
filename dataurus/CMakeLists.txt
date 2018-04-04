@@ -13,7 +13,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread
 
 include_directories(include ~/tbb/tbb2018_20171205oss/include JobScheduler)
 
-set(JS_SOURCE_FILES JobScheduler/filter_job.cpp JobScheduler/create_job.cpp JobScheduler/checksum_job.cpp)
+set(JS_SOURCE_FILES JobScheduler/filter_job.cpp JobScheduler/create_job.cpp JobScheduler/checksum_job.cpp JobScheduler/main_job.cpp JobScheduler/js_master.h JobScheduler/queryFill_job.cpp)
 set(RJ_SOURCE_FILES parallel_radix_join.cpp cpu_mapping.cpp generator.cpp)
 
 add_library(database QueryPlan.cpp Relation.cpp Filter.cpp Parser.cpp Utils.cpp)

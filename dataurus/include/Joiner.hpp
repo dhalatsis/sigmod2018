@@ -16,18 +16,18 @@
 #include "Parser.hpp"
 #include "table_t.hpp"
 #include "parallel_radix_join.h"
-#include "tuple_buffer.h"
-#include "prj_params.h"
 #include "create_job.h"
 #include "checksum_job.h"
 
 /* THread pool Includes */
 /*----------------*/
 
-#define time
+//#define time
 //#define prints
-#define THREAD_NUM_1CPU 4 //20
-#define THREAD_NUM_2CPU 0
+#define THREAD_NUM_1CPU 10
+#define THREAD_NUM_2CPU 10
+#define NUMA_REG1 0
+#define NUMA_REG2 1
 
 using namespace std;
 
@@ -49,8 +49,8 @@ class Joiner {
     public:
 
     /* 2 Jobs scheduler */
-    JobScheduler job_scheduler1;
-    JobScheduler job_scheduler2;
+    JobScheduler job_scheduler;
+    //JobScheduler job_scheduler2;
 
 
     /* Initialize the row_id Array */
@@ -86,14 +86,6 @@ class Joiner {
 
     //caching info
     std::map<Selection, cached_t*> idxcache;
-
-    Cacheinf newcf() {
-        Cacheinf c;
-        size_t   threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
-        c.S = (cached_t *) calloc(threads, sizeof(cached_t));
-        c.R = (cached_t *) calloc(threads, sizeof(cached_t));
-        return c;
-    }
 };
 
 #include "QueryPlan.hpp"

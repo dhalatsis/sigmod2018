@@ -52,7 +52,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     unsigned rels_number = table->rels_num;
     unsigned new_size = 0;
 
-    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
     struct self_join_arg a[range];
     // struct self_join_arg * a = (self_join_arg *) malloc(range * sizeof(self_join_arg));
     for (size_t i = 0; i < range; i++) {
@@ -67,9 +67,9 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
         a[i].rels_number = rels_number;
         a[i].prefix = 0;
         a[i].size = 0;
-        job_scheduler1.Schedule(new JobSelfJoinFindSize(a[i]));
+        job_scheduler.Schedule(new JobSelfJoinFindSize(a[i]));
     }
-    job_scheduler1.Barrier();
+    job_scheduler.Barrier();
 
     /* Calculate the prefix sums */
     unsigned temp = 0;
@@ -83,9 +83,9 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
     for (size_t i = 0; i < range; i++) {
         if (a[i].size == 0) continue;
         a[i].new_row_ids_matrix = new_row_ids_matrix;
-        job_scheduler1.Schedule(new JobSelfJoin(a[i]));
+        job_scheduler.Schedule(new JobSelfJoin(a[i]));
     }
-    job_scheduler1.Barrier();
+    job_scheduler.Barrier();
 
     new_table->row_ids = new_row_ids_matrix;
     new_table->tups_num = new_size;
@@ -154,7 +154,7 @@ table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predic
     }
 
     // Range for chunking
-    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
 
     /* Calculate check sums on the fly , if its the last query */
     vector<uint64_t> sum(distinctPairs.size(), 0);
@@ -176,9 +176,9 @@ table_t * Joiner::SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predic
         a[i].relations_num = rels_number;
         a[i].priv_checsums = sums[i];
         a[i].distinctPairs = &distinctPairs;
-        job_scheduler1.Schedule(new JobCheckSumSelfJoin(a[i]));
+        job_scheduler.Schedule(new JobCheckSumSelfJoin(a[i]));
     }
-    job_scheduler1.Barrier();
+    job_scheduler.Barrier();
 
 
     /* Create the checksum */
@@ -252,9 +252,9 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
             a[i].filterPtrs = & filterPtrs;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobAllNonInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobAllNonInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -268,9 +268,9 @@ void Joiner::SelectAll(vector<FilterInfo*> & filterPtrs, table_t* table) {
         new_row_ids = (unsigned *) malloc(sizeof(unsigned) * new_tbi);
         for (size_t i = 0; i < range; i++) {
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobAllNonInterFilter(a[i]));
+            job_scheduler.Schedule(new JobAllNonInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         // free(a);    // TODO reconsider
     }
@@ -333,7 +333,7 @@ void Joiner::SelectEqual(table_t *table, int filter) {
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
 
-    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU  + 10;//getRange(THREAD_NUM, size);  // get a good range
 
     /* Intermediate result */
     if (inter_res) {
@@ -355,9 +355,9 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             a[i].table_index = table_index;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobEqualInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobEqualInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -373,9 +373,9 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         for (size_t i = 0; i < range; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobEqualInterFilter(a[i]));
+            job_scheduler.Schedule(new JobEqualInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
         #ifdef time
         struct timeval end;
         gettimeofday(&end, NULL);
@@ -399,9 +399,9 @@ void Joiner::SelectEqual(table_t *table, int filter) {
             a[i].filter = filter;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobEqualNonInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobEqualNonInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -417,9 +417,9 @@ void Joiner::SelectEqual(table_t *table, int filter) {
         for (size_t i = 0; i < range; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobEqualNonInterFilter(a[i]));
+            job_scheduler.Schedule(new JobEqualNonInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         // free(a);    // TODO reconsider
 
@@ -453,7 +453,7 @@ void Joiner::SelectGreater(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU  + 10;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
@@ -472,9 +472,9 @@ void Joiner::SelectGreater(table_t *table, int filter){
             a[i].table_index = table_index;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobGreaterInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobGreaterInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -490,9 +490,9 @@ void Joiner::SelectGreater(table_t *table, int filter){
         for (size_t i = 0; i < range; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobGreaterInterFilter(a[i]));
+            job_scheduler.Schedule(new JobGreaterInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         #ifdef time
         struct timeval end;
@@ -517,9 +517,9 @@ void Joiner::SelectGreater(table_t *table, int filter){
             a[i].filter = filter;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobGreaterNonInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobGreaterNonInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         new_tbi += a[0].size;
         unsigned temp = a[0].size;
@@ -535,9 +535,9 @@ void Joiner::SelectGreater(table_t *table, int filter){
         for (size_t i = 0; i < range ; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobGreaterNonInterFilter(a[i]));
+            job_scheduler.Schedule(new JobGreaterNonInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         // free(a);    // TODO reconsider
 
@@ -568,7 +568,7 @@ void Joiner::SelectLess(table_t *table, int filter){
     /* Update the row ids of the table */
     bool inter_res = table->intermediate_res;
     unsigned new_tbi = 0;
-    size_t range = THREAD_NUM_1CPU;// + THREAD_NUM_2CPU;//getRange(THREAD_NUM, size);  // get a good range
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU + 10;//getRange(THREAD_NUM, size);  // get a good range
     if (inter_res) {
         #ifdef time
         struct timeval start;
@@ -587,9 +587,9 @@ void Joiner::SelectLess(table_t *table, int filter){
             a[i].table_index = table_index;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobLessInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobLessInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -605,9 +605,9 @@ void Joiner::SelectLess(table_t *table, int filter){
         for (size_t i = 0; i < range; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobLessInterFilter(a[i]));
+            job_scheduler.Schedule(new JobLessInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         #ifdef time
         struct timeval end;
@@ -630,9 +630,9 @@ void Joiner::SelectLess(table_t *table, int filter){
             a[i].filter = filter;
             a[i].prefix = 0;
             a[i].size = 0;
-            job_scheduler1.Schedule(new JobLessNonInterFindSize(a[i]));
+            job_scheduler.Schedule(new JobLessNonInterFindSize(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         /* Calculate the prefix sums */
         new_tbi += a[0].size;
@@ -648,9 +648,9 @@ void Joiner::SelectLess(table_t *table, int filter){
         for (size_t i = 0; i < range; i++) {
             if (a[i].size == 0) continue;
             a[i].new_array = new_row_ids;
-            job_scheduler1.Schedule(new JobLessNonInterFilter(a[i]));
+            job_scheduler.Schedule(new JobLessNonInterFilter(a[i]));
         }
-        job_scheduler1.Barrier();
+        job_scheduler.Barrier();
 
         // free(a);    // TODO reconsider
 

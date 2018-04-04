@@ -1,11 +1,15 @@
 #include <fcntl.h>
 #include <iostream>
 #include <fstream>
+#include <string.h>
+#include <sys/time.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include "Relation.hpp"
 
 using namespace std;
+
+double timeMMap = 0;
 
 // Stores a relation into a binary file
 void Relation::storeRelation(const string& fileName) {
@@ -36,19 +40,25 @@ void Relation::storeRelationCSV(const string& fileName) {
 void Relation::dumpSQL(const string& fileName,unsigned relationId) {
     ofstream outFile;
     outFile.open(fileName+".sql",ios::out);
-    
+
     // Create table statement
     outFile << "CREATE TABLE r" << relationId << " (";
     for (unsigned cId=0;cId<columns.size();++cId) {
         outFile << "c" << cId << " bigint" << (cId<columns.size()-1?",":"");
     }
     outFile << ");\n";
-    
+
     // Load from csv statement
     outFile << "copy r" << relationId << " from 'r" << relationId << ".tbl' delimiter '|';\n";
 }
 
 void Relation::loadRelation(const char* fileName) {
+    #ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+    #endif
+
+
     int fd = open(fileName, O_RDONLY);
     if (fd==-1) {
         cerr << "cannot open " << fileName << endl;
@@ -81,6 +91,12 @@ void Relation::loadRelation(const char* fileName) {
         this->columns.push_back(reinterpret_cast<uint64_t*>(addr));
         addr+=size*sizeof(uint64_t);
     }
+
+    #ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeMMap += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    #endif
 }
 
 // Constructor that loads relation from disk
