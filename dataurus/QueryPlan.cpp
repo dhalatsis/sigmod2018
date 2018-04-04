@@ -1111,22 +1111,23 @@ void QueryPlan::destroy(Joiner& joiner) {
 
 /* -----------------------CACHING--------------------------------*/
 // cache(sleep time) the partitions of 0,1 columns for all relations
+// TODO CHAGE IT 
 void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
-    size_t relationColumns; // Number of columns of a single relation
+    /*size_t relationColumns; // Number of columns of a single relation
 
     uint64_t *col0_ptr;
     uint64_t *col1_ptr;
     relation_t *r0;
     relation_t *r1;
 
-    /* Now iterate through all relation's 0,1 cols */
-    /* Create select info for col 0,1 and pass it to selection */
-    /* then partion and store in our map */
+    /* Now iterate through all relation's 0,1 cols
+    /* Create select info for col 0,1 and pass it to selection
+    /* then partion and store in our map
     Relation* relation;
     int relationsCount = joiner.getRelationsCount();
     for (int rel = 0; rel < relationsCount; rel++) {
-        /* create a new entry for the map */
-        /* get the relation */
+        /* create a new entry for the map
+        /* get the relation
         relation = &(joiner.getRelation(rel));
 
         if (relation->columns.size() >= 2){
@@ -1142,7 +1143,7 @@ void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
             Selection col1_sel(col1_sel_inf);
 
             /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face */
+            /* pre partiontion face
             col0_ptr = relation->columns[0];
             col1_ptr = relation->columns[1];
             r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
@@ -1163,12 +1164,12 @@ void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
             Selection col0_sel(col0_sel_inf);
 
             /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face */
+            /* pre partiontion face
             col0_ptr = relation->columns[0];
             r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
             r1 = NULL;
             cache_partition_0(r0, nthreads, c01);
             joiner.idxcache[col0_sel] = c01.R;
         }
-    }
+    }*/
 }

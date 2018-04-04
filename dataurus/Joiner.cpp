@@ -52,6 +52,9 @@ double timePreparation = 0;
 double timeCleanQuery = 0;
 double timeToLoop = 0;
 
+//caching info
+std::map<Selection, cached_t*> idxcache;
+pthread_mutex_t cache_mtx;
 
 int cleanQuery(QueryInfo &info) {
 
@@ -879,6 +882,9 @@ void PrintColumn(column_t *column) {
 /* --------------------------------MAIN-------------------------------*/
 #define MASTER_THREADS 2
 int main(int argc, char* argv[]) {
+    /* Initialize the mutex */
+    pthread_mutex_init(&cache_mtx, 0);
+
     Joiner joiner;
     JobSchedulerMaster main_js;
 
@@ -968,6 +974,8 @@ int main(int argc, char* argv[]) {
         #endif
     }
 
+    /* Destroy it */
+    pthread_mutex_destroy(&cache_mtx);
 
 
 #ifdef time
