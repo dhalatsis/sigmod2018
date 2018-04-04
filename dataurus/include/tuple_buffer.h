@@ -92,9 +92,10 @@ cb_read_backwards(chainedtuplebuffer_t * cb)
 static inline tuple_t *
 cb_next_writepos(chainedtuplebuffer_t * cb)
 {
+    int w;
     if(cb->writepos == CHAINEDBUFF_NUMTUPLESPERBUF) {
         tuplebuffer_t * newbuf = (tuplebuffer_t*) malloc(sizeof(tuplebuffer_t));
-        posix_memalign ((void **)&newbuf->tuples,
+        w = posix_memalign ((void **)&newbuf->tuples,
                             CACHE_LINE_SIZE, sizeof(tuple_t)
                             * CHAINEDBUFF_NUMTUPLESPERBUF);
 

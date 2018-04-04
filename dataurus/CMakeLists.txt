@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fuse-ld=gold -Ofast -march=native -lpthread  -msse4.2")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread  -ltbb")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread")
 
 
 include_directories(include ~/tbb/tbb2018_20171205oss/include JobScheduler)
@@ -29,7 +29,7 @@ endif()
 
 set(SOURCE_FILES QueryPlan.cpp Filter.cpp Relation.cpp Parser.cpp Utils.cpp)
 add_executable(Joiner Joiner.cpp ${SOURCE_FILES} ${JS_SOURCE_FILES} ${RJ_SOURCE_FILES})
-target_link_libraries(Joiner tbb database)
+target_link_libraries(Joiner database)
 
 
 # Interactive command line tool to translate our query format to SQL queries
