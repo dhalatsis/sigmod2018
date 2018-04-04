@@ -427,8 +427,13 @@ void Joiner::CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * ta
                     && selections[i].binding == distinctPairs_in_S[j].binding)
                 {
                     (sum[j] == 0) ? result_str += "NULL" : result_str += to_string(sum[j +  distinctPairs_in_R.size()]);
+                    found = true;
                     break;
                 }
+            }
+
+            if (found == false) {
+                std::cerr << "NOT FOUND SELECTIONS " << selections[i].binding << "." << selections[i].colId << '\n';
             }
 
             /* Flag for the next loop */
@@ -876,10 +881,19 @@ void PrintColumn(column_t *column) {
     }
 }
 
+
+bool sortinrev(const pair<int,int> &a,
+               const pair<int,int> &b)
+{
+       return (a.first > b.first);
+}
+
 /* --------------------------------MAIN-------------------------------*/
-#define MASTER_THREADS 2
 int main(int argc, char* argv[]) {
-    Joiner joiner;
+    struct timeval startAll;
+    gettimeofday(&startAll, NULL);
+
+    //Joiner joiner;
     JobSchedulerMaster main_js;
 
     // Read join relations
@@ -888,16 +902,10 @@ int main(int argc, char* argv[]) {
     while (getline(cin, line)) {
         if (line == "Done") break;
         file_names.push_back(line);
+        //joiner.addRelation(line.c_str());
     }
 
     main_js.Init(file_names, MASTER_THREADS);
-
-
-
-    #ifdef time
-    struct timeval start;
-    gettimeofday(&start, NULL);
-    #endif
 
 
     // Create scheduler NUMA REG 0
@@ -917,58 +925,74 @@ int main(int argc, char* argv[]) {
     // We do the Pre_Caching of each ralations collumns 0,1
     //queryPlan.Pre_Caching01(joiner, threads);
 
-    #ifdef time
-    struct timeval end;
-    gettimeofday(&end, NULL);
-    timePreparation += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    #endif
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
-    int q_counter = 0;
-    std::vector<JobMain*> jobs;
-
-    int bcount = 0;
     int query_no = 0;
+    int q_counter = 0;
+    double timeMain, timeAll;
+    std::vector<JobMain*> jobs;
+    std::vector<pair<int, int>> costVector;
+    struct timeval start, end;
     while (getline(cin, line)) {
 
         if (query_no == 0) sleep(3);
-        query_no++;
 
-
-        #ifdef time
-        gettimeofday(&start, NULL);
-        #endif
 
         // If bacth ended
         if (line == "F"){
+
+            gettimeofday(&start, NULL);
+
+            //  Sort by Jobs cost and schedule
+            //sort(costVector.begin(), costVector.end(), sortinrev);
+            for (auto & x: costVector) {
+                main_js.Schedule(jobs[x.second]);
+            }
+
+            // Wait for jobs to end
             main_js.Barrier();
+
+            // time the Batch
+            gettimeofday(&end, NULL);
+            timeMain = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+            //fprintf(stderr, "-%ld\n", (long)(timeMain * 1000));
+
+            // Print the result with the orded the querys came
             for (size_t i = 0; i < jobs.size(); i++) {
                 /* code */
                 std::cout << jobs[i]->result_ << '\n';
                 delete jobs[i];
             }
-            // Destroy The Vector queue
+
+            // Clean The Vectors
             jobs.clear();
+            costVector.clear();
+
             continue;
         }
 
-        //std::cerr << "Bfore call " << line << '\n';
+        //Parse the query
+        QueryInfo * i = new QueryInfo;
+        i->parseQuery(line);
+        cleanQuery(*i);
 
-        // Create job on runtime
-        JobMain * job = new JobMain(queryPlan, line);
-        // Keep them in a vector
+        // Create the tree
+        JoinTree * optimalJT = queryPlan.joinTreePtr->build(*i, queryPlan.columnInfos, query_no);
+
+        //Create job on runtime
+        JobMain * job = new JobMain(i, line, optimalJT, query_no);
+
+        // Keep jobs in a vector
+        costVector.push_back( make_pair(optimalJT->root->treeCost, jobs.size()) );
         jobs.push_back(job);
-        // Schedule the job by the master JS
-        main_js.Schedule(job);
-
-        #ifdef time
-        gettimeofday(&end, NULL);
-        timeInitMasterjs += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        #endif
+        query_no++;
     }
 
-
+    struct timeval endAll;
+    gettimeofday(&endAll, NULL);
+    timeAll= (endAll.tv_sec - startAll.tv_sec) + (endAll.tv_usec - startAll.tv_usec) / 1000000.0;
+    std::cerr << "timeAll: " << (long)(timeAll * 1000) << endl;
 
 #ifdef time
     std::cerr << "timeMMap:            " << (long)(timeMMap * 1000) << endl;

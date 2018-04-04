@@ -525,14 +525,13 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
 }
 
 // Construct a JoinTree from a set of relations
-JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn) {
+JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     // Maps every possible set of relations to its respective best plan tree
     unordered_map< vector<bool>, JoinTree* > BestTree;
     int relationsCount = queryInfo.relationIds.size();
 
     // Initialise the BestTree structure with nodes
     // for every single relation in the input
-
     for (int i = 0; i < relationsCount; i++) {
         // Allocate memory
         JoinTree* joinTreePtr = new JoinTree();
@@ -584,8 +583,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
                 joinTreeNodePtr->usedColumnInfos[filter.filterColumn].counter++;
             }
         }
-
-
 
         for (auto selection : queryInfo.selections) {
             if (selection.binding == i) {
@@ -651,13 +648,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
             for (int j = 0; j < relationsCount; j++) {
                 // If j is not in the set
                 if (s[j] == false) {
-                    // fprintf(stderr, "The set is { ");
-                    // for (int kk = 0; kk < relationsCount; kk++) {
-                    //     if (s[kk] == true) fprintf(stderr, "%d ", kk);
-                    // }
-                    // fprintf(stderr, "} - ");
-
-                    // fprintf(stderr, "Inserting %d\n", j);
                     // Check if there is a corresponding predicate
                     for (auto predicate : queryInfo.predicates) {
                         // If the right relation is found on the right hand side of a predicate
@@ -665,17 +655,13 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
                             for (int n = 0; n < relationsCount; n++) {
                                 // If a relation from the set is found on the left hand side of the same predicate
                                 if ((s[n] == true) && (predicate.left.binding == n)) {
-                                    // fprintf(stderr, "FOUND PREDICATE L %d.%d=%d.%d\n",
-                                    //     predicate.left.binding, predicate.left.colId,
-                                    //     predicate.right.binding, predicate.right.colId);
+                                    // Create the bit vector representation of the relation j
+                                    vector<bool> relationToVector(relationsCount, false);
+                                    relationToVector[j] = true;
 
                                     // If no predicate exists for the relations in the set
                                     // a tree has not been created
                                     if (BestTree[s] == NULL) continue;
-
-                                    // Create the bit vector representation of the relation j
-                                    vector<bool> relationToVector(relationsCount, false);
-                                    relationToVector[j] = true;
 
                                     // Merge the two trees
                                     JoinTree* currTree = CreateJoinTree(BestTree[s], BestTree[relationToVector], predicate);
@@ -685,48 +671,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
                                     s1[j] = true;
 
                                     if ((BestTree[s1] == NULL) || (BestTree[s1]->getCost() > currTree->getCost())) {
-                                        // if (BestTree[s1] != NULL)
-                                        //     fprintf(stderr, "%lu %lu\n", BestTree[s1]->getCost(), currTree->getCost());
-                                        // else
-                                        //     fprintf(stderr, "NULL %lu\n", currTree->getCost());
-                                        BestTree[s1] = currTree;
-                                    }
-                                }
-                            }
-                        }
-                        // If the right relation is found on the right hand side of a predicate
-                        else if (predicate.left.binding == j) {
-                            for (int n = 0; n < relationsCount; n++) {
-                                // If a relation from the set is found on the left hand side of the same predicate
-                                if ((s[n] == true) && (predicate.right.binding == n)) {
-                                    // fprintf(stderr, "FOUND PREDICATE R %d.%d=%d.%d\n",
-                                    //     predicate.left.binding, predicate.left.colId,
-                                    //     predicate.right.binding, predicate.right.colId);
-
-                                    // If no predicate exists for the relations in the set
-                                    // a tree has not been created
-                                    if (BestTree[s] == NULL) continue;
-
-                                    // Create the bit vector representation of the relation j
-                                    vector<bool> relationToVector(relationsCount, false);
-                                    relationToVector[j] = true;
-
-                                    // Merge the two trees
-                                    PredicateInfo temp = predicate;
-                                    temp.left = predicate.right;
-                                    temp.right = predicate.left;
-
-                                    JoinTree* currTree = CreateJoinTree(BestTree[s], BestTree[relationToVector], temp);
-
-                                    // Save the new merged tree
-                                    vector<bool> s1 = s;
-                                    s1[j] = true;
-
-                                    if ((BestTree[s1] == NULL) || (BestTree[s1]->getCost() > currTree->getCost())) {
-                                        // if (BestTree[s1] != NULL)
-                                        //     fprintf(stderr, "%lu %lu\n", BestTree[s1]->getCost(), currTree->getCost());
-                                        // else
-                                        //     fprintf(stderr, "NULL %lu\n", currTree->getCost());
                                         BestTree[s1] = currTree;
                                     }
                                 }
@@ -771,21 +715,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
             if (predicate->right.binding == joinTreeNodePtr->right->nodeId) {
                 for (auto n : joinedNodes) {
                     if (predicate->left.binding == n) {
-                        joinTreeNodePtr->predicatePtr = predicate;
-                        predicatesSet.erase(predicate);
-                        joinedNodes.insert(joinTreeNodePtr->right->nodeId);
-                        predicateFound = true;
-                        break;
-                    }
-                }
-            }
-            else if (predicate->left.binding == joinTreeNodePtr->right->nodeId) {
-                for (auto n : joinedNodes) {
-                    if (predicate->right.binding == n) {
-                        SelectInfo tempLeft = predicate->left;
-                        predicate->left = predicate->right;
-                        predicate->right = tempLeft;
-
                         joinTreeNodePtr->predicatePtr = predicate;
                         predicatesSet.erase(predicate);
                         joinedNodes.insert(joinTreeNodePtr->right->nodeId);
@@ -890,7 +819,7 @@ JoinTree* JoinTree::AddFilterJoin(JoinTree* leftTree, PredicateInfo* predicateIn
 //#define prints
 
 // Execute the plan described by a JoinTree
-table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop, int qn) {
+table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop) {
     JoinTreeNode *left  = joinTreeNodePtr->left;
     JoinTreeNode *right = joinTreeNodePtr->right;
     table_t *table_l;
@@ -916,7 +845,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 
     // Go left
-    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo, result_str, stop, qn);
+    table_l = joinTreeNodePtr->execute(left, joiner, queryInfo, result_str, stop);
 
     // Return without executing the rest of the tree
     if (*stop == true) {
@@ -925,14 +854,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
     // This is an intermediate node (join)
     if (right != NULL) {
-        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo, result_str, stop, qn);
+        table_r = joinTreeNodePtr->execute(right, joiner, queryInfo, result_str, stop);
 
         // If either column has no tuples stop the execution
         if ((table_l->tups_num == 0) || (table_r->tups_num == 0)) {
             *stop = true;
-
-            if (qn == 121 && joiner.getRelationsCount() > 31)
-                std::cerr << "In strange cutting" << '\n';
 
             for (size_t i = 0; i < queryInfo.selections.size(); i++) {
                 result_str += "NULL";
@@ -1002,14 +928,8 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
     else {
         if (joinTreeNodePtr->parent == NULL) {
-            if (qn == 121) {
-                for (columnInfoMap::iterator it=joinTreeNodePtr->usedColumnInfos.begin(); it != joinTreeNodePtr->usedColumnInfos.end(); it++) {
-                    //if (it->second.isSelectionColumn)
-                    std::cerr << "Colinfo: " <<  it->first.binding << "." << it->first.colId << " sel? " << it->second.isSelectionColumn <<'\n';
-                }
-            }
             res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
-                                                  ,queryInfo.selections, result_str, qn);
+                                                  ,queryInfo.selections, result_str);
         }
         else {
             res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
@@ -1021,16 +941,11 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
 // Estimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
-    this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;// + this->right->usedColumnInfos[predicateInfo.right].size;
-
-    // fprintf(stderr, "left=%d.%d right=%d.%d cost: %lu + %lu + %lu = %lu\n",
-    //     predicateInfo.left.binding, predicateInfo.left.colId,
-    //     predicateInfo.right.binding, predicateInfo.right.colId,
-    //     this->left->treeCost, this->left->usedColumnInfos[predicateInfo.left].size, this->right->usedColumnInfos[predicateInfo.right].size, this->treeCost);
+    this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;
 }
 
 // Returns the cost of a given JoinTree
-uint64_t JoinTree::getCost() {
+double JoinTree::getCost() {
     return this->root->treeCost;
 }
 
@@ -1039,11 +954,10 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
         return;
     }
 
-    fprintf(stderr, "\n");
     int depth = 0;
 
     while (joinTreeNodePtr->nodeId == -1) {
-        for (int i=0; i < depth; i++) fprintf(stderr, "    ");
+        for (int i=0; i < depth; i++) fprintf(stderr,"    ");
         //fprintf(stderr, "In node with predicate: ");
         fprintf(stderr,"%d.%d=%d.%d\n", joinTreeNodePtr->predicatePtr->left.binding,
             joinTreeNodePtr->predicatePtr->left.colId, joinTreeNodePtr->predicatePtr->right.binding,
@@ -1128,7 +1042,7 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         args[i].columnTuples = columnTuples[i];
         args[i].columnInfo   = &columnInfosVector[i];
         //if (i % 2 == 0)
-        joiner.job_scheduler.Schedule(new StatisticsJob(&args[i]));
+            joiner.job_scheduler.Schedule(new StatisticsJob(&args[i]));
         //else
         //    joiner.job_scheduler2.Schedule(new StatisticsJob(&args[i]));
     }

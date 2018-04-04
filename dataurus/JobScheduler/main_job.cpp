@@ -1,23 +1,22 @@
 #include "main_job.h"
+#include "time.h"
 
 static double timeExecute = 0;
 static double timeTreegen = 0;
 
+/*
 int JobMain::Run(Joiner & joiner) {
     QueryPlan & queryPlan = queryPlan_;
     string    & line      = line_;
     QueryInfo i;
 
+    double timeMain;
+    struct timeval start;
+    gettimeofday(&start, NULL);
+
     // Parse the query
-    //std::cerr << "Query:" << line.c_str() << '\n';
     i.parseQuery(line);
     cleanQuery(i);
-    //q_counter++;
-
-    #ifdef time
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-    #endif
 
     JoinTree* optimalJoinTree;
     optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
@@ -34,13 +33,44 @@ int JobMain::Run(Joiner & joiner) {
     table_t* result = optimalJoinTree->root->execute(optimalJoinTree->root, joiner, i, result_str, &stop);
 
     //Print the result
-    //std::cout << result_str << endl;
-    //write to result
     result_ = result_str;
-    //result_ = "NOT IMPL";
 
-    // #ifdef time
-    // gettimeofday(&end, NULL);
-    // timeExecute += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    // #endif
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeMain = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    if (joiner.getRelationsCount() > 31)
+        fprintf(stderr, "%d/%d:%ld-%lu\n", qn_, joiner.mst, (long) (timeMain * 1000), optimalJoinTree->root->treeCost);
+}
+*/
+
+int JobMain::Run(Joiner & joiner) {
+
+    // Count Query Time
+    double timeMain;
+    struct timeval start;
+    gettimeofday(&start, NULL);
+
+    // Execute the JoinTree
+    bool stop = false;
+    table_t* result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop, query_no_);
+
+    if (query_no_ == 121 && joiner.getRelationsCount() > 31) {
+
+        columnInfoMap & cmap = joinTreePtr_->root->usedColumnInfos;
+        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
+            std::cerr << "Select: " <<  it->first.binding << "." << it->first.colId << '\n';
+        }
+    }
+
+    // Count query time
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    timeMain = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    if (joiner.getRelationsCount() > 31)
+        //fprintf(stderr, "%d/%d:%ld-%lu\n", query_no_, joiner.mst, (long) (timeMain * 1000), joinTreePtr_->root->treeCost);
+
+
+    // Free unused vars
+    delete i_;
+    delete joinTreePtr_;
 }

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string.h>
 #include <sys/time.h>
+#include <time.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include "Relation.hpp"
@@ -53,12 +54,6 @@ void Relation::dumpSQL(const string& fileName,unsigned relationId) {
 }
 
 void Relation::loadRelation(const char* fileName) {
-    #ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-    #endif
-
-
     int fd = open(fileName, O_RDONLY);
     if (fd==-1) {
         cerr << "cannot open " << fileName << endl;
@@ -91,12 +86,6 @@ void Relation::loadRelation(const char* fileName) {
         this->columns.push_back(reinterpret_cast<uint64_t*>(addr));
         addr+=size*sizeof(uint64_t);
     }
-
-    #ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeMMap += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    #endif
 }
 
 // Constructor that loads relation from disk

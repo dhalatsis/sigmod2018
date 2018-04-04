@@ -24,6 +24,7 @@
 
 //#define time
 //#define prints
+#define MASTER_THREADS  2
 #define THREAD_NUM_1CPU 10
 #define THREAD_NUM_2CPU 10
 #define NUMA_REG1 0
@@ -49,6 +50,7 @@ class Joiner {
     public:
 
     /* 2 Jobs scheduler */
+    int mst;
     JobScheduler job_scheduler;
     //JobScheduler job_scheduler2;
 
@@ -169,7 +171,7 @@ class Joiner {
         return temp;
     }
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
-    table_t* SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str);
+    table_t* SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str, int qn);
 
     //caching info
     std::map<Selection, cached_t*> idxcache;

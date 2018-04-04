@@ -231,6 +231,7 @@ public:
             JobExecutor *executor = static_cast<JobExecutor*>(pthis);
             JobMaster *JobMaster = nullptr;
             Joiner joiner;
+            joiner.mst = 0;
             joiner.job_scheduler.Init(THREAD_NUM_1CPU, NUMA_REG1);
 
             // Initialize joiners with relations
@@ -271,6 +272,7 @@ public:
             JobExecutor *executor = static_cast<JobExecutor*>(pthis);
             JobMaster *JobMaster = nullptr;
             Joiner joiner;
+            joiner.mst = 1;
             joiner.job_scheduler.Init(THREAD_NUM_1CPU, NUMA_REG2);
 
             // Initialize joiners with relations
