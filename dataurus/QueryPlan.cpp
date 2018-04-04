@@ -47,6 +47,7 @@ void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
+    newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
@@ -75,9 +76,6 @@ void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
 void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
     ColumnInfo oldColumnInfo = this->usedColumnInfos[filterInfo.filterColumn];
 
-    //fprintf(stderr, "About to apply filter on column %d.%d\n", filterInfo.filterColumn.binding, filterInfo.filterColumn.colId);
-    //oldColumnInfo.print();
-
     // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
 
@@ -89,9 +87,7 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
-
-    //fprintf(stderr, "After the filter\n");
-    //newColumnInfo.print();
+    newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
@@ -107,9 +103,6 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
             if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-
-            //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
-            //it->second.print();
         }
     }
 
@@ -123,9 +116,6 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
 void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
     ColumnInfo oldColumnInfo = this->usedColumnInfos[filterInfo.filterColumn];
 
-    //fprintf(stderr, "About to apply filter on column %d.%d\n", filterInfo.filterColumn.binding, filterInfo.filterColumn.colId);
-    //oldColumnInfo.print();
-
     // Update the info of the column on which the filter is applied
     ColumnInfo newColumnInfo;
 
@@ -136,9 +126,7 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
     newColumnInfo.n        = 1;
     newColumnInfo.spread   = 1;
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
-
-    //fprintf(stderr, "After the filter\n");
-    //newColumnInfo.print();
+    newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
@@ -154,9 +142,6 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
             it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
             if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-
-            //fprintf(stderr, "Update after filter column %d.%d\n", it->first.binding, it->first.colId);
-            //it->second.print();
         }
     }
 
@@ -261,6 +246,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+    newLeftColumnInfo.isSelectionColumn = oldLeftColumnInfo.isSelectionColumn;
 
     newRightColumnInfo.min      = oldRightColumnInfo.min;
     newRightColumnInfo.max      = oldRightColumnInfo.max;
@@ -270,6 +256,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+    newRightColumnInfo.isSelectionColumn = oldRightColumnInfo.isSelectionColumn;
 
     //------------------
     /*
@@ -298,9 +285,6 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
             if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
-
-            //fprintf(stderr, "Update after join column %d.%d\n", it->first.binding, it->first.colId);
-            //it->second.print();
         }
     }
 
@@ -318,9 +302,6 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
             if(it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
             this->usedColumnInfos[it->first] = it->second;
-
-            //fprintf(stderr, "Update after join column %d.%d\n", it->first.binding, it->first.colId);
-            //it->second.print();
         }
     }
 
@@ -365,6 +346,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+    newLeftColumnInfo.isSelectionColumn = oldLeftColumnInfo.isSelectionColumn;
 
     newRightColumnInfo.min      = oldRightColumnInfo.min;
     newRightColumnInfo.max      = oldRightColumnInfo.max;
@@ -374,6 +356,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+    newRightColumnInfo.isSelectionColumn = oldRightColumnInfo.isSelectionColumn;
 
     this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
     this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
@@ -453,6 +436,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
+    newLeftColumnInfo.isSelectionColumn = oldLeftColumnInfo.isSelectionColumn;
 
     newRightColumnInfo.min      = oldRightColumnInfo.min;
     newRightColumnInfo.max      = oldRightColumnInfo.max;
@@ -462,6 +446,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
+    newRightColumnInfo.isSelectionColumn = oldRightColumnInfo.isSelectionColumn;
 
     this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
     this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
@@ -757,9 +742,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
     }
 
     // Restore the initial column infos of the left child
-    for (columnInfoMap::iterator it=joinTreeNodePtr->left->usedColumnInfos.begin(); it != joinTreeNodePtr->left->usedColumnInfos.end(); it++) {
-        it->second = columnInfos[it->first.relId][it->first.colId];
-    }
+    // for (columnInfoMap::iterator it=joinTreeNodePtr->left->usedColumnInfos.begin(); it != joinTreeNodePtr->left->usedColumnInfos.end(); it++) {
+    //     it->second = columnInfos[it->first.relId][it->first.colId];
+    // }
 
     // Go bottom-up and save the corresponding predicates
     joinedNodes.insert(joinTreeNodePtr->left->nodeId);
@@ -799,9 +784,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos, int qn
         }
 
         // Restore the initial column infos of the right child
-        for (columnInfoMap::iterator it=joinTreeNodePtr->right->usedColumnInfos.begin(); it != joinTreeNodePtr->right->usedColumnInfos.end(); it++) {
-            it->second = columnInfos[it->first.relId][it->first.colId];
-        }
+        // for (columnInfoMap::iterator it=joinTreeNodePtr->right->usedColumnInfos.begin(); it != joinTreeNodePtr->right->usedColumnInfos.end(); it++) {
+        //     it->second = columnInfos[it->first.relId][it->first.colId];
+        // }
 
         // Go to parent
         if (joinTreeNodePtr->parent != NULL) {
@@ -945,8 +930,8 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
 
             return NULL;
         }
-
-        // Get the somains of the two columns to be joined
+/*
+        // Get the domains of the two columns to be joined
         uint64_t leftMin  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].min;
         uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
         uint64_t rightMin = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].min;
@@ -956,7 +941,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         //  leftMin, leftMax, rightMin, rightMax, table_l->tups_num, table_r->tups_num);
 
         // Apply a custom filter to create the same range
-/*
+
         if (leftMin < rightMin && table_l->intermediate_res) {
             FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMin-1, FilterInfo::Comparison::Greater);
             joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
@@ -1002,12 +987,12 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
     else {
         if (joinTreeNodePtr->parent == NULL) {
-            if (qn == 121) {
-                for (columnInfoMap::iterator it=joinTreeNodePtr->usedColumnInfos.begin(); it != joinTreeNodePtr->usedColumnInfos.end(); it++) {
-                    //if (it->second.isSelectionColumn)
-                    std::cerr << "Colinfo: " <<  it->first.binding << "." << it->first.colId << " sel? " << it->second.isSelectionColumn <<'\n';
-                }
-            }
+            // if (qn == 121) {
+            //     for (columnInfoMap::iterator it=joinTreeNodePtr->usedColumnInfos.begin(); it != joinTreeNodePtr->usedColumnInfos.end(); it++) {
+            //         //if (it->second.isSelectionColumn)
+            //         std::cerr << "Colinfo: " <<  it->first.binding << "." << it->first.colId << " sel? " << it->second.isSelectionColumn <<'\n';
+            //     }
+            // }
             res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
                                                   ,queryInfo.selections, result_str, qn);
         }

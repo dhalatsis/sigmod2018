@@ -941,13 +941,10 @@ int main(int argc, char* argv[]) {
     std::vector<pair<int, int>> costVector;
     struct timeval start, end;
     while (getline(cin, line)) {
-
         if (query_no == 0) sleep(3);
 
-
         // If bacth ended
-        if (line == "F"){
-
+        if (line == "F") {
             gettimeofday(&start, NULL);
 
             //  Sort by Jobs cost and schedule

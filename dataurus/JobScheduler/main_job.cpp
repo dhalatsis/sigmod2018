@@ -54,21 +54,10 @@ int JobMain::Run(Joiner & joiner) {
     bool stop = false;
     table_t* result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop, query_no_);
 
-    if (query_no_ == 121 && joiner.getRelationsCount() > 31) {
-
-        columnInfoMap & cmap = joinTreePtr_->root->usedColumnInfos;
-        for (columnInfoMap::iterator it=cmap.begin(); it != cmap.end(); it++) {
-            std::cerr << "Select: " <<  it->first.binding << "." << it->first.colId << '\n';
-        }
-    }
-
     // Count query time
     struct timeval end;
     gettimeofday(&end, NULL);
     timeMain = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-    if (joiner.getRelationsCount() > 31)
-        //fprintf(stderr, "%d/%d:%ld-%lu\n", query_no_, joiner.mst, (long) (timeMain * 1000), joinTreePtr_->root->treeCost);
-
 
     // Free unused vars
     delete i_;
