@@ -25,8 +25,8 @@
 //#define time
 //#define prints
 #define MASTER_THREADS  2
-#define THREAD_NUM_1CPU 10
-#define THREAD_NUM_2CPU 10
+#define THREAD_NUM_1CPU 2
+#define THREAD_NUM_2CPU 2
 #define NUMA_REG1 0
 #define NUMA_REG2 1
 
@@ -37,6 +37,9 @@ class JTree;
 struct ColumnInfo;
 typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
 
+//caching info
+extern std::map<Selection, cached_t*> idxcache;
+extern pthread_mutex_t cache_mtx;
 /*
  * Prints a column
  * Arguments : A @column of column_t type
@@ -83,32 +86,40 @@ class Joiner {
 
     // Joins a given set of relations
     template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
-    T1* join(T1 *table_r, T1 *table_s, T2 &pred_info, T3 & cmap, T4 isRoot, std::vector<T5> & selections, T6 leafs, T7 & result_str){
-        // #ifdef time
-        // struct timeval start;
-        // gettimeofday(&start, NULL);
-        // #endif
+    T1* join(T1 *table_r, T1 *table_s, T2 &pred_info, T3 & cmap, T4 isRoot, std::vector<T5> & selections, T6 leafs, T7 & result_str) {
+        /*#ifdef time
+        struct timeval start;
+        gettimeofday(&start, NULL);
+        #endif*/
+
         relation_t * r1;
         relation_t * r2;
-        // #ifdef time
-        // struct timeval end;
-        // gettimeofday(&end, NULL);
-        // timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        // gettimeofday(&start, NULL);
-        // #endif
+
+        /*#ifdef time
+        struct timeval end;
+        gettimeofday(&end, NULL);
+        timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        gettimeofday(&start, NULL);
+        #endif*/
+
         //HERE WE CHECK FOR CACHED PARTITIONS
         Cacheinf c;
         size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
         Selection left(pred_info.left);
         Selection right(pred_info.right);
-
+        int ch_flag;
         /* Debug orest */
         if (leafs&1) {
-            if (idxcache.find(left) != idxcache.end()) {
+            pthread_mutex_lock(&cache_mtx);
+            ch_flag = (idxcache.find(left) != idxcache.end());
+            pthread_mutex_unlock(&cache_mtx);
+            if (ch_flag == 1) {
                 r1 = (relation_t *)malloc(sizeof(relation_t));
                 r1->num_tuples = table_r->tups_num;
+                pthread_mutex_lock(&cache_mtx);
                 c.R = idxcache[left];
+                pthread_mutex_unlock(&cache_mtx);
             }
             else {
 
@@ -122,10 +133,15 @@ class Joiner {
         }
 
         if (leafs&2) {
-            if (idxcache.find(right) != idxcache.end()) {
+            pthread_mutex_lock(&cache_mtx);
+            ch_flag = (idxcache.find(right) != idxcache.end());
+            pthread_mutex_unlock(&cache_mtx);
+            if (ch_flag == 1) {
                 r2 = (relation_t *)malloc(sizeof(relation_t));
                 r2->num_tuples = table_s->tups_num;
+                pthread_mutex_lock(&cache_mtx);
                 c.S = idxcache[right];
+                pthread_mutex_unlock(&cache_mtx);
             }
             else {
                 r2 = CreateRelationT(table_s, pred_info.right);
@@ -140,16 +156,23 @@ class Joiner {
 
         if (leafs&1) {
             free(r1);
+            pthread_mutex_lock(&cache_mtx);
             idxcache[left] = c.R;
+            pthread_mutex_unlock(&cache_mtx);
         }
         if (leafs&2) {
             free(r2);
+            pthread_mutex_lock(&cache_mtx);
             idxcache[right] = c.S;
+            pthread_mutex_unlock(&cache_mtx);
         }
-        // #ifdef time
-        // gettimeofday(&end, NULL);
-        // timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        // #endif
+
+
+        #ifdef time
+        gettimeofday(&end, NULL);
+        timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+        #endif
+
         table_t *temp = NULL;
         // On root dont create a resilting table just get the checksums
         if (isRoot) {
@@ -157,6 +180,7 @@ class Joiner {
         } else {
             temp = CreateTableT(res, table_r, table_s, cmap);
         }
+
 
         /* Free the tables and the result of radix */
         free(table_r->row_ids);
@@ -170,11 +194,12 @@ class Joiner {
 
         return temp;
     }
+
     table_t* SelfJoin(table_t *table, PredicateInfo *pred_info, columnInfoMap & cmap);
     table_t* SelfJoinCheckSumOnTheFly(table_t *table, PredicateInfo *predicate_ptr, columnInfoMap & cmap, std::vector<SelectInfo> selections, string & result_str, int qn);
 
     //caching info
-    std::map<Selection, cached_t*> idxcache;
+    //std::map<Selection, cached_t*> idxcache;
 };
 
 #include "QueryPlan.hpp"

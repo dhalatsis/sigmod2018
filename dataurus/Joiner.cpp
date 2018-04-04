@@ -52,6 +52,9 @@ double timePreparation = 0;
 double timeCleanQuery = 0;
 double timeToLoop = 0;
 
+//caching info
+std::map<Selection, cached_t*> idxcache;
+pthread_mutex_t cache_mtx;
 
 int cleanQuery(QueryInfo &info) {
 
@@ -893,6 +896,9 @@ int main(int argc, char* argv[]) {
     struct timeval startAll;
     gettimeofday(&startAll, NULL);
 
+    /* Initialize the mutex */
+    pthread_mutex_init(&cache_mtx, 0);    
+
     //Joiner joiner;
     JobSchedulerMaster main_js;
 
@@ -987,6 +993,9 @@ int main(int argc, char* argv[]) {
         costVector.push_back( make_pair(optimalJT->root->treeCost, jobs.size()) );
         jobs.push_back(job);
         query_no++;
+
+        /* Destroy it */
+        pthread_mutex_destroy(&cache_mtx);
     }
 
     struct timeval endAll;
