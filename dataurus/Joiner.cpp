@@ -928,7 +928,7 @@ int main(int argc, char* argv[]) {
 
         JoinTree* optimalJoinTree;
         optimalJoinTree = queryPlan.joinTreePtr->build(i, queryPlan.columnInfos);
-        //optimalJoinTree->root->print(optimalJoinTree->root);
+        optimalJoinTree->root->print(optimalJoinTree->root);
 
         #ifdef time
         gettimeofday(&end, NULL);
