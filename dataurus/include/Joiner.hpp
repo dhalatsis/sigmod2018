@@ -39,7 +39,6 @@ typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
 //caching info
 extern std::map<Selection, cached_t*> idxcache;
 extern pthread_mutex_t cache_mtx;
-
 /*
  * Prints a column
  * Arguments : A @column of column_t type

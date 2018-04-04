@@ -240,7 +240,7 @@ bool SelectInfo::operator==(const SelectInfo& o) const {
 bool operator<(const PredicateInfo& lhs, const PredicateInfo& rhs) {
     if  (lhs.left < rhs.left)
         return true;
-    else if (rhs.right < lhs.right)
+    else if (rhs.left < lhs.left)
         return false;
     else
         return lhs.right < rhs.right;
