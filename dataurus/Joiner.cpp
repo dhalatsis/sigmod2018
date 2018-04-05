@@ -919,6 +919,9 @@ int main(int argc, char* argv[]) {
     // Preparation phase (not timed)
     QueryPlan queryPlan;
     main_js.Schedule(new JobFillQueryPlan(queryPlan));  // MAYBE BARREIR IN THE FUTURE
+    
+    // Wait for jobs to end
+    main_js.Barrier();
 
     // THis will become a job
     // Get the needed info of every column
@@ -944,7 +947,7 @@ int main(int argc, char* argv[]) {
             gettimeofday(&start, NULL);
 
             //  Sort by Jobs cost and schedule
-            //sort(costVector.begin(), costVector.end(), sortinrev);
+            sort(costVector.begin(), costVector.end(), sortinrev);
             for (auto & x: costVector) {
                 main_js.Schedule(jobs[x.second]);
             }

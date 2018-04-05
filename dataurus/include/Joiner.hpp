@@ -25,8 +25,8 @@
 //#define time
 //#define prints
 #define MASTER_THREADS  2
-#define THREAD_NUM_1CPU 2
-#define THREAD_NUM_2CPU 2
+#define THREAD_NUM_1CPU 10
+#define THREAD_NUM_2CPU 10
 #define NUMA_REG1 0
 #define NUMA_REG2 1
 
