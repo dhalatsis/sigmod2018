@@ -35,6 +35,8 @@ using namespace std;
 
 class JTree;
 struct ColumnInfo;
+// Use it in filter cpp for the result of the map
+typedef std::map<Selection, cached_t*>::iterator cache_res;
 typedef std::map<SelectInfo, ColumnInfo> columnInfoMap;
 
 //caching info
@@ -83,89 +85,105 @@ class Joiner {
     void SelectEqual(table_t *table, int filter);
     void SelectGreater(table_t *table, int filter);
     void SelectLess(table_t *table, int filter);
+    cached_t* Cached_SelectEqual(uint64_t fil, cache_res& cache_info, table_t* table);
 
     // Joins a given set of relations
     template <typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
     T1* join(T1 *table_r, T1 *table_s, T2 &pred_info, T3 & cmap, T4 isRoot, std::vector<T5> & selections, T6 leafs, T7 & result_str) {
-        /*#ifdef time
-        struct timeval start;
-        gettimeofday(&start, NULL);
-        #endif*/
 
         relation_t * r1;
         relation_t * r2;
-
-        /*#ifdef time
-        struct timeval end;
-        gettimeofday(&end, NULL);
-        timeCreateRelationT += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
-        gettimeofday(&start, NULL);
-        #endif*/
 
         //HERE WE CHECK FOR CACHED PARTITIONS
         Cacheinf c;
         size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
+
+
+
         Selection left(pred_info.left);
         Selection right(pred_info.right);
         int ch_flag;
-        /* Debug orest */
-        if (leafs&1) {
-            pthread_mutex_lock(&cache_mtx);
-            ch_flag = (idxcache.find(left) != idxcache.end());
-            pthread_mutex_unlock(&cache_mtx);
-            if (ch_flag == 1) {
-                r1 = (relation_t *)malloc(sizeof(relation_t));
-                r1->num_tuples = table_r->tups_num;
+
+        // if (table_r->ch_filter == NULL) {
+            if (leafs&1) {
                 pthread_mutex_lock(&cache_mtx);
-                c.R = idxcache[left];
+                ch_flag = (idxcache.find(left) != idxcache.end());
                 pthread_mutex_unlock(&cache_mtx);
-            }
-            else {
+                if (ch_flag == 1) {
+                    r1 = (relation_t *)malloc(sizeof(relation_t));
+                    r1->num_tuples = table_r->tups_num;
+                    pthread_mutex_lock(&cache_mtx);
+                    c.R = idxcache[left];
+                    pthread_mutex_unlock(&cache_mtx);
+                }
+                else {
+
+                    r1 = CreateRelationT(table_r, pred_info.left);
+                    c.R = (cached_t *) calloc(threads, sizeof(cached_t));
+                }
+            } else {
 
                 r1 = CreateRelationT(table_r, pred_info.left);
-                c.R = (cached_t *) calloc(threads, sizeof(cached_t));
+                c.R = NULL;
             }
-        } else {
+        // } else {
+        //     // We have cached filter
+        //     std::cerr << "In left cached filter" << '\n';
+        //     r1 = (relation_t *)malloc(sizeof(relation_t));
+        //     r1->num_tuples = table_r->tups_num;
+        //     c.R = table_r->ch_filter;
+        // }
 
-            r1 = CreateRelationT(table_r, pred_info.left);
-            c.R = NULL;
-        }
 
-        if (leafs&2) {
-            pthread_mutex_lock(&cache_mtx);
-            ch_flag = (idxcache.find(right) != idxcache.end());
-            pthread_mutex_unlock(&cache_mtx);
-            if (ch_flag == 1) {
-                r2 = (relation_t *)malloc(sizeof(relation_t));
-                r2->num_tuples = table_s->tups_num;
+        // Check for cached filter
+        //if (table_s->ch_filter == NULL) {
+            if (leafs&2) {
                 pthread_mutex_lock(&cache_mtx);
-                c.S = idxcache[right];
+                ch_flag = (idxcache.find(right) != idxcache.end());
                 pthread_mutex_unlock(&cache_mtx);
-            }
-            else {
+                if (ch_flag == 1) {
+                    r2 = (relation_t *)malloc(sizeof(relation_t));
+                    r2->num_tuples = table_s->tups_num;
+                    pthread_mutex_lock(&cache_mtx);
+                    c.S = idxcache[right];
+                    pthread_mutex_unlock(&cache_mtx);
+                }
+                else {
+                    r2 = CreateRelationT(table_s, pred_info.right);
+                    c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
+                }
+            } else {
                 r2 = CreateRelationT(table_s, pred_info.right);
-                c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
+                c.S = NULL;
             }
-        } else {
-            r2 = CreateRelationT(table_s, pred_info.right);
-            c.S = NULL;
-        }
+        // } else {
+        //     // We have cached filter
+        //     std::cerr << "In right cached filter" << '\n';
+        //     r2 = (relation_t *)malloc(sizeof(relation_t));
+        //     r2->num_tuples = table_s->tups_num;
+        //     c.S = table_s->ch_filter;
+        // }
 
         result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
 
-        if (leafs&1) {
-            free(r1);
-            pthread_mutex_lock(&cache_mtx);
-            idxcache[left] = c.R;
-            pthread_mutex_unlock(&cache_mtx);
-        }
-        if (leafs&2) {
-            free(r2);
-            pthread_mutex_lock(&cache_mtx);
-            idxcache[right] = c.S;
-            pthread_mutex_unlock(&cache_mtx);
-        }
+        //if (table_r->ch_filter == NULL) {
+            if (leafs&1) {
+                free(r1);
+                pthread_mutex_lock(&cache_mtx);
+                idxcache[left] = c.R;
+                pthread_mutex_unlock(&cache_mtx);
+            }
+        //}
+
+        //if (table_s->ch_filter == NULL) {
+            if (leafs&2) {
+                free(r2);
+                pthread_mutex_lock(&cache_mtx);
+                idxcache[right] = c.S;
+                pthread_mutex_unlock(&cache_mtx);
+            }
+        //}
 
 
         #ifdef time
@@ -183,6 +201,11 @@ class Joiner {
 
 
         /* Free the tables and the result of radix */
+        if (table_r->ch_filter != NULL) free(table_r->ch_filter);
+        if (table_s->ch_filter != NULL) free(table_s->ch_filter);
+        table_r->ch_filter = NULL;
+        table_s->ch_filter = NULL;
+
         free(table_r->row_ids);
         delete table_r->column_j;
         delete table_r;

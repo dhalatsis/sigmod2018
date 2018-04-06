@@ -23,9 +23,10 @@ public:
     QueryInfo * i_;
     JoinTree  * joinTreePtr_;
     string result_;
+    string line_;
     int query_no_;
 
-    JobMain(QueryInfo * i, string & line, JoinTree * joinTreePtr, int query_no) : i_(i), joinTreePtr_(joinTreePtr), query_no_(query_no) {}
+    JobMain(QueryInfo * i, string line, JoinTree * joinTreePtr, int query_no) : i_(i), joinTreePtr_(joinTreePtr), query_no_(query_no), line_(line) {}
     ~JobMain() {};
     int Run(Joiner & joiner);
 };

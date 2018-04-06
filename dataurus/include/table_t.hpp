@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include "parallel_radix_join.h"
 #include "filter_job.h"
 
 
@@ -21,6 +22,7 @@ struct table_t {
     unsigned * row_ids;
     unsigned   tups_num;
     unsigned   rels_num;
+    cached_t * ch_filter;
 
     /* use the binfing to map the relations */
     std::unordered_map<unsigned, unsigned> relations_bindings;

@@ -501,6 +501,7 @@ table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * t
     table_t * new_table = new table_t;
     new_table->intermediate_res = true;
     new_table->column_j = new column_t;
+    new_table->ch_filter = NULL;
     new_table->tups_num = result->totalresults;
     new_table->rels_num = num_relations;
     new_table->row_ids = (unsigned *) malloc(sizeof(unsigned) * num_relations * result->totalresults);
@@ -736,6 +737,7 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     table_t_ptr->column_j = new column_t;
     table_t_ptr->intermediate_res = false;
     table_t_ptr->tups_num = rel.size;
+    table_t_ptr->ch_filter = NULL;
     table_t_ptr->rels_num = 1;
     table_t_ptr->row_ids = NULL;
 
@@ -919,7 +921,7 @@ int main(int argc, char* argv[]) {
     // Preparation phase (not timed)
     QueryPlan queryPlan;
     main_js.Schedule(new JobFillQueryPlan(queryPlan));  // MAYBE BARREIR IN THE FUTURE
-    
+
     // Wait for jobs to end
     main_js.Barrier();
 
@@ -940,14 +942,14 @@ int main(int argc, char* argv[]) {
     std::vector<pair<int, int>> costVector;
     struct timeval start, end;
     while (getline(cin, line)) {
-        if (query_no == 0) sleep(3);
+        if (query_no == 0) sleep(4);
 
         // If bacth ended
         if (line == "F") {
             gettimeofday(&start, NULL);
 
             //  Sort by Jobs cost and schedule
-            sort(costVector.begin(), costVector.end(), sortinrev);
+            //sort(costVector.begin(), costVector.end(), sortinrev);
             for (auto & x: costVector) {
                 main_js.Schedule(jobs[x.second]);
             }
@@ -989,10 +991,10 @@ int main(int argc, char* argv[]) {
         costVector.push_back( make_pair(optimalJT->root->treeCost, jobs.size()) );
         jobs.push_back(job);
         query_no++;
-
-        /* Destroy it */
-        pthread_mutex_destroy(&cache_mtx);
     }
+
+    /* Destroy it */
+    pthread_mutex_destroy(&cache_mtx);
 
     struct timeval endAll;
     gettimeofday(&endAll, NULL);

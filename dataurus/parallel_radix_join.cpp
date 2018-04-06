@@ -513,7 +513,6 @@ prj_thread(void * param)
     // # JIM/GEORGE
 
     if (args->outR != NULL) {
-
         if (args->outR->tmp == NULL) {
             part.rel = args->relR;
             part.tmp          = args->tmpR;
@@ -527,7 +526,7 @@ prj_thread(void * param)
 
             args->outR->tmp = (void *) args->tmpR;
             args->outR->hist = args->histR;
-            args->outR->output = outputR;
+            args->outR->output = (my_tid == 0) ? outputR : NULL;
             args->outR->num_tuples = args->numR;
             args->outR->total_tuples = args->totalR;
         }
@@ -569,7 +568,7 @@ prj_thread(void * param)
 
             args->outS->tmp = (void *) args->tmpS;
             args->outS->hist = args->histS;
-            args->outS->output = outputS;
+            args->outS->output = (my_tid == 0) ? outputS : NULL;
             args->outS->num_tuples = args->numS;
             args->outS->total_tuples = args->totalS;
         }
@@ -608,8 +607,10 @@ prj_thread(void * param)
             int32_t ntupS = outputS[i+1] - outputS[i] - PADDING_TUPLES;
 
             if(ntupR > 0 && ntupS > 0) {
+
+
                 /* Determine the NUMA node of each partition: */
-                void * ptr = (void*)&((args->tmpR + outputR[i])[0]);
+                //void * ptr = (void*)&((args->tmpR + outputR[i])[0]);
 
                 /* TODO:when we do the 2cpu NUMA change it */
                 //int pq_idx = get_numa_node_of_address(ptr);
