@@ -767,6 +767,13 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     int32_t numperthr[2];
     int64_t result = 0;
 
+    //JIM + GEORGE
+    int rNull = 0, sNull = 0;
+    if (cinf.R != NULL && cinf.R[0].tmp == NULL)
+        rNull = 1;
+    if (cinf.S != NULL && cinf.S[0].tmp == NULL)
+        sNull =1;
+
     /* task_queue_t * part_queue, * join_queue; */
     int numnuma = 1; // get_num_numa_regions();  # GEO / TEO
     task_queue_t * part_queue[numnuma];
@@ -913,10 +920,26 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     }
 
 // # JIM/GEORGE
+
+//in case of problem, delete these lines!
+    for (i=1; i < nthreads && rNull == 1; i++) {
+        free(cinf.R[i].output);
+        cinf.R[i].output = cinf.R[0].output;
+    }
+
+    for (i=1; i < nthreads && sNull == 1; i++) {
+        free(cinf.S[i].output);
+        cinf.S[i].output = cinf.S[0].output;
+    }
+//until here
+
     if (cinf.R == NULL)
         free(tmpRelR);
     if (cinf.S == NULL)
         free(tmpRelS);
+
+
+
 #ifdef SYNCSTATS
     free(args[0].globaltimer);
 #endif

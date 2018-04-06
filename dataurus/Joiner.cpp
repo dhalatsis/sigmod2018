@@ -85,7 +85,26 @@ int cleanQuery(QueryInfo &info) {
             }
         }
         else {
-            filters.insert(filter);
+                if ((filter_mapL.find(filter.filterColumn) != filter_mapL.end())) {
+                    if (filter_mapL[filter.filterColumn].constant < filter.constant)
+                        return -1;
+                    else {
+                        filter_mapL.erase(filter.filterColumn);
+
+                    }
+                }
+
+
+                if ((filter_mapG.find(filter.filterColumn) != filter_mapG.end())) {
+                    if (filter_mapG[filter.filterColumn].constant > filter.constant)
+                        return -1;
+                    else {
+                        filter_mapG.erase(filter.filterColumn);
+
+                    }
+
+                }
+                filters.insert(filter);
         }
     }
 
@@ -125,10 +144,12 @@ int cleanQuery(QueryInfo &info) {
         return 0;
     }
 
+
     info.predicates.clear();
     for (auto pred: pred_set) {
         info.predicates.push_back(pred);
     }
+
 
 #ifdef time
     struct timeval end;
@@ -935,6 +956,7 @@ int main(int argc, char* argv[]) {
 
     // The test harness will send the first query after 1 second.
     QueryInfo i;
+    int rv;
     int query_no = 0;
     int q_counter = 0;
     double timeMain, timeAll;
@@ -979,8 +1001,11 @@ int main(int argc, char* argv[]) {
         //Parse the query
         QueryInfo * i = new QueryInfo;
         i->parseQuery(line);
-        cleanQuery(*i);
 
+        rv = cleanQuery(*i);
+        if (rv == -1) {
+      //      cerr << "-1 : " << line << endl;
+        }
         // Create the tree
         JoinTree * optimalJT = queryPlan.joinTreePtr->build(*i, queryPlan.columnInfos);
 
