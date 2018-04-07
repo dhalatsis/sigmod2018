@@ -226,38 +226,22 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
     return table_t_ptr;
 }
 
+
+// table_t * Joiner:star_join(vector<table_t*> tables, vector<PredicateInfo*> preds, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
+//
+// }
+
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
     relation_t * r1;
     relation_t * r2;
-
-
-    // Swap predicates depebding on size
-    PredicateInfo temp_pred;
-    PredicateInfo & pred_ref = pred_info;
-    // if (table_r->tups_num > table_s->tups_num) {
-    //     //std::cerr << "Left size " << table_r->tups_num << " Right size " << table_s->tups_num << '\n';
-    //     // Swap table pointers
-    //     table_t * temp = table_r;
-    //     table_r = table_s;
-    //     table_s = temp;
-    //
-    //     // swap predicate info
-    //     temp_pred.left  = pred_info.right;
-    //     temp_pred.right = pred_info.left;
-    //     pred_ref = temp_pred;
-    // }
-
-
     //HERE WE CHECK FOR CACHED PARTITIONS
     Cacheinf c;
     size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
 
 
-    Selection left(pred_ref.left);
-    Selection right(pred_ref.right);
+    Selection left(pred_info.left);
+    Selection right(pred_info.right);
     int ch_flag;
-
-    //leafs = 0;
 
     // if (table_r->ch_filter == NULL) {
         if (leafs&1) {
@@ -273,12 +257,12 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
             }
             else {
 
-                r1 = CreateRelationT(table_r, pred_ref.left);
+                r1 = CreateRelationT(table_r, pred_info.left);
                 c.R = (cached_t *) calloc(threads, sizeof(cached_t));
             }
         } else {
 
-            r1 = CreateRelationT(table_r, pred_ref.left);
+            r1 = CreateRelationT(table_r, pred_info.left);
             c.R = NULL;
         }
     // } else {
@@ -304,11 +288,11 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
                 pthread_mutex_unlock(&cache_mtx);
             }
             else {
-                r2 = CreateRelationT(table_s, pred_ref.right);
+                r2 = CreateRelationT(table_s, pred_info.right);
                 c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
             }
         } else {
-            r2 = CreateRelationT(table_s, pred_ref.right);
+            r2 = CreateRelationT(table_s, pred_info.right);
             c.S = NULL;
         }
     // } else {
@@ -319,7 +303,7 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     //     c.S = table_s->ch_filter;
     // }
 
-    //fprintf(stderr, "Before Radiki %d.%d leaf? %d\n", pred_ref.left.binding, pred_ref.left.colId, leafs);
+    //fprintf(stderr, "Before Radiki %d.%d leaf? %d\n", pred_info.left.binding, pred_info.left.colId, leafs);
     result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
     //fprintf(stderr, "After Radiki\n");
 
