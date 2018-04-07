@@ -35,6 +35,8 @@ int JobMain::Run(Joiner & joiner) {
     else
         result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop);
 
+    // result = joinTreePtr_->root->execute_combo(joinTreePtr_->root, joiner, *i_, result_, &stop);
+
     // Count query time
     struct timeval end;
     gettimeofday(&end, NULL);

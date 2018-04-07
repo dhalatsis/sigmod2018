@@ -22,15 +22,13 @@
 
 #include "parallel_radix_join.h"
 #include "prj_params.h"         /* constant parameters */
+#include "task_queue_64.h"         /* task_queue_* */
+#include "barrier.h"            /* pthread_barrier_* */
+#include "tuple_buffer_64.h"       /* for materialization */
 #include "task_queue.h"         /* task_queue_* */
 #include "cpu_mapping.h"        /* get_cpu_id */
-
-#include "barrier.h"            /* pthread_barrier_* */
-#include "generator.h"          /* numa_localize() */
-
-#ifdef JOIN_RESULT_MATERIALIZE
 #include "tuple_buffer.h"       /* for materialization */
-#endif
+#include "generator.h"          /* numa_localize() */
 
 /** \internal */
 #ifndef BARRIER_ARRIVE
@@ -76,13 +74,6 @@
 
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
-/** Debug msg logging method */
-#ifdef DEBUG
-#define DEBUGMSG(COND, MSG, ...)                                    \
-    if(COND) { fprintf(stdout, "[DEBUG] "MSG, ## __VA_ARGS__); }
-#else
-#define DEBUGMSG(COND, MSG, ...)
-#endif
 
 /* just to enable compilation with g++ */
 #if defined(__cplusplus)
@@ -92,18 +83,18 @@
 /** An experimental feature to allocate input relations numa-local */
 extern int numalocalize;  /* defined in generator.c */
 
-typedef struct arg_t  arg_t;
-typedef struct part_t part_t;
+typedef struct arg_64_32_t  arg_64_32_t;
+typedef struct part_64_32_t part_64_32_t;
 typedef struct synctimer_t synctimer_t;
-typedef int64_t (*JoinFunction)(const relation_t * const,
+typedef int64_t (*JoinFunction)(const relation64_t * const,
                                 const relation_t * const,
-                                relation_t * const,
+                                relation64_t * const,
                                 void * output);
 /** holds the arguments passed to each thread */
-struct arg_t {
+struct arg_64_32_t {
     int32_t ** histR;
-    tuple_t *  relR;
-    tuple_t *  tmpR;
+    tuple64_t *  relR;
+    tuple64_t *  tmpR;
     int32_t ** histS;
     tuple_t *  relS;
     tuple_t *  tmpS;
@@ -113,8 +104,8 @@ struct arg_t {
     int64_t totalR;
     int64_t totalS;
 
-    task_queue_t **      join_queue;
-    task_queue_t **      part_queue;
+    task_queue64_t **      join_queue;
+    task_queue64_t **      part_queue;
 
     pthread_barrier_t * barrier;
     JoinFunction        join_function;
@@ -137,12 +128,12 @@ struct arg_t {
 } __attribute__((aligned(CACHE_LINE_SIZE)));
 
 /** holds arguments passed for partitioning */
-struct part_t {
+struct part_64_32_t {
     tuple_t *  rel;
-    tuple_t *  tmp;
+    tuple64_t *  tmp;
     int32_t ** hist;
     int64_t *  output;
-    arg_t   *  thrargs;
+    arg_64_32_t   *  thrargs;
     uint64_t   total_tuples;
     uint32_t   num_tuples;
     int32_t    R;
@@ -187,7 +178,7 @@ alloc_aligned(size_t size)
  * @return number of result tuples
  */
 int64_t
-bucket_chaining_join(const relation_t * const R,
+bucket_chaining_join_t64_t32(const relation64_t * const R,
                      const relation_t * const S,
                      relation_t * const tmpR,
                      void * output)
@@ -205,7 +196,7 @@ bucket_chaining_join(const relation_t * const R,
     /* posix_memalign((void**)&next, CACHE_LINE_SIZE, numR * sizeof(int)); */
     bucket = (int*) calloc(N, sizeof(int));
 
-    const tuple_t * const Rtuples = R->tuples;
+    const tuple64_t * const Rtuples = R->tuples;
     for(uint32_t i=0; i < numR; ){
         uint32_t idx = HASH_BIT_MODULO(R->tuples[i].key, MASK, NUM_RADIX_BITS);
         next[i]      = bucket[idx];
@@ -219,9 +210,7 @@ bucket_chaining_join(const relation_t * const R,
     const tuple_t * const Stuples = S->tuples;
     const uint32_t        numS    = S->num_tuples;
 
-
-    chainedtuplebuffer_t * chainedbuf = (chainedtuplebuffer_t *) output;
-
+    chainedtuplebuffer64_t * chainedbuf = (chainedtuplebuffer64_t *) output;
 
     /* Disable the following loop for no-probe for the break-down experiments */
     /* PROBE- LOOP */
@@ -234,7 +223,7 @@ bucket_chaining_join(const relation_t * const R,
             if(Stuples[i].key == Rtuples[hit-1].key){
 
                 /* copy to the result buffer, we skip it */
-                tuple_t * joinres = cb_next_writepos(chainedbuf);
+                tuple64_t * joinres = cb_next_writepos_t64(chainedbuf);
                 joinres->key      = Rtuples[hit-1].payload; /* R-rid */
                 joinres->payload  = Stuples[i].payload;     /* S-rid */
                 matches ++;
@@ -249,6 +238,7 @@ bucket_chaining_join(const relation_t * const R,
 
     return matches;
 }
+
 
 /**
  * Radix clustering algorithm (originally described by Manegold et al)
@@ -306,6 +296,64 @@ radix_cluster(relation_t * restrict outRel,
     }
 }
 
+
+/**
+ * Radix clustering algorithm (originally described by Manegold et al)
+ * The algorithm mimics the 2-pass radix clustering algorithm from
+ * Kim et al. The difference is that it does not compute
+ * prefix-sum, instead the sum (offset in the code) is computed iteratively.
+ *
+ * @warning This method puts padding between clusters, see
+ * radix_cluster_nopadding for the one without padding.
+ *
+ * @param outRel [out] result of the partitioning
+ * @param inRel [in] input relation
+ * @param hist [out] number of tuples in each partition
+ * @param R cluster bits
+ * @param D radix bits per pass
+ * @returns tuples per partition.
+ */
+void
+radix_cluster_t64(relation64_t * restrict outRel,
+              relation64_t * restrict inRel,
+              int32_t * restrict hist,
+              int R,
+              int D)
+{
+    uint32_t i;
+    uint32_t M = ((1 << D) - 1) << R;
+    uint32_t offset;
+    uint32_t fanOut = 1 << D;
+
+    /* the following are fixed size when D is same for all the passes,
+       and can be re-used from call to call. Allocating in this function
+       just in case D differs from call to call. */
+    uint32_t dst[fanOut];
+
+    /* count tuples per cluster */
+    for( i=0; i < inRel->num_tuples; i++ ){
+        uint32_t idx = HASH_BIT_MODULO(inRel->tuples[i].key, M, R);
+        hist[idx]++;
+    }
+    offset = 0;
+    /* determine the start and end of each cluster depending on the counts. */
+    for ( i=0; i < fanOut; i++ ) {
+        /* dst[i]      = outRel->tuples + offset; */
+        /* determine the beginning of each partitioning by adding some
+           padding to avoid L1 conflict misses during scatter. */
+        dst[i] = offset + i * SMALL_PADDING_TUPLES_64;
+        offset += hist[i];
+    }
+
+    /* copy tuples to their corresponding clusters at appropriate offsets */
+    for( i=0; i < inRel->num_tuples; i++ ){
+        uint32_t idx   = HASH_BIT_MODULO(inRel->tuples[i].key, M, R);
+        outRel->tuples[ dst[idx] ] = inRel->tuples[i];
+        ++dst[idx];
+    }
+}
+
+
 /**
  * This function implements the radix clustering of a given input
  * relations. The relations to be clustered are defined in task_t and after
@@ -361,6 +409,64 @@ void serial_radix_partition(task_t * const task,
     free(outputR);
     free(outputS);
 }
+
+
+/**
+ * This function implements the radix clustering of a given input
+ * relations. The relations to be clustered are defined in task64_t and after
+ * clustering, each partition pair is added to the join_queue to be joined.
+ *
+ * @param task description of the relation to be partitioned
+ * @param join_queue task queue to add join tasks after clustering
+ */
+void serial_radix_partition_t64(task64_t * const task,
+                            task_queue64_t * join_queue,
+                            const int R, const int D)
+{
+    int i;
+    uint32_t offsetR = 0, offsetS = 0;
+    const int fanOut = 1 << D;  /*(NUM_RADIX_BITS / NUM_PASSES);*/
+    int32_t * outputR, * outputS;
+
+    outputR = (int32_t*)calloc(fanOut+1, sizeof(int32_t));
+    outputS = (int32_t*)calloc(fanOut+1, sizeof(int32_t));
+    /* TODO: measure the effect of memset() */
+    /* memset(outputR, 0, fanOut * sizeof(int32_t)); */
+    radix_cluster_t64(&task->tmpR, &task->relR, outputR, R, D);
+
+    /* memset(outputS, 0, fanOut * sizeof(int32_t)); */
+    radix_cluster_t64(&task->tmpS, &task->relS, outputS, R, D);
+
+    /* task64_t t; */
+    for(i = 0; i < fanOut; i++) {
+        if(outputR[i] > 0 && outputS[i] > 0) {
+            task64_t * t = task_queue_get_slot_atomic_t64(join_queue);
+            t->relR.num_tuples = outputR[i];
+            t->relR.tuples = task->tmpR.tuples + offsetR
+                             + i * SMALL_PADDING_TUPLES_64;
+            t->tmpR.tuples = task->relR.tuples + offsetR
+                             + i * SMALL_PADDING_TUPLES_64;
+            offsetR += outputR[i];
+
+            t->relS.num_tuples = outputS[i];
+            t->relS.tuples = task->tmpS.tuples + offsetS
+                             + i * SMALL_PADDING_TUPLES_64;
+            t->tmpS.tuples = task->relS.tuples + offsetS
+                             + i * SMALL_PADDING_TUPLES_64;
+            offsetS += outputS[i];
+
+            /* task_queue_copy_atomic(join_queue, &t); */
+            task_queue_add_atomic_t64(join_queue, t);
+        }
+        else {
+            offsetR += outputR[i];
+            offsetS += outputS[i];
+        }
+    }
+    free(outputR);
+    free(outputS);
+}
+
 
 /**
  * This function implements the parallel radix partitioning of a given input
@@ -437,6 +543,82 @@ parallel_radix_partition(part_t * const part)
     }
 }
 
+
+/**
+ * This function implements the parallel radix partitioning of a given input
+ * relation. Parallel partitioning is done by histogram-based relation
+ * re-ordering as described by Kim et al. Parallel partitioning method is
+ * commonly used by all parallel radix join algorithms.
+ *
+ * @param part description of the relation to be partitioned
+ */
+void
+parallel_radix_partition_t64(part64_t * const part)
+{
+    const tuple64_t * restrict rel    = part->rel;
+    int32_t **               hist   = part->hist;
+    int64_t *       restrict output = part->output;
+
+    const uint32_t my_tid     = part->thrargs->my_tid;
+    const uint32_t nthreads   = part->thrargs->nthreads;
+    const uint32_t num_tuples = part->num_tuples;
+
+    const int32_t  R       = part->R;
+    const int32_t  D       = part->D;
+    const uint32_t fanOut  = 1 << D;
+    const uint32_t MASK    = (fanOut - 1) << R;
+    const uint32_t padding = part->padding;
+
+    int64_t sum = 0;
+    uint32_t i, j;
+    int rv;
+
+    int64_t dst[fanOut+1];
+
+    /* compute local histogram for the assigned region of rel */
+    /* compute histogram */
+    int32_t * my_hist = hist[my_tid];
+
+    for(i = 0; i < num_tuples; i++) {
+        uint32_t idx = HASH_BIT_MODULO(rel[i].key, MASK, R);
+        my_hist[idx] ++;
+    }
+
+    /* compute local prefix sum on hist */
+    for(i = 0; i < fanOut; i++){
+        sum += my_hist[i];
+        my_hist[i] = sum;
+    }
+
+    /* wait at a barrier until each thread complete histograms */
+    BARRIER_ARRIVE(part->thrargs->barrier, rv);
+
+    /* determine the start and end of each cluster */
+    for(i = 0; i < my_tid; i++) {
+        for(j = 0; j < fanOut; j++)
+            output[j] += hist[i][j];
+    }
+    for(i = my_tid; i < nthreads; i++) {
+        for(j = 1; j < fanOut; j++)
+            output[j] += hist[i][j-1];
+    }
+
+    for(i = 0; i < fanOut; i++ ) {
+        output[i] += i * padding; //PADDING_TUPLES_64;
+        dst[i] = output[i];
+    }
+    output[fanOut] = part->total_tuples + fanOut * padding; //PADDING_TUPLES_64;
+
+    tuple64_t * restrict tmp = part->tmp;
+
+    /* Copy tuples to their corresponding clusters */
+    for(i = 0; i < num_tuples; i++ ){
+        uint32_t idx = HASH_BIT_MODULO(rel[i].key, MASK, R);
+        tmp[dst[idx]] = rel[i];
+        ++dst[idx];
+    }
+}
+
 /**
  * @defgroup SoftwareManagedBuffer Optimized Partitioning Using SW-buffers
  * @{
@@ -446,12 +628,20 @@ typedef union {
         tuple_t tuples[CACHE_LINE_SIZE/sizeof(tuple_t)];
     } tuples;
     struct {
+        tuple64_t tuples[CACHE_LINE_SIZE/sizeof(tuple64_t)];
+    } tuples64;
+    struct {
         tuple_t tuples[CACHE_LINE_SIZE/sizeof(tuple_t) - 1];
         int64_t slot;
     } data;
+    struct {
+        tuple64_t tuples[CACHE_LINE_SIZE/sizeof(tuple64_t) - 1];
+        int64_t slot;
+    } data64;
 } cacheline_t;
 
 #define TUPLESPERCACHELINE (CACHE_LINE_SIZE/sizeof(tuple_t))
+#define TUPLESPERCACHELINE_64 (CACHE_LINE_SIZE/sizeof(tuple64_t))
 
 /** @} */
 /**
@@ -464,27 +654,26 @@ typedef union {
  * @return
  */
 void *
-prj_thread(void * param)
+prj_thread_t64_t32(void * param)
 {
-    arg_t * args   = (arg_t*) param;
+    arg_64_32_t * args   = (arg_64_32_t*) param;
     int32_t my_tid = args->my_tid;
 
     const int fanOut = 1 << (NUM_RADIX_BITS / NUM_PASSES);//PASS1RADIXBITS;
-    //const int R = (NUM_RADIX_BITS / NUM_PASSES);//PASS1RADIXBITS;
-    //const int D = (NUM_RADIX_BITS - (NUM_RADIX_BITS / NUM_PASSES));//PASS2RADIXBITS;
+    const int R = (NUM_RADIX_BITS / NUM_PASSES);//PASS1RADIXBITS;
+    const int D = (NUM_RADIX_BITS - (NUM_RADIX_BITS / NUM_PASSES));//PASS2RADIXBITS;
 
     uint64_t results = 0;
     int i;
     int rv;
 
-    part_t part;
-    task_t * task;
-    task_queue_t * part_queue;
-    task_queue_t * join_queue;
+    part_32_64_t part;
+    task64_t * task;
+    task_queue64_t * part_queue;
+    task_queue64_t * join_queue;
 
     int64_t * outputR = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
     int64_t * outputS = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
-    //MALLOC_CHECK((outputR && outputS));
 
     int numaid = 0; //get_numa_id(my_tid);   # GEO / TEO
     //int numaid = get_numa_region_id(my_tid);
@@ -505,11 +694,10 @@ prj_thread(void * param)
     part.R       = 0;
     part.D       = NUM_RADIX_BITS / NUM_PASSES; //PASS1RADIXBITS
     part.thrargs = args;
-    part.padding = PADDING_TUPLES;
+    part.padding = PADDING_TUPLES_64;
 
     /* 1. partitioning for relation R */
     // # JIM/GEORGE
-
     if (args->outR != NULL) {
         if (args->outR->tmp == NULL) {
             part.rel = args->relR;
@@ -529,7 +717,7 @@ prj_thread(void * param)
             args->outR->total_tuples = args->totalR;
         }
         else {
-            args->tmpR        = (tuple_t *) args->outR->tmp;
+            args->tmpR        = (tuple64_t *) args->outR->tmp;
             args->histR       = args->outR->hist;
             outputR           = args->outR->output;
             args->numR        = args->outR->num_tuples;
@@ -548,10 +736,8 @@ prj_thread(void * param)
             parallel_radix_partition(&part);
     }
 
-
     /* 2. partitioning for relation S */
      // # JIM/GEORGE
-
     if (args->outS != NULL) {
         if (args->outS->tmp == NULL) {
             part.rel = args->relS;
@@ -562,7 +748,7 @@ prj_thread(void * param)
             part.total_tuples = args->totalS;
             part.relidx       = 1;
 
-            parallel_radix_partition(&part);
+            parallel_radix_partition_t64(&part);
 
             args->outS->tmp = (void *) args->tmpS;
             args->outS->hist = args->histS;
@@ -586,7 +772,7 @@ prj_thread(void * param)
         part.total_tuples = args->totalS;
         part.relidx       = 1;
 
-        parallel_radix_partition(&part);
+        parallel_radix_partition_t64(&part);
     }
 
     /* wait at a barrier until each thread copies out */
@@ -597,7 +783,7 @@ prj_thread(void * param)
     if(my_tid == 0) {
         for(i = 0; i < fanOut; i++) {
             int32_t ntupR = outputR[i+1] - outputR[i] - PADDING_TUPLES;
-            int32_t ntupS = outputS[i+1] - outputS[i] - PADDING_TUPLES;
+            int32_t ntupS = outputS[i+1] - outputS[i] - PADDING_TUPLES_64;
 
             if(ntupR > 0 && ntupS > 0) {
                 /* Determine the NUMA node of each partition: */
@@ -605,9 +791,9 @@ prj_thread(void * param)
                 //int pq_idx = get_numa_node_of_address(ptr);
                 int pq_idx = 0;
 
-                task_queue_t * numalocal_part_queue = args->part_queue[pq_idx];
+                task_queue64_t * numalocal_part_queue = args->part_queue[pq_idx];
 
-                task_t * t = task_queue_get_slot(numalocal_part_queue);
+                task64_t * t = task_queue_get_slot_t64(numalocal_part_queue);
 
                 t->relR.num_tuples = t->tmpR.num_tuples = ntupR;
                 t->relR.tuples = args->tmpR + outputR[i];
@@ -617,12 +803,9 @@ prj_thread(void * param)
                 t->relS.tuples = args->tmpS + outputS[i];
                 t->tmpS.tuples = args->relS + outputS[i];
 
-                task_queue_add(numalocal_part_queue, t);
+                task_queue_add_t64(numalocal_part_queue, t);
             }
         }
-
-        /* debug partitioning task queue */
-        DEBUGMSG(1, "Pass-2: # partitioning tasks = %d\n", part_queue->count);
     }
 
     /* wait at a barrier until first thread adds all partitioning tasks */
@@ -633,7 +816,7 @@ prj_thread(void * param)
 
 #if NUM_PASSES==1
     /* If the partitioning is single pass we directly add tasks from pass-1 */
-    task_queue_t * swap = join_queue;
+    task_queue64_t * swap = join_queue;
     join_queue = part_queue;
     /* part_queue is used as a temporary queue for handling skewed parts */
     part_queue = swap;
@@ -641,7 +824,7 @@ prj_thread(void * param)
 #elif NUM_PASSES==2
 
     while((task = task_queue_get_atomic(part_queue))){
-        serial_radix_partition(task, join_queue, R, D);
+        serial_radix_partition_t64(task, join_queue, R, D);
     }
 
 #else
@@ -654,21 +837,13 @@ prj_thread(void * param)
     if (args->outS == NULL)
         free(outputS);
 
-    //SYNC_TIMER_STOP(&args->localtimer.sync4);
     /* wait at a barrier until all threads add all join tasks */
     BARRIER_ARRIVE(args->barrier, rv);
     /* global barrier sync point-4 */
-    //SYNC_GLOBAL_STOP(&args->globaltimer->sync4, my_tid);
 
-    DEBUGMSG((my_tid == 0), "Number of join tasks = %d\n", join_queue->count);
+    chainedtuplebuffer64_t * chainedbuf = chainedtuplebuffer_init_t64();
 
-#ifdef JOIN_RESULT_MATERIALIZE
-    chainedtuplebuffer_t * chainedbuf = chainedtuplebuffer_init();
-#else
-    void * chainedbuf = NULL;
-#endif
-
-    while((task = task_queue_get_atomic(join_queue))){
+    while((task = task_queue_get_atomic_t64(join_queue))){
         /* do the actual join. join method differs for different algorithms,
            i.e. bucket chaining, histogram-based, histogram-based with simd &
            prefetching  */
@@ -678,12 +853,9 @@ prj_thread(void * param)
     }
 
     args->result = results;
-
-#ifdef JOIN_RESULT_MATERIALIZE
     args->threadresult->nresults = results;
     args->threadresult->threadid = my_tid;
     args->threadresult->results  = (void *) chainedbuf;
-#endif
 
     return 0;
 }
@@ -692,15 +864,15 @@ prj_thread(void * param)
 
 
 // # TEO / ORESTIS
-class RadixJob : public Job {
+class RadixJob_t64_t32 : public Job {
 public:
     void * arg_;
-    RadixJob(void * arg) :arg_(arg) {}
+    RadixJob_t64_t32(void * arg) :arg_(arg) {}
 
-    ~RadixJob() {}
+    ~RadixJob_t64_t32() {}
     int Run() {
         // Run the thread function
-        prj_thread(arg_);
+        prj_thread_t64_t32(arg_);
     }
 };
 
@@ -712,54 +884,43 @@ public:
  * partitioning steps. Difference is only in the build-probe step. Here are all
  * the parallel radix join implemetations and their Join (build-probe) functions:
  *
- * - PRO,  Parallel Radix Join Optimized --> bucket_chaining_join()
+ * - PRO,  Parallel Radix Join Optimized --> bucket_chaining_join_t64()
  */
 result_t *
-join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthreads, struct Cacheinf& cinf, JobScheduler& js)
+join_init_run_t64_t32(relation64_t * relR, relation_t * relS, JoinFunction jf, int nthreads, struct Cacheinf& cinf, JobScheduler& js)
 {
     int i, rv;
     pthread_t tid[nthreads];
     pthread_attr_t attr;
     pthread_barrier_t barrier;
     cpu_set_t set;
-    arg_t args[nthreads];
+    arg_64_32_t args[nthreads];
 
     int32_t ** histR, ** histS;
-    tuple_t * tmpRelR, * tmpRelS;
+    tuple64_t * tmpRelR; tuple_t * tmpRelS;
     int32_t numperthr[2];
     int64_t result = 0;
 
-    //JIM + GEORGE
-    int rNull = 0, sNull = 0;
-    if (cinf.R != NULL && cinf.R[0].tmp == NULL)
-        rNull = 1;
-    if (cinf.S != NULL && cinf.S[0].tmp == NULL)
-        sNull =1;
-
-    /* task_queue_t * part_queue, * join_queue; */
+    /* task_queue64_t * part_queue, * join_queue; */
     int numnuma = 1; // get_num_numa_regions();  # GEO / TEO
-    task_queue_t * part_queue[numnuma];
-    task_queue_t * join_queue[numnuma];
+    task_queue64_t * part_queue[numnuma];
+    task_queue64_t * join_queue[numnuma];
 
     for(i = 0; i < numnuma; i++){
-        part_queue[i] = task_queue_init(FANOUT_PASS1);
-        join_queue[i] = task_queue_init((1<<NUM_RADIX_BITS));
+        part_queue[i] = task_queue_init_t64(FANOUT_PASS1);
+        join_queue[i] = task_queue_init_t64((1<<NUM_RADIX_BITS));
     }
 
     result_t * joinresult = 0;
     joinresult = (result_t *) malloc(sizeof(result_t));
-
-#ifdef JOIN_RESULT_MATERIALIZE
     joinresult->resultlist = (threadresult_t *) malloc(sizeof(threadresult_t)
                                                        * nthreads);
-#endif
 
     /* allocate temporary space for partitioning */
-    tmpRelR = (tuple_t*) alloc_aligned(relR->num_tuples * sizeof(tuple_t) +
+    tmpRelR = (tuple64_t*) alloc_aligned(relR->num_tuples * sizeof(tuple_t) +
                                        RELATION_PADDING);
-    tmpRelS = (tuple_t*) alloc_aligned(relS->num_tuples * sizeof(tuple_t) +
-                                       RELATION_PADDING);
-    //MALLOC_CHECK((tmpRelR && tmpRelS));
+    tmpRelS = (tuple_t*) alloc_aligned(relS->num_tuples * sizeof(tuple64_t) +
+                                       RELATION_PADDING_64);
 
     /* allocate histograms arrays, actual allocation is local to threads */
     histR = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
@@ -773,11 +934,6 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     }
 
     pthread_attr_init(&attr);
-
-#ifdef SYNCSTATS
-    /* thread-0 keeps track of synchronization stats */
-    args[0].globaltimer = (synctimer_t*) malloc(sizeof(synctimer_t));
-#endif
 
     /* first assign chunks of relR & relS for each thread */
     numperthr[0] = relR->num_tuples / nthreads;
@@ -820,7 +976,7 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
             args[i].outS = &(cinf.S[i]);
 
         // # TEO/ORESTIS
-        js.Schedule(new RadixJob((void*)&args[i]));
+        js.Schedule(new RadixJob_t64_t32((void*)&args[i]));
     }
 
     // # TEO/ORESTIS
@@ -848,8 +1004,8 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     free(histS);
 
     for(i = 0; i < numnuma; i++){
-        task_queue_free(part_queue[i]);
-        task_queue_free(join_queue[i]);
+        task_queue_free_t64(part_queue[i]);
+        task_queue_free_t64(join_queue[i]);
     }
 
 // # JIM/GEORGE
@@ -871,412 +1027,14 @@ join_init_run(relation_t * relR, relation_t * relS, JoinFunction jf, int nthread
     if (cinf.S == NULL)
         free(tmpRelS);
 
-#ifdef SYNCSTATS
-    free(args[0].globaltimer);
-#endif
-
     return joinresult;
 }
 
 // # JIM/GEORGE
 /** \copydoc PRO */
 result_t *
-PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf &cinf, JobScheduler& js)
+PRO_t32_t64(relation64_t * relR, relation_t * relS, int nthreads, struct Cacheinf &cinf, JobScheduler& js)
 {
-    return join_init_run(relR, relS, bucket_chaining_join, nthreads, cinf, js);
+    return join_init_run_t64_t32(relR, relS, bucket_chaining_join_t64, nthreads, cinf, js);
 }
 /** @} */
-
-
-/*-----------------------------CACHE PARTION FOR ONLY 1 COLUMN---------------------*/
-void *
-prj_thread_partition_0(void * param)
-{
-    arg_t * args   = (arg_t*) param;
-    int32_t my_tid = args->my_tid;
-
-    const int fanOut = 1 << (NUM_RADIX_BITS / NUM_PASSES);//PASS1RADIXBITS;
-
-    uint64_t results = 0;
-    int i;
-    int rv;
-
-    part_t part;
-
-    int64_t * outputR = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
-    //MALLOC_CHECK((outputR && outputS));
-
-    int numaid = get_numa_id(my_tid);
-
-    args->histR[my_tid] = (int32_t *) calloc(fanOut, sizeof(int32_t));
-
-    /* in the first pass, partitioning is done together by all threads */
-    args->parts_processed = 0;
-
-    /* wait at a barrier until each thread starts and then start the timer */
-    BARRIER_ARRIVE(args->barrier, rv);
-
-    /********** 1st pass of multi-pass partitioning ************/
-    part.R       = 0;
-    part.D       = NUM_RADIX_BITS / NUM_PASSES; //PASS1RADIXBITS
-    part.thrargs = args;
-    part.padding = PADDING_TUPLES;
-
-    /* 1. partitioning for relation R */
-    // # JIM/GEORGE
-
-    if (args->outR != NULL) {
-
-        if (args->outR->tmp == NULL) {
-            part.rel = args->relR;
-            part.tmp          = args->tmpR;
-            part.hist         = args->histR;        //maybe delete
-            part.output       = outputR;
-            part.num_tuples   = args->numR;
-            part.total_tuples = args->totalR;
-            part.relidx       = 0;
-
-            parallel_radix_partition(&part);
-
-            args->outR->tmp = (void *) args->tmpR;
-            args->outR->hist = args->histR;
-            args->outR->output = outputR;
-            args->outR->num_tuples = args->numR;
-            args->outR->total_tuples = args->totalR;
-        }
-        else {
-            args->tmpR        = (tuple_t *) args->outR->tmp;
-            args->histR       = args->outR->hist;
-            outputR           = args->outR->output;
-            args->numR        = args->outR->num_tuples;
-            args->totalR      = args->outR->total_tuples;
-
-        }
-    } else {
-        part.rel = args->relR;
-        part.tmp          = args->tmpR;
-        part.hist         = args->histR;        //maybe delete
-        part.output       = outputR;
-        part.num_tuples   = args->numR;
-        part.total_tuples = args->totalR;
-        part.relidx       = 0;
-
-        parallel_radix_partition(&part);
-    }
-}
-
-void cache_partition_0(relation_t *relR, int nthreads, struct Cacheinf &cinf) {
-    int i, rv;
-    pthread_t tid[nthreads];
-    pthread_attr_t attr;
-    pthread_barrier_t barrier;
-    cpu_set_t set;
-    arg_t args[nthreads];
-
-    int32_t ** histR;
-    tuple_t * tmpRelR;
-    int32_t numperthr[1];
-
-    /* task_queue_t * part_queue, * join_queue; */
-    int numnuma = get_num_numa_regions();
-
-    /* allocate temporary space for partitioning */
-    tmpRelR = (tuple_t*) alloc_aligned(relR->num_tuples * sizeof(tuple_t) +
-                                       RELATION_PADDING);
-    /* allocate histograms arrays, actual allocation is local to threads */
-    histR = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
-
-    rv = pthread_barrier_init(&barrier, NULL, nthreads);
-    if(rv != 0){
-        printf("[ERROR] Couldn't create the barrier\n");
-        exit(EXIT_FAILURE);
-    }
-
-    pthread_attr_init(&attr);
-
-    /* first assign chunks of relR & relS for each thread */
-    numperthr[0] = relR->num_tuples / nthreads;
-
-     for(i = 0; i < nthreads; i++){
-        int cpu_idx = get_cpu_id(i);
-
-        DEBUGMSG(1, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-        //fprintf(stderr, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-
-        // CPU_ZERO(&set);
-        // CPU_SET(cpu_idx, &set);
-        // pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);  //TODO CHANGE
-
-        args[i].relR = relR->tuples + i * numperthr[0];
-        args[i].tmpR = tmpRelR;
-
-        args[i].histR = histR;
-
-        args[i].numR = (i == (nthreads-1)) ?
-            (relR->num_tuples - i * numperthr[0]) : numperthr[0];
-
-        args[i].totalR = relR->num_tuples;
-
-        args[i].my_tid = i;
-
-        args[i].barrier       = &barrier;
-        args[i].nthreads      = nthreads;
-
-        // # JIM/GEORGE
-        if (cinf.R == NULL)
-            args[i].outR = NULL;
-        else
-            args[i].outR = &(cinf.R[i]);
-
-        rv = pthread_create(&tid[i], &attr, prj_thread_partition_0, (void*)&args[i]);
-        if (rv){
-            fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
-            exit(-1);
-        }
-    }
-      /* wait for threads to finish */
-    for(i = 0; i < nthreads; i++){
-        pthread_join(tid[i], NULL);
-    }
-
-    // # JIM/GEORGE
-    /* clean up */
-    if (cinf.R == NULL)
-        for(i = 0; i < nthreads; i++) {
-            free(histR[i]);
-        }
-    free(histR);
-
-    if (cinf.R == NULL)
-        free(tmpRelR);
-}
-
-
-/*----------------------------------CACHE PARTITION FOR 2 COLUMNS-------------------------*/
-void *
-prj_thread_partition_01(void * param)
-{
-    arg_t * args   = (arg_t*) param;
-    int32_t my_tid = args->my_tid;
-
-    const int fanOut = 1 << (NUM_RADIX_BITS / NUM_PASSES);//PASS1RADIXBITS;
-
-    uint64_t results = 0;
-    int i;
-    int rv;
-
-    part_t part;
-
-    int64_t * outputR = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
-    int64_t * outputS = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
-    //MALLOC_CHECK((outputR && outputS));
-
-    int numaid = get_numa_id(my_tid);
-
-    args->histR[my_tid] = (int32_t *) calloc(fanOut, sizeof(int32_t));
-    args->histS[my_tid] = (int32_t *) calloc(fanOut, sizeof(int32_t));
-
-    /* in the first pass, partitioning is done together by all threads */
-    args->parts_processed = 0;
-
-    /* wait at a barrier until each thread starts and then start the timer */
-    BARRIER_ARRIVE(args->barrier, rv);
-
-    /********** 1st pass of multi-pass partitioning ************/
-    part.R       = 0;
-    part.D       = NUM_RADIX_BITS / NUM_PASSES; //PASS1RADIXBITS
-    part.thrargs = args;
-    part.padding = PADDING_TUPLES;
-
-    /* 1. partitioning for relation R */
-    // # JIM/GEORGE
-
-    if (args->outR != NULL) {
-
-        if (args->outR->tmp == NULL) {
-            part.rel = args->relR;
-            part.tmp          = args->tmpR;
-            part.hist         = args->histR;        //maybe delete
-            part.output       = outputR;
-            part.num_tuples   = args->numR;
-            part.total_tuples = args->totalR;
-            part.relidx       = 0;
-
-            parallel_radix_partition(&part);
-
-            args->outR->tmp = (void *) args->tmpR;
-            args->outR->hist = args->histR;
-            args->outR->output = outputR;
-            args->outR->num_tuples = args->numR;
-            args->outR->total_tuples = args->totalR;
-        }
-        else {
-            args->tmpR        = (tuple_t *) args->outR->tmp;
-            args->histR       = args->outR->hist;
-            outputR           = args->outR->output;
-            args->numR        = args->outR->num_tuples;
-            args->totalR      = args->outR->total_tuples;
-
-        }
-    } else {
-            part.rel = args->relR;
-            part.tmp          = args->tmpR;
-            part.hist         = args->histR;        //maybe delete
-            part.output       = outputR;
-            part.num_tuples   = args->numR;
-            part.total_tuples = args->totalR;
-            part.relidx       = 0;
-
-            parallel_radix_partition(&part);
-    }
-
-
-    /* 2. partitioning for relation S */
-    // # JIM/GEORGE
-    if (args->outS != NULL) {
-        if (args->outS->tmp == NULL) {
-            part.rel = args->relS;
-            part.tmp          = args->tmpS;
-            part.hist         = args->histS;       //maybe delete
-            part.output       = outputS;
-            part.num_tuples   = args->numS;
-            part.total_tuples = args->totalS;
-            part.relidx       = 1;
-
-            parallel_radix_partition(&part);
-
-            args->outS->tmp = (void *) args->tmpS;
-            args->outS->hist = args->histS;
-            args->outS->output = outputS;
-            args->outS->num_tuples = args->numS;
-            args->outS->total_tuples = args->totalS;
-        }
-        else {
-            args->tmpS        = (tuple_t *) args->outS->tmp;
-            args->histS       = args->outS->hist;
-            outputS           = args->outS->output;
-            args->numS        = args->outS->num_tuples;
-            args->totalS      = args->outS->total_tuples;
-        }
-    } else {
-        part.rel = args->relS;
-        part.tmp          = args->tmpS;
-        part.hist         = args->histS;       //maybe delete
-        part.output       = outputS;
-        part.num_tuples   = args->numS;
-        part.total_tuples = args->totalS;
-        part.relidx       = 1;
-
-        parallel_radix_partition(&part);
-    }
-}
-
-
-void cache_partition_01(relation_t *relR, relation_t *relS, int nthreads, struct Cacheinf &cinf) {
-    int i, rv;
-    pthread_t tid[nthreads];
-    pthread_attr_t attr;
-    pthread_barrier_t barrier;
-    cpu_set_t set;
-    arg_t args[nthreads];
-
-    int32_t ** histR, ** histS;
-    tuple_t * tmpRelR, * tmpRelS;
-    int32_t numperthr[2];
-
-    /* task_queue_t * part_queue, * join_queue; */
-    int numnuma = get_num_numa_regions();
-
-    /* allocate temporary space for partitioning */
-    tmpRelR = (tuple_t*) alloc_aligned(relR->num_tuples * sizeof(tuple_t) +
-                                       RELATION_PADDING);
-    tmpRelS = (tuple_t*) alloc_aligned(relS->num_tuples * sizeof(tuple_t) +
-                                       RELATION_PADDING);
-
-    /* allocate histograms arrays, actual allocation is local to threads */
-    histR = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
-    histS = (int32_t**) alloc_aligned(nthreads * sizeof(int32_t*));
-
-    rv = pthread_barrier_init(&barrier, NULL, nthreads);
-    if(rv != 0){
-        printf("[ERROR] Couldn't create the barrier\n");
-        exit(EXIT_FAILURE);
-    }
-
-    pthread_attr_init(&attr);
-
-    /* first assign chunks of relR & relS for each thread */
-    numperthr[0] = relR->num_tuples / nthreads;
-    numperthr[1] = relS->num_tuples / nthreads;
-    for(i = 0; i < nthreads; i++){
-        int cpu_idx = get_cpu_id(i);
-
-        DEBUGMSG(1, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-        //fprintf(stderr, "Assigning thread-%d to CPU-%d\n", i, cpu_idx);
-
-        // CPU_ZERO(&set);
-        // CPU_SET(cpu_idx, &set);
-        // pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &set);  //TODO CHANGE
-
-        args[i].relR = relR->tuples + i * numperthr[0];
-        args[i].tmpR = tmpRelR;
-        args[i].histR = histR;
-
-        args[i].relS = relS->tuples + i * numperthr[1];
-        args[i].tmpS = tmpRelS;
-        args[i].histS = histS;
-
-        args[i].numR = (i == (nthreads-1)) ?
-            (relR->num_tuples - i * numperthr[0]) : numperthr[0];
-        args[i].numS = (i == (nthreads-1)) ?
-            (relS->num_tuples - i * numperthr[1]) : numperthr[1];
-        args[i].totalR = relR->num_tuples;
-        args[i].totalS = relS->num_tuples;
-
-        args[i].my_tid = i;
-
-        args[i].barrier       = &barrier;
-        args[i].nthreads      = nthreads;
-
-        // # JIM/GEORGE
-        if (cinf.R == NULL)
-            args[i].outR = NULL;
-        else
-            args[i].outR = &(cinf.R[i]);
-
-        if (cinf.S == NULL)
-            args[i].outS = NULL;
-        else
-            args[i].outS = &(cinf.S[i]);
-
-        rv = pthread_create(&tid[i], &attr, prj_thread_partition_01, (void*)&args[i]);
-        if (rv){
-            fprintf(stderr,"[ERROR] return code from pthread_create() is %d\n", rv);
-            exit(-1);
-        }
-    }
-      /* wait for threads to finish */
-    for(i = 0; i < nthreads; i++){
-        pthread_join(tid[i], NULL);
-    }
-
-    // # JIM/GEORGE
-    /* clean up */
-    if (cinf.R == NULL)
-        for(i = 0; i < nthreads; i++) {
-            free(histR[i]);
-        }
-    if (cinf.S == NULL)
-        for(i = 0; i < nthreads; i++) {
-            free(histS[i]);
-        }
-
-    free(histR);
-    free(histS);
-
-// # JIM/GEORGE
-    if (cinf.R == NULL)
-        free(tmpRelR);
-    if (cinf.S == NULL)
-        free(tmpRelS);
-}

@@ -244,88 +244,64 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     int ch_flag;
 
     // if (table_r->ch_filter == NULL) {
-        if (leafs&1) {
+    if (leafs&1) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(left) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r1 = (relation_t *)malloc(sizeof(relation_t));
+            r1->num_tuples = table_r->tups_num;
             pthread_mutex_lock(&cache_mtx);
-            ch_flag = (idxcache.find(left) != idxcache.end());
+            c.R = idxcache[left];
             pthread_mutex_unlock(&cache_mtx);
-            if (ch_flag == 1) {
-                r1 = (relation_t *)malloc(sizeof(relation_t));
-                r1->num_tuples = table_r->tups_num;
-                pthread_mutex_lock(&cache_mtx);
-                c.R = idxcache[left];
-                pthread_mutex_unlock(&cache_mtx);
-            }
-            else {
-
-                r1 = CreateRelationT(table_r, pred_info.left);
-                c.R = (cached_t *) calloc(threads, sizeof(cached_t));
-            }
-        } else {
+        }
+        else {
 
             r1 = CreateRelationT(table_r, pred_info.left);
-            c.R = NULL;
+            c.R = (cached_t *) calloc(threads, sizeof(cached_t));
         }
-    // } else {
-    //     // We have cached filter
-    //     std::cerr << "In left cached filter" << '\n';
-    //     r1 = (relation_t *)malloc(sizeof(relation_t));
-    //     r1->num_tuples = table_r->tups_num;
-    //     c.R = table_r->ch_filter;
-    // }
+    } else {
 
+        r1 = CreateRelationT(table_r, pred_info.left);
+        c.R = NULL;
+    }
 
     // Check for cached filter
-    //if (table_s->ch_filter == NULL) {
-        if (leafs&2) {
+    if (leafs&2) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(right) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r2 = (relation_t *)malloc(sizeof(relation_t));
+            r2->num_tuples = table_s->tups_num;
             pthread_mutex_lock(&cache_mtx);
-            ch_flag = (idxcache.find(right) != idxcache.end());
+            c.S = idxcache[right];
             pthread_mutex_unlock(&cache_mtx);
-            if (ch_flag == 1) {
-                r2 = (relation_t *)malloc(sizeof(relation_t));
-                r2->num_tuples = table_s->tups_num;
-                pthread_mutex_lock(&cache_mtx);
-                c.S = idxcache[right];
-                pthread_mutex_unlock(&cache_mtx);
-            }
-            else {
-                r2 = CreateRelationT(table_s, pred_info.right);
-                c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
-            }
-        } else {
+        }
+        else {
             r2 = CreateRelationT(table_s, pred_info.right);
-            c.S = NULL;
+            c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
         }
-    // } else {
-    //     // We have cached filter
-    //     std::cerr << "In right cached filter" << '\n';
-    //     r2 = (relation_t *)malloc(sizeof(relation_t));
-    //     r2->num_tuples = table_s->tups_num;
-    //     c.S = table_s->ch_filter;
-    // }
+    } else {
+        r2 = CreateRelationT(table_s, pred_info.right);
+        c.S = NULL;
+    }
 
-    //fprintf(stderr, "Before Radiki %d.%d leaf? %d\n", pred_info.left.binding, pred_info.left.colId, leafs);
     result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
-    //fprintf(stderr, "After Radiki\n");
 
-    //if (table_r->ch_filter == NULL) {
-        if (leafs&1) {
-            free(r1);
-            pthread_mutex_lock(&cache_mtx);
-            idxcache[left] = c.R;
-            pthread_mutex_unlock(&cache_mtx);
-        }
-    //}
+    if (leafs&1) {
+        free(r1);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[left] = c.R;
+        pthread_mutex_unlock(&cache_mtx);
+    }
 
-    //if (table_s->ch_filter == NULL) {
-        if (leafs&2) {
-            free(r2);
-            pthread_mutex_lock(&cache_mtx);
-            idxcache[right] = c.S;
-            pthread_mutex_unlock(&cache_mtx);
-        }
-    //}
-
-    //fprintf(stderr, "After Caching\n");
+    if (leafs&2) {
+        free(r2);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[right] = c.S;
+        pthread_mutex_unlock(&cache_mtx);
+    }
 
 
     #ifdef time
@@ -336,14 +312,10 @@ table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_in
     table_t *temp = NULL;
     // On root dont create a resilting table just get the checksums
     if (isRoot) {
-    //    std::cerr << "ON THE FLY" << '\n';
         CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
     } else {
-    //    std::cerr << "CREATE" << '\n';
         temp = CreateTableT(res, table_r, table_s, cmap);
     }
-
-    //fprintf(stderr, "CheckSumOnTheFly\n");
 
 
     /* Free the tables and the result of radix */
@@ -461,6 +433,217 @@ table_t* Joiner::join_t64(table_t *table_r, table_t *table_s, PredicateInfo &pre
     return temp;
 }
 
+
+table_t* Joiner::join_t32_t64(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
+    relation_t * r1;
+    relation_t * r2;
+    //HERE WE CHECK FOR CACHED PARTITIONS
+    Cacheinf c;
+    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+
+
+    Selection left(pred_info.left);
+    Selection right(pred_info.right);
+    int ch_flag;
+
+    // if (table_r->ch_filter == NULL) {
+    if (leafs&1) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(left) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r1 = (relation_t *)malloc(sizeof(relation_t));
+            r1->num_tuples = table_r->tups_num;
+            pthread_mutex_lock(&cache_mtx);
+            c.R = idxcache[left];
+            pthread_mutex_unlock(&cache_mtx);
+        }
+        else {
+
+            r1 = CreateRelationT(table_r, pred_info.left);
+            c.R = (cached_t *) calloc(threads, sizeof(cached_t));
+        }
+    } else {
+
+        r1 = CreateRelationT(table_r, pred_info.left);
+        c.R = NULL;
+    }
+
+    // Check for cached filter
+    if (leafs&2) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(right) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r2 = (relation_t *)malloc(sizeof(relation_t));
+            r2->num_tuples = table_s->tups_num;
+            pthread_mutex_lock(&cache_mtx);
+            c.S = idxcache[right];
+            pthread_mutex_unlock(&cache_mtx);
+        }
+        else {
+            r2 = CreateRelationT(table_s, pred_info.right);
+            c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
+        }
+    } else {
+        r2 = CreateRelationT(table_s, pred_info.right);
+        c.S = NULL;
+    }
+
+    result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
+
+    if (leafs&1) {
+        free(r1);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[left] = c.R;
+        pthread_mutex_unlock(&cache_mtx);
+    }
+
+    if (leafs&2) {
+        free(r2);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[right] = c.S;
+        pthread_mutex_unlock(&cache_mtx);
+    }
+
+
+    #ifdef time
+    gettimeofday(&end, NULL);
+    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    #endif
+
+    table_t *temp = NULL;
+    // On root dont create a resilting table just get the checksums
+    if (isRoot) {
+        CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
+    } else {
+        temp = CreateTableT(res, table_r, table_s, cmap);
+    }
+
+
+    /* Free the tables and the result of radix */
+    if (table_r->ch_filter != NULL) free(table_r->ch_filter);
+    if (table_s->ch_filter != NULL) free(table_s->ch_filter);
+    table_r->ch_filter = NULL;
+    table_s->ch_filter = NULL;
+
+    free(table_r->row_ids);
+    delete table_r->column_j;
+    delete table_r;
+    free(table_s->row_ids);
+    delete table_s->column_j;
+    delete table_s;
+    free(res->resultlist);
+    free(res);
+
+    return temp;
+}
+
+
+table_t* Joiner::join_t64_t32(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
+    relation_t * r1;
+    relation_t * r2;
+    //HERE WE CHECK FOR CACHED PARTITIONS
+    Cacheinf c;
+    size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
+
+
+    Selection left(pred_info.left);
+    Selection right(pred_info.right);
+    int ch_flag;
+
+    // if (table_r->ch_filter == NULL) {
+    if (leafs&1) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(left) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r1 = (relation_t *)malloc(sizeof(relation_t));
+            r1->num_tuples = table_r->tups_num;
+            pthread_mutex_lock(&cache_mtx);
+            c.R = idxcache[left];
+            pthread_mutex_unlock(&cache_mtx);
+        }
+        else {
+
+            r1 = CreateRelationT(table_r, pred_info.left);
+            c.R = (cached_t *) calloc(threads, sizeof(cached_t));
+        }
+    } else {
+
+        r1 = CreateRelationT(table_r, pred_info.left);
+        c.R = NULL;
+    }
+
+    // Check for cached filter
+    if (leafs&2) {
+        pthread_mutex_lock(&cache_mtx);
+        ch_flag = (idxcache.find(right) != idxcache.end());
+        pthread_mutex_unlock(&cache_mtx);
+        if (ch_flag == 1) {
+            r2 = (relation_t *)malloc(sizeof(relation_t));
+            r2->num_tuples = table_s->tups_num;
+            pthread_mutex_lock(&cache_mtx);
+            c.S = idxcache[right];
+            pthread_mutex_unlock(&cache_mtx);
+        }
+        else {
+            r2 = CreateRelationT(table_s, pred_info.right);
+            c.S = (cached_t *) calloc(threads, sizeof(cached_t));;
+        }
+    } else {
+        r2 = CreateRelationT(table_s, pred_info.right);
+        c.S = NULL;
+    }
+
+    result_t * res  = PRO(r1, r2, threads, c, job_scheduler);
+
+    if (leafs&1) {
+        free(r1);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[left] = c.R;
+        pthread_mutex_unlock(&cache_mtx);
+    }
+
+    if (leafs&2) {
+        free(r2);
+        pthread_mutex_lock(&cache_mtx);
+        idxcache[right] = c.S;
+        pthread_mutex_unlock(&cache_mtx);
+    }
+
+
+    #ifdef time
+    gettimeofday(&end, NULL);
+    timeRadixJoin += (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+    #endif
+
+    table_t *temp = NULL;
+    // On root dont create a resilting table just get the checksums
+    if (isRoot) {
+        CheckSumOnTheFly(res, table_r, table_s, cmap, selections, result_str);
+    } else {
+        temp = CreateTableT(res, table_r, table_s, cmap);
+    }
+
+
+    /* Free the tables and the result of radix */
+    if (table_r->ch_filter != NULL) free(table_r->ch_filter);
+    if (table_s->ch_filter != NULL) free(table_s->ch_filter);
+    table_r->ch_filter = NULL;
+    table_s->ch_filter = NULL;
+
+    free(table_r->row_ids);
+    delete table_r->column_j;
+    delete table_r;
+    free(table_s->row_ids);
+    delete table_s->column_j;
+    delete table_s;
+    free(res->resultlist);
+    free(res);
+
+    return temp;
+}
 
 
 // Loads a relation from disk

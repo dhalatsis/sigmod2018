@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <string>
 #include <map>
+#include <limits>   // for numeric_limits
 
 #include "Relation.hpp"
 #include "Parser.hpp"
@@ -75,6 +76,8 @@ class Joiner {
     //
     table_t* join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
     table_t* join_t64(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
+    table_t* join_t32_t64(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
+    table_t* join_t64_t32(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
 
     relation_t* CreateRowRelationT(uint64_t * column, unsigned size);
     relation_t* CreateRelationT(table_t * table, SelectInfo &sel_info);

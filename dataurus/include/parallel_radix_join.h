@@ -72,4 +72,11 @@ PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf&, JobSch
 
 result_t *
 PRO_t64(relation64_t * relR, relation64_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
+
+result_t *
+PRO_t32_t64(relation_t * relR, relation64_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
+
+result_t *
+PRO_t64_32(relation64_t * relR, relation_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
+
 #endif /* PARALLEL_RADIX_JOIN_H */
