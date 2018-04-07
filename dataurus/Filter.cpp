@@ -5,6 +5,8 @@
 #include "prj_params.h"
 #include "generator.h"
 
+extern qn;
+
 /* --------------------------------------CACHED FILTERS------------------------------------- */
 extern std::map<Selection, cached_t*> idxcache;
 extern pthread_mutex_t cache_mtx;
@@ -247,6 +249,10 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
     gettimeofday(&start, NULL);
     #endif
 
+
+    if (qn == 1)
+        std::cerr << "Size berfor filter " << table->num_tups << '\n';
+
     /* Construct table  - Initialize variable */
     SelectInfo &sel_info = fil_info.filterColumn;
     uint64_t filter = fil_info.constant;
@@ -305,6 +311,9 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
             //     table->ch_filter = NULL;
             // }
     }
+
+    if (qn == 1)
+        std::cerr << "Size after berfor filter " << table->num_tups << '\n';
 
     #ifdef time
     struct timeval end;
