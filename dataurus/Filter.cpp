@@ -5,7 +5,7 @@
 #include "prj_params.h"
 #include "generator.h"
 
-extern qn;
+// extern int qn;
 
 /* --------------------------------------CACHED FILTERS------------------------------------- */
 extern std::map<Selection, cached_t*> idxcache;
@@ -250,8 +250,8 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
     #endif
 
 
-    if (qn == 1)
-        std::cerr << "Size berfor filter " << table->num_tups << '\n';
+    // if (qn == 1)
+    //     std::cerr << "Size berfor filter " << table->num_tups << '\n';
 
     /* Construct table  - Initialize variable */
     SelectInfo &sel_info = fil_info.filterColumn;
@@ -312,8 +312,8 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
             // }
     }
 
-    if (qn == 1)
-        std::cerr << "Size after berfor filter " << table->num_tups << '\n';
+    // if (qn == 1)
+    //     std::cerr << "Size after berfor filter " << table->num_tups << '\n';
 
     #ifdef time
     struct timeval end;
