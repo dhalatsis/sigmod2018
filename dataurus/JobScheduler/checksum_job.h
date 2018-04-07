@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 
 #include "job.h"
@@ -5,13 +6,6 @@
 #include "types.h"
 
 using namespace std;
-
-struct checksumST {
-    unsigned colId;
-    unsigned index;
-    unsigned binding;
-    uint64_t * values;
-};
 
 struct selfJoinSum_arg {
     vector<struct checksumST> * distinctPairs;
@@ -68,15 +62,6 @@ struct noninterNoninterSum_arg {
     tuplebuffer_t * tb;
     uint64_t * priv_checsums;
     unsigned   size;
-};
-
-class JobChechkSum : public Job {
-public:
-    JobChechkSum() {}
-
-    ~JobChechkSum() {};
-
-    virtual int Run()=0;
 };
 
 

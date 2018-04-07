@@ -19,19 +19,32 @@
  * @{
  */
 
-// #ifdef KEY_8B /* 64-bit key/value, 16B tuples */
-// typedef int64_t intkey_t;
-// typedef int64_t value_t;
-// #else /* 32-bit key/value, 8B tuples */
 typedef uint32_t intkey_t;
+typedef uint64_t intkey64_t;
 typedef unsigned value_t;
-// #endif
+
 
 typedef struct tuple_t    tuple_t;
 typedef struct relation_t relation_t;
 
+typedef struct tuple64_t    tuple64_t;
+typedef struct relation64_t relation64_t;
+
 typedef struct result_t result_t;
 typedef struct threadresult_t threadresult_t;
+
+
+
+
+struct tuple64_t {
+    intkey64_t key;
+    value_t  payload;
+};
+
+struct relation64_t {
+  tuple64_t * tuples;
+  uint64_t  num_tuples;
+};
 
 /** Type definition for a tuple, depending on KEY_8B a tuple can be 16B or 8B */
 struct tuple_t {

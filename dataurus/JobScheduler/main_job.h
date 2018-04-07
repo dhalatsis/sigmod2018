@@ -4,19 +4,6 @@
 
 using namespace std;
 
-/*
-class JobMain: public JobMaster {
-public:
-    QueryPlan& queryPlan_;
-    string line_;
-    string result_;
-    int qn_;
-
-    JobMain(QueryPlan & qp, string & line, int qn) : queryPlan_(qp), line_(line), qn_(qn) {}
-    ~JobMain() {};
-    int Run(Joiner & joiner);
-};
-*/
 
 class JobMain: public JobMaster {
 public:
@@ -25,8 +12,12 @@ public:
     string result_;
     string line_;
     int query_no_;
+    bool switch_64_;
+    bool unsatisfied_filters_;
 
-    JobMain(QueryInfo * i, string line, JoinTree * joinTreePtr, int query_no) : i_(i), joinTreePtr_(joinTreePtr), query_no_(query_no), line_(line) {}
-    ~JobMain() {};
+    JobMain(QueryInfo * i, string line, JoinTree * joinTreePtr, int query_no, bool switch_64, bool unsat_filters)
+    : i_(i), joinTreePtr_(joinTreePtr), query_no_(query_no),
+      line_(line), switch_64_(switch_64), unsatisfied_filters_(unsat_filters) {}
+    ~JobMain() {}
     int Run(Joiner & joiner);
 };

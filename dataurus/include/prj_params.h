@@ -93,5 +93,27 @@
 
 /** \endinternal */
 
+/** number of tuples fitting into L1 */
+#define L1_CACHE_TUPLES_64 (L1_CACHE_SIZE/sizeof(tuple64_t))
+
+/** thresholds for skewed partitions in 3-phase parallel join */
+// #ifndef SKEW_HANDLING
+// #define SKEW_HANDLING 0
+// #endif
+#define THRESHOLD1_64(NTHR) (NTHR*L1_CACHE_TUPLES_64)
+#define THRESHOLD2_64(NTHR) (NTHR*NTHR*L1_CACHE_TUPLES_64)
+
+/**
+ * Put an odd number of cache lines between partitions in pass-2:
+ * Here we put 3 cache lines.
+ */
+#define SMALL_PADDING_TUPLES_64 (3 * CACHE_LINE_SIZE/sizeof(tuple64_t))
+#define PADDING_TUPLES_64 (SMALL_PADDING_TUPLES_64*(FANOUT_PASS2+1))
+
+/** @warning This padding must be allocated at the end of relation */
+#define RELATION_PADDING_64 (PADDING_TUPLES_64*FANOUT_PASS1*sizeof(tuple64_t))
+
+
+
 
 #endif /* PRJ_PARAMS_H */

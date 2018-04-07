@@ -1,6 +1,7 @@
 #include <bitset>
 #include <unordered_set>
 #include <math.h>
+#include <limits>       // std::numeric_limits
 
 #include "QueryPlan.hpp"
 #include "parallel_radix_join.h"
@@ -995,9 +996,132 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
     }
 }
 
+table_t* JoinTreeNode::execute_t64(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop) {
+    JoinTreeNode *left  = joinTreeNodePtr->left;
+    JoinTreeNode *right = joinTreeNodePtr->right;
+    table_t *table_l;
+    table_t *table_r;
+    table_t *res;
+    int leafs = 0;
+
+    // Leaf node containing a single relation
+    if (left == NULL && right == NULL) {
+        res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
+
+        // Apply the filters
+        for (auto filter : joinTreeNodePtr->filterPtrs) {
+            joiner.AddColumnToTableT(filter->filterColumn, res);
+            joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+        }
+
+        //Apply all fiters
+        // if (!joinTreeNodePtr->filterPtrs.empty())
+        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
+
+        return res;
+    }
+
+    // Go left
+    table_l = joinTreeNodePtr->execute_t64(left, joiner, queryInfo, result_str, stop);
+
+    // Return without executing the rest of the tree
+    if (*stop == true) {
+        return NULL;
+    }
+
+    // This is an intermediate node (join)
+    if (right != NULL) {
+        table_r = joinTreeNodePtr->execute_t64(right, joiner, queryInfo, result_str, stop);
+
+        // If either column has no tuples stop the execution
+        if ((table_l->tups_num == 0) || (table_r->tups_num == 0)) {
+            *stop = true;
+
+            for (size_t i = 0; i < queryInfo.selections.size(); i++) {
+                result_str += "NULL";
+
+                // Create the write check sum
+                if (i != queryInfo.selections.size() - 1) {
+                    result_str +=  " ";
+                }
+            }
+
+            return NULL;
+        }
+/*
+        // Get the domains of the two columns to be joined
+        uint64_t leftMin  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].min;
+        uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
+        uint64_t rightMin = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].min;
+        uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
+
+        // fprintf(stderr, "%6lu %6lu - %6lu %6lu -- %6lu %6lu\n",
+        //  leftMin, leftMax, rightMin, rightMax, table_l->tups_num, table_r->tups_num);
+
+        // Apply a custom filter to create the same range
+
+        if (leftMin < rightMin && table_l->intermediate_res) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMin-1, FilterInfo::Comparison::Greater);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
+            joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
+        }
+
+        else if (leftMin > rightMin) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMin-1, FilterInfo::Comparison::Greater);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_r);
+            joiner.Select(customFilter, table_r, &(joinTreeNodePtr->right->usedColumnInfos[customFilter.filterColumn]));
+        }
+
+        if (leftMax < rightMax) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->right, leftMax+1, FilterInfo::Comparison::Less);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_r);
+            joiner.Select(customFilter, table_r, &(joinTreeNodePtr->right->usedColumnInfos[customFilter.filterColumn]));
+        }
+        else if (leftMax > rightMax) {
+            FilterInfo customFilter(joinTreeNodePtr->predicatePtr->left, rightMax+1, FilterInfo::Comparison::Less);
+            joiner.AddColumnToTableT(customFilter.filterColumn, table_l);
+            joiner.Select(customFilter, table_l, &(joinTreeNodePtr->left->usedColumnInfos[customFilter.filterColumn]));
+        }
+*/
+        // Calculate leafs
+        if (left->nodeId != -1 && left->filterPtrs.size() == 0) {
+            leafs = 1;
+        }
+        if (right->nodeId != -1 && right->filterPtrs.size() == 0) {
+            leafs |= 2;
+        }
+
+        if (joinTreeNodePtr->parent == NULL) {
+            res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+                             joinTreeNodePtr->usedColumnInfos, true,
+                             queryInfo.selections, leafs, result_str);
+        }
+        else {
+            res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+                             joinTreeNodePtr->usedColumnInfos, false,
+                             queryInfo.selections, leafs, result_str);
+        }
+        return res;
+    }
+    else {
+        if (joinTreeNodePtr->parent == NULL) {
+            res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
+                                                  ,queryInfo.selections, result_str);
+        }
+        else {
+            res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+        }
+        return res;
+
+    }
+}
+
+
 // Estimate the cost of a JoinTreeNode
 void JoinTreeNode::cost(PredicateInfo& predicateInfo) {
-    this->treeCost = this->left->treeCost + this->left->usedColumnInfos[predicateInfo.left].size;// + this->right->usedColumnInfos[predicateInfo.right].size;
+    this->treeCost = this->left->treeCost +
+                     this->left->usedColumnInfos[predicateInfo.left].size;
+                     //this->right->usedColumnInfos[predicateInfo.right].size;
 
     // fprintf(stderr, "left=%d.%d right=%d.%d cost: %lu + %lu + %lu = %lu\n",
     //     predicateInfo.left.binding, predicateInfo.left.colId,
@@ -1068,7 +1192,7 @@ void JoinTreeNode::print(JoinTreeNode* joinTreeNodePtr) {
 }
 
 // Fills the columnInfo matrix with the data of every column
-void QueryPlan::fillColumnInfo(Joiner& joiner) {
+void QueryPlan::fillColumnInfo(Joiner& joiner, JobScheduler & j1, JobScheduler & j2, bool & switch_64) {
     Relation* relation;
     int relationsCount = joiner.getRelationsCount();
     size_t allColumns = 0; // Number of all columns of all relations
@@ -1103,15 +1227,15 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         args[i].columnPtr    = columnPtrs[i];
         args[i].columnTuples = columnTuples[i];
         args[i].columnInfo   = &columnInfosVector[i];
-        //if (i % 2 == 0)
-        joiner.job_scheduler.Schedule(new StatisticsJob(&args[i]));
-        //else
-        //    joiner.job_scheduler2.Schedule(new StatisticsJob(&args[i]));
+        if (i % 2 == 0)
+            j1.Schedule(new StatisticsJob(&args[i]));
+        else
+            j2.Schedule(new StatisticsJob(&args[i]));
     }
 
     // Wait for the threads to finish
-    joiner.job_scheduler.Barrier();
-    //joiner.job_scheduler2.Barrier();
+    j1.Barrier();
+    j2.Barrier();
 
     // Now we have to transfrom the vector of columnInfo to a 2 dimensional matrix
     index = 0;
@@ -1129,6 +1253,18 @@ void QueryPlan::fillColumnInfo(Joiner& joiner) {
         for (int col = 0; col < relationColumns; col++) {
             columnInfos[rel][col] = columnInfosVector[index];
             index++;
+
+            // Hard coded test
+            // if (col == 0 && rel == 0) {
+            //     columnInfos[0][0].max = (uint64_t) (numeric_limits<uint32_t>::max());
+            //     columnInfos[0][0].max++;
+            //     std::cerr << "Changed max " << columnInfos[0][0].max << '\n';
+            // }
+
+            // Check the max value of a column
+            if (columnInfos[rel][col].max > numeric_limits<uint32_t>::max()) {
+                switch_64 = true;
+            }
         }
     }
 }

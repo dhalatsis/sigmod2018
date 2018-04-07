@@ -66,6 +66,8 @@ struct JoinTreeNode {
 
     // Execute a Join Tree
     table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str, bool* stop);
+    // Execute a Join Tree
+    table_t* execute_t64(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str, bool* stop);
 
     // Estimates the cost of a given Plan Tree Node
     void cost(PredicateInfo& predicateInfo);
@@ -115,7 +117,7 @@ struct QueryPlan {
     void execute(QueryInfo& queryInfoPtr);
 
     // Fills the columnInfo matrix with the data of every column
-    void fillColumnInfo(Joiner& joiner);
+    void fillColumnInfo(Joiner& joiner, JobScheduler & j1, JobScheduler & j2, bool & switch_64);
 
     //Cache 01 cols for all the rels
     void Pre_Caching01(Joiner& joiner, int threads);

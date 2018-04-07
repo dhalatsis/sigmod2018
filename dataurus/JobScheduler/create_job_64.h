@@ -1,31 +1,32 @@
 #pragma once
+
 #include "job.h"
-#include "tuple_buffer.h"
+#include "tuple_buffer_64.h"
 #include "types.h"
 
 
 // Args for Non intermediate functions
-struct noninterRel_arg {
+struct noninterRel_arg64_t {
     unsigned low;
     unsigned high;
-    tuple_t  * tups;
+    tuple64_t  * tups;
     uint64_t * values;
 };
 
 // Args for intermediate functions
-struct interRel_arg {
+struct interRel_arg64_t {
     unsigned low;
     unsigned high;
     uint64_t * values;
-    tuple_t  * tups;
+    tuple64_t  * tups;
     unsigned * rids;
     unsigned rel_num;
     unsigned table_index;
 };
 
 // Args for inter R inter S Table create
-struct interInterTable_arg {
-    tuplebuffer_t * tb;
+struct interInterTable_arg64_t {
+    tuplebuffer64_t * tb;
     unsigned   start_index;
     unsigned   rel_num_all;
     unsigned   rel_num_r;
@@ -39,8 +40,8 @@ struct interInterTable_arg {
 };
 
 // Args for inter R non inter S Table create
-struct interNoninterTable_arg {
-    tuplebuffer_t * tb;
+struct interNoninterTable_arg64_t {
+    tuplebuffer64_t * tb;
     unsigned   start_index;
     unsigned   rel_num_all;
     unsigned   rel_num_r;
@@ -52,8 +53,8 @@ struct interNoninterTable_arg {
 };
 
 // Args for inter R non inter S Table create
-struct noninterInterTable_arg {
-    tuplebuffer_t * tb;
+struct noninterInterTable_arg64_t {
+    tuplebuffer64_t * tb;
     unsigned   start_index;
     unsigned   rel_num_all;
     unsigned   rel_num_s;
@@ -65,8 +66,8 @@ struct noninterInterTable_arg {
 };
 
 // Args for inter R non inter S Table create
-struct noninterNoninterTable_arg {
-    tuplebuffer_t * tb;
+struct noninterNoninterTable_arg64_t {
+    tuplebuffer64_t * tb;
     unsigned   start_index;
     unsigned   rel_num_all;
     unsigned * rids_res;
@@ -76,57 +77,57 @@ struct noninterNoninterTable_arg {
 };
 
 // Create Table T R is inter S is inter
-class JobCreateInterInterTable : public CreateJob {
+class JobCreateInterInterTable_t64 : public CreateJob {
 public:
-    struct interInterTable_arg & args_;
+    struct interInterTable_arg64_t & args_;
 
-    JobCreateInterInterTable(struct interInterTable_arg & args)
+    JobCreateInterInterTable_t64(struct interInterTable_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateInterInterTable() {};
+    ~JobCreateInterInterTable_t64() {};
 
     int Run();
 };
 
 // Create Table T R is inter S is non inter
-class JobCreateInterNonInterTable : public CreateJob {
+class JobCreateInterNonInterTable_t64 : public CreateJob {
 public:
-    struct interNoninterTable_arg & args_;
+    struct interNoninterTable_arg64_t & args_;
 
-    JobCreateInterNonInterTable(struct interNoninterTable_arg & args)
+    JobCreateInterNonInterTable_t64(struct interNoninterTable_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateInterNonInterTable() {};
+    ~JobCreateInterNonInterTable_t64() {};
 
     int Run();
 };
 
 // Create Table T R is non inter S is inter
-class JobCreateNonInterInterTable : public CreateJob {
+class JobCreateNonInterInterTable_t64 : public CreateJob {
 public:
-    struct noninterInterTable_arg & args_;
+    struct noninterInterTable_arg64_t & args_;
 
-    JobCreateNonInterInterTable(struct noninterInterTable_arg & args)
+    JobCreateNonInterInterTable_t64(struct noninterInterTable_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateNonInterInterTable() {};
+    ~JobCreateNonInterInterTable_t64() {};
 
     int Run();
 };
 
 // Create Table T R is non inter S is non inter
-class JobCreateNonInterNonInterTable : public CreateJob {
+class JobCreateNonInterNonInterTable_t64 : public CreateJob {
 public:
-    struct noninterNoninterTable_arg & args_;
+    struct noninterNoninterTable_arg64_t & args_;
 
-    JobCreateNonInterNonInterTable(struct noninterNoninterTable_arg & args)
+    JobCreateNonInterNonInterTable_t64(struct noninterNoninterTable_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateNonInterNonInterTable() {};
+    ~JobCreateNonInterNonInterTable_t64() {};
 
     int Run();
 };
@@ -136,29 +137,29 @@ public:
 /*+++++++++++++++++++++++++++*/
 
 // Create Non intermediate realtion
-class JobCreateNonInterRel : public CreateJob {
+class JobCreateNonInterRel_t64 : public CreateJob {
 public:
-    struct noninterRel_arg & args_;
+    struct noninterRel_arg64_t & args_;
 
-    JobCreateNonInterRel(struct noninterRel_arg & args)
+    JobCreateNonInterRel_t64(struct noninterRel_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateNonInterRel() {};
+    ~JobCreateNonInterRel_t64() {};
 
     int Run();
 };
 
 // Create intermediate realtion
-class JobCreateInterRel : public CreateJob {
+class JobCreateInterRel_t64 : public CreateJob {
 public:
-    struct interRel_arg & args_;
+    struct interRel_arg64_t & args_;
 
-    JobCreateInterRel(struct interRel_arg & args)
+    JobCreateInterRel_t64(struct interRel_arg64_t & args)
     :args_(args)
     {}
 
-    ~JobCreateInterRel() {};
+    ~JobCreateInterRel_t64() {};
 
     int Run();
 };

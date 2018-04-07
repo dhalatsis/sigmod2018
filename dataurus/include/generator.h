@@ -18,12 +18,7 @@
 relation_t *
 gen_rel(int num_tuples);
 
-/**
- * This is just to make sure that chunks of the temporary memory
- * will be numa local to threads. Just initialize memory to 0 for
- * making sure it will be allocated numa-local.
- */
-int
-numa_localize(tuple_t * relation, int64_t num_tuples, uint32_t nthreads) ;
+relation64_t *
+gen_rel_t64(int num_tuples);
 
 #endif /* GENERATOR_H */

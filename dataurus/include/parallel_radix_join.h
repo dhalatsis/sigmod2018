@@ -69,4 +69,7 @@ cache_partition_01(relation_t *r0, relation_t *r1, int nthreads, struct Cacheinf
  */
 result_t *
 PRO(relation_t * relR, relation_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
+
+result_t *
+PRO_t64(relation64_t * relR, relation64_t * relS, int nthreads, struct Cacheinf&, JobScheduler&);
 #endif /* PARALLEL_RADIX_JOIN_H */
