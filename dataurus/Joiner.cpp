@@ -18,6 +18,8 @@
 
 using namespace std;
 
+int qn = 0;
+
 bool done_testing = false;
 
 /* Timing variables */

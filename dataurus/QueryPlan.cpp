@@ -738,6 +738,9 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
     // Go to the leftmost join
     while (joinTreeNodePtr->left->nodeId == -1) {
         JoinTreeNode* temp = joinTreeNodePtr;
+        if (joinTreeNodePtr->right != NULL) {
+            joinTreeNodePtr->right->parent = temp;
+        }
         joinTreeNodePtr = joinTreeNodePtr->left;
         joinTreeNodePtr->parent = temp;
     }
