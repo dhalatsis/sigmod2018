@@ -734,8 +734,8 @@ int main(int argc, char* argv[]) {
 
     queryPlan.Pre_Caching(joiner, js1, js2, startS);
 
-    std::cerr << "Uint 64 ? " << switch_64t << '\n';
-    std::cerr << "We have cached " << idxcache.size()  << '\n';
+    //std::cerr << "Uint 64 ? " << switch_64t << '\n';
+    //std::cerr << "We have cached " << idxcache.size()  << '\n';
 
     // Desoty the Js's
     js1.Stop(false);   js1.Destroy();
