@@ -1398,6 +1398,32 @@ void QueryPlan::fillColumnInfo(Joiner& joiner, JobScheduler & j1, JobScheduler &
             }
         }
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    /* stress test */
+    // // For every relation allocate memory for its columns
+    // for (int rel = 0; rel < relationsCount; rel++) {
+    //     // Get the number of columns
+    //     relationColumns = joiner.getRelation(rel).columns.size();
+    //     columnInfos[rel] = (ColumnInfo*) malloc(relationColumns * sizeof(ColumnInfo));
+    //
+    //     // Get the info of every column
+    //     for (int col = 0; col < relationColumns; col++) {
+    //         columnInfos[rel][col] = columnInfosVector[index];
+    //         index++;
+    //
+    //         // ADD THIS
+    //         if (rel == 0 && col == 0) {
+    //             columnInfos[rel][col].max = (uint64_t) numeric_limits<uint32_t>::max();
+    //             columnInfos[rel][col].max += 10;
+    //             /* for debugging */
+    //             // columnInfos[rel][col].print();
+    //         }
+    //
+    //         // fprintf(stderr, "%d.%d\n", rel, col); columnInfos[rel][col].print();
+    //     }
+    // }
+    ////////////////////////////////////////////////////////////////////////////
 }
 
 
