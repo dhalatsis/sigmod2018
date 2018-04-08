@@ -11,8 +11,13 @@
 
 #include "Joiner.hpp"
 #include "Parser.hpp"
+#include "generator.h"
 
 using namespace std;
+
+// Values that keep the distinct elements vector from allocating too much memory
+#define MAX_DOMAIN_SIZE 250000000 // Maximum allowed domain = maximmum - minimum + 1
+#define MAX_VECTOR_SIZE 250000013 // First prime number after the MAX_DOMAIN_SIZE
 
 // Keeps the important info/statistics for every column
 // needed to build the plan tree
@@ -26,6 +31,7 @@ struct ColumnInfo {
 
     unsigned counter; // Number of times the column appears in the query
     bool isSelectionColumn;
+    bool updateSize;
 
     // Prints a Column Info structure
     void print();
@@ -60,9 +66,9 @@ struct JoinTreeNode {
     void estimateInfoAfterJoin(PredicateInfo& predicateInfo);
 
     // Updates the column info map
-    ColumnInfo estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo);
+    ColumnInfo estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo, ColumnInfo oldLeftColumnInfo, ColumnInfo oldRightColumnInfo);
     ColumnInfo estimateInfoAfterRightDependentJoin(PredicateInfo& predicateInfo);
-    ColumnInfo estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo);
+    ColumnInfo estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo, ColumnInfo oldLeftColumnInfo, ColumnInfo oldRightColumnInfo);
 
     // Execute a Join Tree
     table_t* execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string & result_str, bool* stop);
@@ -119,10 +125,10 @@ struct QueryPlan {
     void execute(QueryInfo& queryInfoPtr);
 
     // Fills the columnInfo matrix with the data of every column
-    void fillColumnInfo(Joiner& joiner, JobScheduler & j1, JobScheduler & j2, bool & switch_64);
+    void fillColumnInfo(Joiner& joiner, JobScheduler& j1, JobScheduler& j2, bool& switch_64);
 
     //Cache 01 cols for all the rels
-    void Pre_Caching01(Joiner& joiner, int threads);
+    void Pre_Caching(Joiner& joiner, JobScheduler& j1, JobScheduler& j2, struct timeval& time);
 };
 
 // Arguments needed for every thread during
@@ -154,12 +160,25 @@ public:
             if (element < minimum) minimum = element;
         }
 
-        // One pass for the distinct elements
-        vector<bool> distinctElements(maximum - minimum + 1, false);
+        // Determine the size of the vector that counts the distinct elements
+        uint64_t distinctElementsSize = maximum - minimum + 1;
+        bool normaliseElements = false;
+
+        if (maximum - minimum + 1 > MAX_DOMAIN_SIZE) {
+            distinctElementsSize = MAX_VECTOR_SIZE;
+            normaliseElements = true;
+        }
+
+        vector<bool> distinctElements(distinctElementsSize, false);
         uint64_t distinctCounter = 0;
 
+        // One pass for the distinct elements
         for (int i = 0; i < tuples; i++) {
             element = (myArg->columnPtr)[i];
+            if (normaliseElements == true) {
+                element = element % MAX_VECTOR_SIZE + minimum;
+            }
+
             if (distinctElements[element - minimum] == false) {
                 distinctCounter++;
                 distinctElements[element - minimum] = true;
@@ -176,5 +195,6 @@ public:
 
         myArg->columnInfo->counter = 0;
         myArg->columnInfo->isSelectionColumn = false;
+        myArg->columnInfo->updateSize = false;
     }
 };

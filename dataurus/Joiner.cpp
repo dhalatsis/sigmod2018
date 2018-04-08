@@ -693,6 +693,8 @@ int main(int argc, char* argv[]) {
     struct timeval startAll;
     gettimeofday(&startAll, NULL);
 
+    Joiner joiner;
+
     /* Initialize the mutex */
     pthread_mutex_init(&cache_mtx, 0);
 
@@ -705,7 +707,12 @@ int main(int argc, char* argv[]) {
     while (getline(cin, line)) {
         if (line == "Done") break;
         file_names.push_back(line);
+        joiner.addRelation(line.c_str());
     }
+
+    // Time statistics
+    struct timeval startS;
+    gettimeofday(&startS, NULL);
 
     /* Initialize master thread scheduler */
     main_js.Init(file_names, MASTER_THREADS);
@@ -718,18 +725,26 @@ int main(int argc, char* argv[]) {
     // Preparation phase (not timed)
     QueryPlan queryPlan;
     bool switch_64t = false;
+
+    // Get the statistics for the planner
     main_js.Schedule(new JobFillQueryPlan(queryPlan, js1, js2, switch_64t));
 
     // Wait for jobs to end
     main_js.Barrier();
-    std::cerr << "Uint 64 ? " << switch_64t << '\n';
+
+    queryPlan.Pre_Caching(joiner, js1, js2, startS);
+
+    //std::cerr << "Uint 64 ? " << switch_64t << '\n';
+    //std::cerr << "We have cached " << idxcache.size()  << '\n';
 
     // Desoty the Js's
     js1.Stop(false);   js1.Destroy();
     js2.Stop(false);   js2.Destroy();
 
-    // We do the Pre_Caching of each ralations collumns 0,1
-    //queryPlan.Pre_Caching01(joiner, threads);
+    struct timeval endS;
+    gettimeofday(&endS, NULL);
+    double timeStats = (endS.tv_sec - startS.tv_sec) + (endS.tv_usec - startS.tv_usec) / 1000000.0;
+    std::cerr << "timeStats: " << (long)(timeStats * 1000) << endl;
 
     // The test harness will send the first query after 1 second.
     int rv;

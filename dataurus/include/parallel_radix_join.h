@@ -47,10 +47,7 @@ struct Cacheinf {
 };
 
 void
-cache_partition_0(relation_t *r0, int nthreads, struct Cacheinf &cinf);
-
-void
-cache_partition_01(relation_t *r0, relation_t *r1, int nthreads, struct Cacheinf &cinf);
+cache_partition_0(relation_t *r0, int nthreads, struct Cacheinf & cinf, JobScheduler & js1, JobScheduler & js2);
 
 /**
  * PRO: Parallel Radix Join Optimized.

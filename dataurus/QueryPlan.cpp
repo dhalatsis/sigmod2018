@@ -1,8 +1,7 @@
 #include <bitset>
 #include <unordered_set>
 #include <math.h>
-#include <limits>       // std::numeric_limits
-
+#include <limits>
 #include "QueryPlan.hpp"
 #include "parallel_radix_join.h"
 
@@ -43,26 +42,27 @@ void JoinTreeNode::estimateInfoAfterFilterLess(FilterInfo& filterInfo) {
     newColumnInfo.min      = oldColumnInfo.min;
     newColumnInfo.max      = filterInfo.constant;
     newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
-    if(newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
+    if (newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
     newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
     newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
+    newColumnInfo.updateSize        = oldColumnInfo.updateSize;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
     // Update the info of the other columns
     for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
         if (!(it->first == filterInfo.filterColumn)) {
-            if(it->second.distinct == 0) it->second.distinct = 1;
+            if (it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newColumnInfo.size;
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
-            if(it->second.distinct == 0) it->second.distinct = 1;
+            if (it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double)it->second.n) / ((double) it->second.distinct);
         }
     }
@@ -83,26 +83,27 @@ void JoinTreeNode::estimateInfoAfterFilterGreater(FilterInfo& filterInfo) {
     newColumnInfo.min      = filterInfo.constant;
     newColumnInfo.max      = oldColumnInfo.max;
     newColumnInfo.distinct = (uint64_t) (((double) (newColumnInfo.max - newColumnInfo.min)) / oldColumnInfo.spread);
-    if(newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
+    if (newColumnInfo.distinct == 0) newColumnInfo.distinct = 1;
     newColumnInfo.size     = newColumnInfo.distinct * (oldColumnInfo.size / oldColumnInfo.distinct);
     newColumnInfo.n        = newColumnInfo.max - newColumnInfo.min + 1;
     newColumnInfo.spread   = ((double) newColumnInfo.n) / ((double) newColumnInfo.distinct);
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
     newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
+    newColumnInfo.updateSize        = oldColumnInfo.updateSize;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
     // Update the info of the other columns
     for (columnInfoMap::iterator it=this->usedColumnInfos.begin(); it != this->usedColumnInfos.end(); it++) {
         if (!(it->first == filterInfo.filterColumn)) {
-            if(it->second.distinct == 0) it->second.distinct = 1;
+            if (it->second.distinct == 0) it->second.distinct = 1;
             double base      = 1 - (((double) newColumnInfo.size) / ((double) oldColumnInfo.size));
             double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
             double tempValue = pow(base, exponent);
 
             it->second.size     = newColumnInfo.size;
             it->second.distinct = (uint64_t) (((double) it->second.distinct) * (1 - tempValue));
-            if(it->second.distinct == 0) it->second.distinct = 1;
+            if (it->second.distinct == 0) it->second.distinct = 1;
             it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
         }
     }
@@ -128,6 +129,7 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
     newColumnInfo.spread   = 1;
     newColumnInfo.counter  = oldColumnInfo.counter - 1;
     newColumnInfo.isSelectionColumn = oldColumnInfo.isSelectionColumn;
+    newColumnInfo.updateSize        = oldColumnInfo.updateSize;
 
     this->usedColumnInfos[filterInfo.filterColumn] = newColumnInfo;
 
@@ -156,8 +158,8 @@ void JoinTreeNode::estimateInfoAfterFilterEqual(FilterInfo& filterInfo) {
 // after a join predicate is applied to its children
 void JoinTreeNode::estimateInfoAfterJoin(PredicateInfo& predicateInfo) {
     // Get the column info of the columns to be joined from the children
-    ColumnInfo* leftColumnInfo = &(this->left->usedColumnInfos[predicateInfo.left]);
-    ColumnInfo* rightColumnInfo = &(this->right->usedColumnInfos[predicateInfo.right]);
+    ColumnInfo leftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    ColumnInfo rightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
 
     //----------------
     /*
@@ -171,31 +173,31 @@ void JoinTreeNode::estimateInfoAfterJoin(PredicateInfo& predicateInfo) {
     //----------------
 
     // Save the current min and max in case they change
-    uint64_t oldLeftMin  = leftColumnInfo->min;
-    uint64_t oldLeftMax  = leftColumnInfo->max;
-    uint64_t oldRightMin = rightColumnInfo->min;
-    uint64_t oldRightMax = rightColumnInfo->max;
+    uint64_t oldLeftMin  = leftColumnInfo.min;
+    uint64_t oldLeftMax  = leftColumnInfo.max;
+    uint64_t oldRightMin = rightColumnInfo.min;
+    uint64_t oldRightMax = rightColumnInfo.max;
 
     // If the domains are not the same apply a custom filter
-    if ((oldLeftMin != oldRightMin) || (oldLeftMax != rightColumnInfo->max)) {
+    if ((oldLeftMin != oldRightMin) || (oldLeftMax != oldRightMax)) {
         // First apply the right filters to create the same domain on both columns
-        uint64_t oldDistinct     = leftColumnInfo->distinct;
-        leftColumnInfo->min      = max(leftColumnInfo->min, rightColumnInfo->min);
-        leftColumnInfo->max      = min(leftColumnInfo->max, rightColumnInfo->max);
-        leftColumnInfo->distinct = (uint64_t) (((double) (leftColumnInfo->max - leftColumnInfo->min)) / leftColumnInfo->spread);
-        if (leftColumnInfo->distinct == 0) leftColumnInfo->distinct = 1;
-        leftColumnInfo->size     = leftColumnInfo->distinct * (leftColumnInfo->size / oldDistinct + 1);
-        leftColumnInfo->n        = leftColumnInfo->max - leftColumnInfo->min + 1;
-        leftColumnInfo->spread   = ((double) leftColumnInfo->n) / ((double) leftColumnInfo->distinct);
+        uint64_t oldDistinct    = leftColumnInfo.distinct;
+        leftColumnInfo.min      = max(leftColumnInfo.min, rightColumnInfo.min);
+        leftColumnInfo.max      = min(leftColumnInfo.max, rightColumnInfo.max);
+        leftColumnInfo.distinct = (uint64_t) (((double) (leftColumnInfo.max - leftColumnInfo.min)) / leftColumnInfo.spread);
+        if (leftColumnInfo.distinct == 0) leftColumnInfo.distinct = 1;
+        leftColumnInfo.size     = leftColumnInfo.distinct * (leftColumnInfo.size / oldDistinct + 1);
+        leftColumnInfo.n        = leftColumnInfo.max - leftColumnInfo.min + 1;
+        leftColumnInfo.spread   = ((double) leftColumnInfo.n) / ((double) leftColumnInfo.distinct);
 
-        oldDistinct               = rightColumnInfo->distinct;
-        rightColumnInfo->min      = leftColumnInfo->min;
-        rightColumnInfo->max      = leftColumnInfo->max;
-        rightColumnInfo->distinct = (uint64_t) (((double) (rightColumnInfo->max - rightColumnInfo->min)) / rightColumnInfo->spread);
-        if (rightColumnInfo->distinct == 0) rightColumnInfo->distinct = 1;
-        rightColumnInfo->size     = rightColumnInfo->distinct * (rightColumnInfo->size / oldDistinct);
-        rightColumnInfo->n        = rightColumnInfo->max - rightColumnInfo->min + 1;
-        rightColumnInfo->spread   = ((double) rightColumnInfo->n) / ((double) rightColumnInfo->distinct);
+        oldDistinct              = rightColumnInfo.distinct;
+        rightColumnInfo.min      = leftColumnInfo.min;
+        rightColumnInfo.max      = leftColumnInfo.max;
+        rightColumnInfo.distinct = (uint64_t) (((double) (rightColumnInfo.max - rightColumnInfo.min)) / rightColumnInfo.spread);
+        if (rightColumnInfo.distinct == 0) rightColumnInfo.distinct = 1;
+        rightColumnInfo.size     = rightColumnInfo.distinct * (rightColumnInfo.size / oldDistinct);
+        rightColumnInfo.n        = rightColumnInfo.max - rightColumnInfo.min + 1;
+        rightColumnInfo.spread   = ((double) rightColumnInfo.n) / ((double) rightColumnInfo.distinct);
 
         //---------------
         /*
@@ -208,25 +210,29 @@ void JoinTreeNode::estimateInfoAfterJoin(PredicateInfo& predicateInfo) {
         //---------------
     }
 
+    //this->estimateInfoAfterIndependentJoin(predicateInfo, leftColumnInfo, rightColumnInfo);
+    this->estimateInfoAfterLeftDependentJoin(predicateInfo, leftColumnInfo, rightColumnInfo);
+
+/*
     if ((oldLeftMin >= oldRightMin) && (oldLeftMax <= rightColumnInfo->max)) {
-        this->estimateInfoAfterLeftDependentJoin(predicateInfo);
+        this->estimateInfoAfterLeftDependentJoin(predicateInfo, leftColumnInfo, rightColumnInfo);
     }
-    /*
-    else if ((rightColumnInfo->min >= leftColumnInfo->min) && (rightColumnInfo->max <= leftColumnInfo->max)) {
-        this->estimateInfoAfterRightDependentJoin(predicateInfo);
-    }*/
+    //else if ((rightColumnInfo->min >= leftColumnInfo->min) && (rightColumnInfo->max <= leftColumnInfo->max)) {
+    //    this->estimateInfoAfterRightDependentJoin(predicateInfo);
+    //}
     else {
         this->estimateInfoAfterIndependentJoin(predicateInfo);
     }
+*/
 }
 
 // Updates the column info map
-ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo) {
+ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predicateInfo, ColumnInfo oldLeftColumnInfo, ColumnInfo oldRightColumnInfo) {
     ColumnInfo newLeftColumnInfo, newRightColumnInfo;
 
     // Get the info of the columns to be joined
-    ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
-    ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
+    // ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    // ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
 
     //------------------
     /*
@@ -248,6 +254,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
     newLeftColumnInfo.isSelectionColumn = oldLeftColumnInfo.isSelectionColumn;
+    newLeftColumnInfo.updateSize        = true;
 
     newRightColumnInfo.min      = oldRightColumnInfo.min;
     newRightColumnInfo.max      = oldRightColumnInfo.max;
@@ -258,6 +265,7 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
     newRightColumnInfo.isSelectionColumn = oldRightColumnInfo.isSelectionColumn;
+    newRightColumnInfo.updateSize        = true;
 
     //------------------
     /*
@@ -277,15 +285,19 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
             if (it->second.distinct == 0) it->second.distinct = 1;
+            ColumnInfo newRandomColumnInfo = it->second;
+
             double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
-            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double exponent  = ((double) newRandomColumnInfo.size) / ((double) newRandomColumnInfo.distinct);
             double tempValue = pow(base, exponent);
 
-            it->second.size     = newLeftColumnInfo.size;
-            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
-            if(it->second.distinct == 0) it->second.distinct = 1;
-            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-            this->usedColumnInfos[it->first] = it->second;
+            newRandomColumnInfo.size         = newLeftColumnInfo.size;
+            newRandomColumnInfo.distinct     = ceil(newRandomColumnInfo.distinct * (1 - tempValue));
+            //newRandomColumnInfo.distinct     = min(newRandomColumnInfo.size, it->second.distinct);
+            if (newRandomColumnInfo.distinct == 0) newRandomColumnInfo.distinct = 1;
+            newRandomColumnInfo.spread       = ((double) newRandomColumnInfo.n) / ((double) newRandomColumnInfo.distinct);
+            newRandomColumnInfo.updateSize   = true;
+            this->usedColumnInfos[it->first] = newRandomColumnInfo;
         }
     }
 
@@ -294,15 +306,32 @@ ColumnInfo JoinTreeNode::estimateInfoAfterLeftDependentJoin(PredicateInfo& predi
     for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
             if (it->second.distinct == 0) it->second.distinct = 1;
+            ColumnInfo newRandomColumnInfo = it->second;
+
             double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
-            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double exponent  = ((double) newRandomColumnInfo.size) / ((double) newRandomColumnInfo.distinct);
             double tempValue = pow(base, exponent);
 
-            it->second.size     = newRightColumnInfo.size;
-            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
-            if(it->second.distinct == 0) it->second.distinct = 1;
-            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-            this->usedColumnInfos[it->first] = it->second;
+            newRandomColumnInfo.size         = newRightColumnInfo.size;
+            newRandomColumnInfo.distinct     = ceil(newRandomColumnInfo.distinct * (1 - tempValue));
+            //newRandomColumnInfo.distinct     = min(newRandomColumnInfo.size, it->second.distinct);
+            if (newRandomColumnInfo.distinct == 0) newRandomColumnInfo.distinct = 1;
+            newRandomColumnInfo.spread       = ((double) newRandomColumnInfo.n) / ((double) newRandomColumnInfo.distinct);
+            newRandomColumnInfo.updateSize   = true;
+            this->usedColumnInfos[it->first] = newRandomColumnInfo;
+        }
+    }
+
+    // Update the needed column sizes
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if (it->second.updateSize == true) {
+            it->second.size = newLeftColumnInfo.size;;
+        }
+    }
+
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if (it->second.updateSize == true) {
+            it->second.size = newRightColumnInfo.size;;
         }
     }
 
@@ -421,33 +450,35 @@ ColumnInfo JoinTreeNode::estimateInfoAfterRightDependentJoin(PredicateInfo& pred
 }
 
 // Updates the column info map
-ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo) {
+ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predicateInfo, ColumnInfo oldLeftColumnInfo, ColumnInfo oldRightColumnInfo) {
     ColumnInfo newLeftColumnInfo, newRightColumnInfo;
 
     // Get the info of the columns to be joined
-    ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
-    ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
+    // ColumnInfo oldLeftColumnInfo = this->left->usedColumnInfos[predicateInfo.left];
+    // ColumnInfo oldRightColumnInfo = this->right->usedColumnInfos[predicateInfo.right];
 
     // Estimate the new info of the columns to be joined
     newLeftColumnInfo.min      = oldLeftColumnInfo.min;
     newLeftColumnInfo.max      = oldLeftColumnInfo.max;
-    newLeftColumnInfo.size     = (oldLeftColumnInfo.size * oldRightColumnInfo.size);
+    newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
+    newLeftColumnInfo.size     = (oldLeftColumnInfo.size * oldRightColumnInfo.size) / newLeftColumnInfo.n;
     newLeftColumnInfo.distinct = oldRightColumnInfo.distinct;
     if(newLeftColumnInfo.distinct == 0) newLeftColumnInfo.distinct = 1;
-    newLeftColumnInfo.n        = newLeftColumnInfo.max - newLeftColumnInfo.min + 1;
     newLeftColumnInfo.spread   = ((double) newLeftColumnInfo.n) / ((double) newLeftColumnInfo.distinct);
     newLeftColumnInfo.counter  = oldLeftColumnInfo.counter - 1;
     newLeftColumnInfo.isSelectionColumn = oldLeftColumnInfo.isSelectionColumn;
+    newLeftColumnInfo.updateSize        = true;
 
     newRightColumnInfo.min      = oldRightColumnInfo.min;
     newRightColumnInfo.max      = oldRightColumnInfo.max;
-    newRightColumnInfo.size     = oldRightColumnInfo.size * (oldLeftColumnInfo.size / oldLeftColumnInfo.distinct);
+    newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
+    newRightColumnInfo.size     = (oldLeftColumnInfo.size * oldRightColumnInfo.size) / newRightColumnInfo.n;
     newRightColumnInfo.distinct = oldRightColumnInfo.distinct;
     if(newRightColumnInfo.distinct == 0) newRightColumnInfo.distinct = 1;
-    newRightColumnInfo.n        = newRightColumnInfo.max - newRightColumnInfo.min + 1;
     newRightColumnInfo.spread   = ((double) newRightColumnInfo.n) / ((double) newRightColumnInfo.distinct);
     newRightColumnInfo.counter  = oldRightColumnInfo.counter - 1;
     newRightColumnInfo.isSelectionColumn = oldRightColumnInfo.isSelectionColumn;
+    newRightColumnInfo.updateSize        = true;
 
     this->usedColumnInfos[predicateInfo.left] = newLeftColumnInfo;
     this->usedColumnInfos[predicateInfo.right] = newRightColumnInfo;
@@ -457,15 +488,19 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.left)) && (it->first.binding == predicateInfo.left.binding)) {
             if (it->second.distinct == 0) it->second.distinct = 1;
+            ColumnInfo newRandomColumnInfo = it->second;
+
             double base      = 1 - (((double) newLeftColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
-            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double exponent  = ((double) newRandomColumnInfo.size) / ((double) newRandomColumnInfo.distinct);
             double tempValue = pow(base, exponent);
 
-            it->second.size     = newLeftColumnInfo.size;
-            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
-            if (it->second.distinct == 0) it->second.distinct = 1;
-            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-            this->usedColumnInfos[it->first] = it->second;
+            newRandomColumnInfo.size         = newLeftColumnInfo.size;
+            newRandomColumnInfo.distinct     = ceil(newRandomColumnInfo.distinct * (1 - tempValue));
+            //newRandomColumnInfo.distinct     = min(newRandomColumnInfo.size, it->second.distinct);
+            if (newRandomColumnInfo.distinct == 0) newRandomColumnInfo.distinct = 1;
+            newRandomColumnInfo.spread       = ((double) newRandomColumnInfo.n) / ((double) newRandomColumnInfo.distinct);
+            newRandomColumnInfo.updateSize   = true;
+            this->usedColumnInfos[it->first] = newRandomColumnInfo;
         }
     }
 
@@ -474,15 +509,32 @@ ColumnInfo JoinTreeNode::estimateInfoAfterIndependentJoin(PredicateInfo& predica
     for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
         if ((!(it->first == predicateInfo.right)) && (it->first.binding == predicateInfo.right.binding)) {
             if (it->second.distinct == 0) it->second.distinct = 1;
+            ColumnInfo newRandomColumnInfo = it->second;
+
             double base      = 1 - (((double) newRightColumnInfo.size) / (((double) oldLeftColumnInfo.size) * ((double) oldRightColumnInfo.size)));
-            double exponent  = ((double) it->second.size) / ((double) it->second.distinct);
+            double exponent  = ((double) newRandomColumnInfo.size) / ((double) newRandomColumnInfo.distinct);
             double tempValue = pow(base, exponent);
 
-            it->second.size     = newRightColumnInfo.size;
-            it->second.distinct = ceil(it->second.distinct * (1 - tempValue));
-            if (it->second.distinct == 0) it->second.distinct = 1;
-            it->second.spread   = ((double) it->second.n) / ((double) it->second.distinct);
-            this->usedColumnInfos[it->first] = it->second;
+            newRandomColumnInfo.size         = newRightColumnInfo.size;
+            newRandomColumnInfo.distinct     = ceil(newRandomColumnInfo.distinct * (1 - tempValue));
+            //newRandomColumnInfo.distinct     = min(newRandomColumnInfo.size, it->second.distinct);
+            if (newRandomColumnInfo.distinct == 0) newRandomColumnInfo.distinct = 1;
+            newRandomColumnInfo.spread       = ((double) newRandomColumnInfo.n) / ((double) newRandomColumnInfo.distinct);
+            newRandomColumnInfo.updateSize   = true;
+            this->usedColumnInfos[it->first] = newRandomColumnInfo;
+        }
+    }
+
+    // Update the needed column sizes
+    for (columnInfoMap::iterator it=this->left->usedColumnInfos.begin(); it != this->left->usedColumnInfos.end(); it++) {
+        if (it->second.updateSize == true) {
+            it->second.size = newLeftColumnInfo.size;;
+        }
+    }
+
+    for (columnInfoMap::iterator it=this->right->usedColumnInfos.begin(); it != this->right->usedColumnInfos.end(); it++) {
+        if (it->second.updateSize == true) {
+            it->second.size = newRightColumnInfo.size;;
         }
     }
 
@@ -571,8 +623,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
             }
         }
 
-
-
         for (auto selection : queryInfo.selections) {
             if (selection.binding == i) {
                 // If the column is not already in the map insert it's info
@@ -637,13 +687,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
             for (int j = 0; j < relationsCount; j++) {
                 // If j is not in the set
                 if (s[j] == false) {
-                    // fprintf(stderr, "The set is { ");
-                    // for (int kk = 0; kk < relationsCount; kk++) {
-                    //     if (s[kk] == true) fprintf(stderr, "%d ", kk);
-                    // }
-                    // fprintf(stderr, "} - ");
-
-                    // fprintf(stderr, "Inserting %d\n", j);
                     // Check if there is a corresponding predicate
                     for (auto predicate : queryInfo.predicates) {
                         // If the right relation is found on the right hand side of a predicate
@@ -651,10 +694,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                             for (int n = 0; n < relationsCount; n++) {
                                 // If a relation from the set is found on the left hand side of the same predicate
                                 if ((s[n] == true) && (predicate.left.binding == n)) {
-                                    // fprintf(stderr, "FOUND PREDICATE L %d.%d=%d.%d\n",
-                                    //     predicate.left.binding, predicate.left.colId,
-                                    //     predicate.right.binding, predicate.right.colId);
-
                                     // If no predicate exists for the relations in the set
                                     // a tree has not been created
                                     if (BestTree[s] == NULL) continue;
@@ -671,10 +710,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                                     s1[j] = true;
 
                                     if ((BestTree[s1] == NULL) || (BestTree[s1]->getCost() > currTree->getCost())) {
-                                        // if (BestTree[s1] != NULL)
-                                        //     fprintf(stderr, "%lu %lu\n", BestTree[s1]->getCost(), currTree->getCost());
-                                        // else
-                                        //     fprintf(stderr, "NULL %lu\n", currTree->getCost());
                                         BestTree[s1] = currTree;
                                     }
                                 }
@@ -685,10 +720,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                             for (int n = 0; n < relationsCount; n++) {
                                 // If a relation from the set is found on the left hand side of the same predicate
                                 if ((s[n] == true) && (predicate.right.binding == n)) {
-                                    // fprintf(stderr, "FOUND PREDICATE R %d.%d=%d.%d\n",
-                                    //     predicate.left.binding, predicate.left.colId,
-                                    //     predicate.right.binding, predicate.right.colId);
-
                                     // If no predicate exists for the relations in the set
                                     // a tree has not been created
                                     if (BestTree[s] == NULL) continue;
@@ -709,10 +740,6 @@ JoinTree* JoinTree::build(QueryInfo& queryInfo, ColumnInfo** columnInfos) {
                                     s1[j] = true;
 
                                     if ((BestTree[s1] == NULL) || (BestTree[s1]->getCost() > currTree->getCost())) {
-                                        // if (BestTree[s1] != NULL)
-                                        //     fprintf(stderr, "%lu %lu\n", BestTree[s1]->getCost(), currTree->getCost());
-                                        // else
-                                        //     fprintf(stderr, "NULL %lu\n", currTree->getCost());
                                         BestTree[s1] = currTree;
                                     }
                                 }
@@ -1465,66 +1492,93 @@ void QueryPlan::destroy(Joiner& joiner) {
 }
 
 /* -----------------------CACHING--------------------------------*/
+relation_t * CreateRowRelationT(uint64_t * column, unsigned size, JobScheduler &js1, JobScheduler &js2) {
+
+    /* Create the relation_t */
+    relation_t * new_relation = gen_rel(size);
+
+    // Get the range for the threds chinking
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
+
+    /* Initialize relation */
+    struct noninterRel_arg a[range];
+    for (size_t i = 0; i < range; i++) {
+        a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+        a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
+        a[i].values = column;
+        a[i].tups = new_relation->tuples;
+        if (i % 2 == 0 )
+            js1.Schedule(new JobCreateNonInterRel(a[i]));
+        else
+            js2.Schedule(new JobCreateNonInterRel(a[i]));
+
+    }
+    js1.Barrier();
+    js2.Barrier();
+    return new_relation;
+}
+
+
 // cache(sleep time) the partitions of 0,1 columns for all relations
-// TODO CHAGE IT
-void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
-    /*size_t relationColumns; // Number of columns of a single relation
-
+void QueryPlan::Pre_Caching(Joiner& joiner,JobScheduler & j1, JobScheduler & j2, struct timeval & start) {
     uint64_t *col0_ptr;
-    uint64_t *col1_ptr;
     relation_t *r0;
-    relation_t *r1;
+    int nthreads = THREAD_NUM_1CPU;
+    size_t relationColumns; // Number of columns of a single relation
 
-    /* Now iterate through all relation's 0,1 cols
-    /* Create select info for col 0,1 and pass it to selection
-    /* then partion and store in our map
+    /* Now iterate through all relation's 0,1 cols */
+    /* Create select info for col 0,1 and pass it to selection */
+    /* then partion and store in our map */
     Relation* relation;
     int relationsCount = joiner.getRelationsCount();
-    for (int rel = 0; rel < relationsCount; rel++) {
-        /* create a new entry for the map
-        /* get the relation
+
+    double time_margin = 1000;
+    double time_elapsed;
+    double safe_time = 0;
+
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    time_elapsed = (double) ((end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0);
+
+    for (int rel = 0; (rel < relationsCount) && (time_elapsed * 1000 < time_margin - safe_time * 1000); rel++) {
+        /* create a new entry for the map */
+        /* get the relation */
         relation = &(joiner.getRelation(rel));
 
-        if (relation->columns.size() >= 2){
-            Cacheinf c01;
-            c01.S = (cached_t *) calloc(nthreads, sizeof(cached_t));
-            c01.R = (cached_t *) calloc(nthreads, sizeof(cached_t));
+        /* Get the number of the relation */
+        relationColumns = relation->columns.size();
 
-            //check the binding
-            //create the select_info for the
-            struct SelectInfo col0_sel_inf(rel, 0, 0);
-            struct SelectInfo col1_sel_inf(rel, 0, 1);
-            Selection col0_sel(col0_sel_inf);
-            Selection col1_sel(col1_sel_inf);
+        for (size_t col = 0; col < relationColumns; col++) {
+            struct timeval relTimeStart;   // time one relation
+            gettimeofday(&relTimeStart, NULL);
 
-            /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face
-            col0_ptr = relation->columns[0];
-            col1_ptr = relation->columns[1];
-            r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
-            r1 = joiner.CreateRowRelationT(col1_ptr, columnInfos[rel][1].size);
+            Cacheinf c;
+            c.R  = (cached_t *) calloc(nthreads, sizeof(cached_t));
+            c.S  = NULL;
+            relation_t * r0 = CreateRowRelationT(relation->columns[col], relation->size, j1, j2);
 
-            cache_partition_01(r0, r1, nthreads, c01);
+            cache_partition_0(r0, nthreads, c, j1, j2);
 
-            joiner.idxcache[col0_sel] = c01.R;
-            joiner.idxcache[col1_sel] = c01.S;
+            SelectInfo col_sel_inf(rel, 0, col);
+            Selection  col_sel(col_sel_inf);
+            idxcache[col_sel] = c.R;
+
+            // Time one creation with strict policy
+            struct timeval relTimeEnd;   // time one relation
+            gettimeofday(&relTimeEnd, NULL);
+            double tmp_safe_time = (double) ((relTimeEnd.tv_sec - relTimeStart.tv_sec) + (relTimeEnd.tv_usec - relTimeStart.tv_usec) / 1000000.0);
+            if (safe_time < tmp_safe_time)
+                safe_time = tmp_safe_time;
+
+            gettimeofday(&end, NULL);
+            time_elapsed = (double) ((end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0);
+
+            // std::cerr << "Time ellapesed " << time_elapsed * 1000 << '\n';
+            // std::cerr << "Time margin " << time_margin  << '\n';
+            // std::cerr << "Safe time " << safe_time * 1000 << '\n';
+            if (time_elapsed * 1000 > time_margin - safe_time * 1000) break;
         }
-        else {
-            Cacheinf c01;
-            c01.R = (cached_t *) calloc(nthreads, sizeof(cached_t));
-            c01.S = NULL;
-            //check the binding
-            //create the select_info for the
-            struct SelectInfo col0_sel_inf(rel, 0, 0);
-            Selection col0_sel(col0_sel_inf);
+    }
 
-            /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face
-            col0_ptr = relation->columns[0];
-            r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
-            r1 = NULL;
-            cache_partition_0(r0, nthreads, c01);
-            joiner.idxcache[col0_sel] = c01.R;
-        }
-    }*/
+    gettimeofday(&end, NULL);
 }

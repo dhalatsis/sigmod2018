@@ -79,12 +79,10 @@ class Joiner {
     table_t* join_t32_t64(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
     table_t* join_t64_t32(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str);
 
-    relation_t* CreateRowRelationT(uint64_t * column, unsigned size);
     relation_t* CreateRelationT(table_t * table, SelectInfo &sel_info);
     table_t*    CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
     void        CheckSumOnTheFly(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections, string &);
 
-    relation64_t* CreateRowRelationT_t64(uint64_t * column, unsigned size);
     relation64_t* CreateRelationT_t64(table_t * table, SelectInfo &sel_info);
     table_t*      CreateTableT_t64(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap);
     void          CheckSumOnTheFly_t64(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap, std::vector<SelectInfo> selections, string &);
