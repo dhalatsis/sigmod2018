@@ -11,6 +11,7 @@
 
 #include "Joiner.hpp"
 #include "Parser.hpp"
+#include "generator.h"
 
 using namespace std;
 
@@ -122,7 +123,7 @@ struct QueryPlan {
     void fillColumnInfo(Joiner& joiner, JobScheduler & j1, JobScheduler & j2, bool & switch_64);
 
     //Cache 01 cols for all the rels
-    void Pre_Caching01(Joiner& joiner, int threads);
+    void Pre_Caching(Joiner& joiner, JobScheduler & j1, JobScheduler & j2, struct timeval & time);
 };
 
 // Arguments needed for every thread during

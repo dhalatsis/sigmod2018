@@ -1439,66 +1439,93 @@ void QueryPlan::destroy(Joiner& joiner) {
 }
 
 /* -----------------------CACHING--------------------------------*/
+relation_t * CreateRowRelationT(uint64_t * column, unsigned size, JobScheduler &js1, JobScheduler &js2) {
+
+    /* Create the relation_t */
+    relation_t * new_relation = gen_rel(size);
+
+    // Get the range for the threds chinking
+    size_t range = THREAD_NUM_1CPU + THREAD_NUM_2CPU;
+
+    /* Initialize relation */
+    struct noninterRel_arg a[range];
+    for (size_t i = 0; i < range; i++) {
+        a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
+        a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
+        a[i].values = column;
+        a[i].tups = new_relation->tuples;
+        if (i % 2 == 0 )
+            js1.Schedule(new JobCreateNonInterRel(a[i]));
+        else
+            js2.Schedule(new JobCreateNonInterRel(a[i]));
+
+    }
+    js1.Barrier();
+    js2.Barrier();
+    return new_relation;
+}
+
+
 // cache(sleep time) the partitions of 0,1 columns for all relations
-// TODO CHAGE IT
-void QueryPlan::Pre_Caching01(Joiner& joiner, int nthreads) {
-    /*size_t relationColumns; // Number of columns of a single relation
-
+void QueryPlan::Pre_Caching(Joiner& joiner,JobScheduler & j1, JobScheduler & j2, struct timeval & start) {
     uint64_t *col0_ptr;
-    uint64_t *col1_ptr;
     relation_t *r0;
-    relation_t *r1;
+    int nthreads = THREAD_NUM_1CPU;
+    size_t relationColumns; // Number of columns of a single relation
 
-    /* Now iterate through all relation's 0,1 cols
-    /* Create select info for col 0,1 and pass it to selection
-    /* then partion and store in our map
+    /* Now iterate through all relation's 0,1 cols */
+    /* Create select info for col 0,1 and pass it to selection */
+    /* then partion and store in our map */
     Relation* relation;
     int relationsCount = joiner.getRelationsCount();
-    for (int rel = 0; rel < relationsCount; rel++) {
-        /* create a new entry for the map
-        /* get the relation
+
+    double time_margin = 1000;
+    double time_elapsed;
+    double safe_time = 0;
+
+    struct timeval end;
+    gettimeofday(&end, NULL);
+    time_elapsed = (double) ((end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0);
+
+    for (int rel = 0; (rel < relationsCount) && (time_elapsed * 1000 < time_margin - safe_time * 1000); rel++) {
+        /* create a new entry for the map */
+        /* get the relation */
         relation = &(joiner.getRelation(rel));
 
-        if (relation->columns.size() >= 2){
-            Cacheinf c01;
-            c01.S = (cached_t *) calloc(nthreads, sizeof(cached_t));
-            c01.R = (cached_t *) calloc(nthreads, sizeof(cached_t));
+        /* Get the number of the relation */
+        relationColumns = relation->columns.size();
 
-            //check the binding
-            //create the select_info for the
-            struct SelectInfo col0_sel_inf(rel, 0, 0);
-            struct SelectInfo col1_sel_inf(rel, 0, 1);
-            Selection col0_sel(col0_sel_inf);
-            Selection col1_sel(col1_sel_inf);
+        for (size_t col = 0; col < relationColumns; col++) {
+            struct timeval relTimeStart;   // time one relation
+            gettimeofday(&relTimeStart, NULL);
 
-            /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face
-            col0_ptr = relation->columns[0];
-            col1_ptr = relation->columns[1];
-            r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
-            r1 = joiner.CreateRowRelationT(col1_ptr, columnInfos[rel][1].size);
+            Cacheinf c;
+            c.R  = (cached_t *) calloc(nthreads, sizeof(cached_t));
+            c.S  = NULL;
+            relation_t * r0 = CreateRowRelationT(relation->columns[col], relation->size, j1, j2);
 
-            cache_partition_01(r0, r1, nthreads, c01);
+            cache_partition_0(r0, nthreads, c, j1, j2);
 
-            joiner.idxcache[col0_sel] = c01.R;
-            joiner.idxcache[col1_sel] = c01.S;
+            SelectInfo col_sel_inf(rel, 0, col);
+            Selection  col_sel(col_sel_inf);
+            idxcache[col_sel] = c.R;
+
+            // Time one creation with strict policy
+            struct timeval relTimeEnd;   // time one relation
+            gettimeofday(&relTimeEnd, NULL);
+            double tmp_safe_time = (double) ((relTimeEnd.tv_sec - relTimeStart.tv_sec) + (relTimeEnd.tv_usec - relTimeStart.tv_usec) / 1000000.0);
+            if (safe_time < tmp_safe_time)
+                safe_time = tmp_safe_time;
+
+            gettimeofday(&end, NULL);
+            time_elapsed = (double) ((end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0);
+
+            // std::cerr << "Time ellapesed " << time_elapsed * 1000 << '\n';
+            // std::cerr << "Time margin " << time_margin  << '\n';
+            // std::cerr << "Safe time " << safe_time * 1000 << '\n';
+            if (time_elapsed * 1000 > time_margin - safe_time * 1000) break;
         }
-        else {
-            Cacheinf c01;
-            c01.R = (cached_t *) calloc(nthreads, sizeof(cached_t));
-            c01.S = NULL;
-            //check the binding
-            //create the select_info for the
-            struct SelectInfo col0_sel_inf(rel, 0, 0);
-            Selection col0_sel(col0_sel_inf);
+    }
 
-            /* put ptr in the col 0,1 pass them to create a relation_t */
-            /* pre partiontion face
-            col0_ptr = relation->columns[0];
-            r0 = joiner.CreateRowRelationT(col0_ptr, columnInfos[rel][0].size);
-            r1 = NULL;
-            cache_partition_0(r0, nthreads, c01);
-            joiner.idxcache[col0_sel] = c01.R;
-        }
-    }*/
+    gettimeofday(&end, NULL);
 }

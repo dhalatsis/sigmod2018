@@ -109,30 +109,6 @@ relation_t * Joiner::CreateRelationT(table_t * table, SelectInfo &sel_info) {
     return new_relation;
 }
 
-
-relation_t * Joiner::CreateRowRelationT(uint64_t * column, unsigned size) {
-
-    /* Create the relation_t */
-    relation_t * new_relation = gen_rel(size);
-
-    // Get the range for the threds chinking
-    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
-
-    /* Initialize relation */
-    struct noninterRel_arg a[range];
-    for (size_t i = 0; i < range; i++) {
-        a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
-        a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
-        a[i].values = column;
-        a[i].tups = new_relation->tuples;
-        job_scheduler.Schedule(new JobCreateNonInterRel(a[i]));
-    }
-    job_scheduler.Barrier();
-
-    return new_relation;
-}
-
-
 table_t * Joiner::CreateTableT(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
 #ifdef time
@@ -449,30 +425,6 @@ relation64_t * Joiner::CreateRelationT_t64(table_t * table, SelectInfo &sel_info
 
     return new_relation;
 }
-
-
-relation64_t * Joiner::CreateRowRelationT_t64(uint64_t * column, unsigned size) {
-
-    /* Create the relation64_t */
-    relation64_t * new_relation = gen_rel_t64(size);
-
-    // Get the range for the threds chinking
-    size_t range = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
-
-    /* Initialize relation */
-    struct noninterRel_arg64_t a[range];
-    for (size_t i = 0; i < range; i++) {
-        a[i].low   = (i < size % range) ? i * (size / range) + i : i * (size / range) + size % range;
-        a[i].high  = (i < size % range) ? a[i].low + size / range + 1 :  a[i].low + size / range;
-        a[i].values = column;
-        a[i].tups = new_relation->tuples;
-        job_scheduler.Schedule(new JobCreateNonInterRel_t64(a[i]));
-    }
-    job_scheduler.Barrier();
-
-    return new_relation;
-}
-
 
 table_t * Joiner::CreateTableT_t64(result_t * result, table_t * table_r, table_t * table_s, columnInfoMap & cmap) {
 
