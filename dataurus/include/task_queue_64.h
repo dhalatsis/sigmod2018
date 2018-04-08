@@ -112,9 +112,11 @@ task64_t *
 task_queue_get_slot_t64(task_queue64_t * tq) __attribute__((always_inline));
 
 /* initialize a task queue with given allocation block size */
+inline
 task_queue64_t *
 task_queue_init_t64(int alloc_size);
 
+inline
 void
 task_queue_free_t64(task_queue64_t * tq);
 

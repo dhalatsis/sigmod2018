@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_C_COMPILER /usr/local/bin/gcc)
-#set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
+set(CMAKE_CXX_COMPILER /usr/bin/g++-6)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_} -fuse-ld=gold -Ofast -march=native -lpthread  -msse4.2")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread")
@@ -14,7 +14,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_}  -fuse-ld=gold -Ofast -march=native -lpthread
 include_directories(include JobScheduler)
 
 set(JS_SOURCE_FILES JobScheduler/filter_job.cpp JobScheduler/create_job.cpp JobScheduler/checksum_job.cpp JobScheduler/main_job.cpp JobScheduler/js_master.h JobScheduler/queryFill_job.cpp  JobScheduler/create_job_64.cpp JobScheduler/checksum_job_64.cpp)
-set(RJ_SOURCE_FILES parallel_radix_join.cpp parallel_radix_join_64.cpp cpu_mapping.cpp generator.cpp)
+set(RJ_SOURCE_FILES parallel_radix_join.cpp parallel_radix_join_64.cpp parallel_radix_join_32_64.cpp parallel_radix_join_64_32.cpp cpu_mapping.cpp generator.cpp)
 
 add_library(database QueryPlan.cpp Relation.cpp Filter.cpp Parser.cpp Utils.cpp)
 target_include_directories(database PUBLIC

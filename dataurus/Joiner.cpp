@@ -753,8 +753,8 @@ int main(int argc, char* argv[]) {
     // Wait for jobs to end
     main_js.Barrier();
 
-    if (!switch_64t)
-        queryPlan.Pre_Caching(joiner, js1, js2, startS);
+    // if (!switch_64t)
+    //     queryPlan.Pre_Caching(joiner, js1, js2, startS);
     // else
     //     queryPlan.Pre_Caching_t64(joiner, js1, js2, startS);
 

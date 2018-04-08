@@ -3,9 +3,9 @@
  * @author  Cagri Balkesen <cagri.balkesen@inf.ethz.ch>
  * @date    Sat Feb  4 20:00:58 2012
  * @version $Id: task_queue.h 3017 2012-12-07 10:56:20Z bcagri $
- * 
+ *
  * @brief  Implements task queue facility for the join processing.
- * 
+ *
  */
 #ifndef TASK_QUEUE_H
 #define TASK_QUEUE_H
@@ -15,8 +15,8 @@
 
 #include "types.h" /* relation_t, int32_t */
 
-/** 
- * @defgroup TaskQueue Task Queue Implementation 
+/**
+ * @defgroup TaskQueue Task Queue Implementation
  * @{
  */
 
@@ -47,17 +47,17 @@ struct task_queue_t {
     int32_t         alloc_size;
 };
 
-inline 
-task_t * 
+inline
+task_t *
 get_next_task(task_queue_t * tq) __attribute__((always_inline));
 
-inline 
-void 
+inline
+void
 add_tasks(task_queue_t * tq, task_t * t) __attribute__((always_inline));
 
-inline 
-task_t * 
-get_next_task(task_queue_t * tq) 
+inline
+task_t *
+get_next_task(task_queue_t * tq)
 {
     pthread_mutex_lock(&tq->lock);
     task_t * ret = 0;
@@ -71,9 +71,9 @@ get_next_task(task_queue_t * tq)
     return ret;
 }
 
-inline 
-void 
-add_tasks(task_queue_t * tq, task_t * t) 
+inline
+void
+add_tasks(task_queue_t * tq, task_t * t)
 {
     pthread_mutex_lock(&tq->lock);
     t->next = tq->head;
@@ -83,46 +83,48 @@ add_tasks(task_queue_t * tq, task_t * t)
 }
 
 /* atomically get the next available task */
-inline 
-task_t * 
+inline
+task_t *
 task_queue_get_atomic(task_queue_t * tq) __attribute__((always_inline));
 
 /* atomically add a task */
-inline 
-void 
-task_queue_add_atomic(task_queue_t * tq, task_t * t) 
+inline
+void
+task_queue_add_atomic(task_queue_t * tq, task_t * t)
     __attribute__((always_inline));
 
-inline 
-void 
+inline
+void
 task_queue_add(task_queue_t * tq, task_t * t) __attribute__((always_inline));
 
-inline 
-void 
+inline
+void
 task_queue_copy_atomic(task_queue_t * tq, task_t * t)
     __attribute__((always_inline));
 
 /* get a free slot of task_t */
-inline 
-task_t * 
+inline
+task_t *
 task_queue_get_slot_atomic(task_queue_t * tq) __attribute__((always_inline));
 
-inline 
-task_t * 
+inline
+task_t *
 task_queue_get_slot(task_queue_t * tq) __attribute__((always_inline));
 
 /* initialize a task queue with given allocation block size */
-task_queue_t * 
+inline
+task_queue_t *
 task_queue_init(int alloc_size);
 
-void 
+inline
+void
 task_queue_free(task_queue_t * tq);
 
 /**************** DEFINITIONS ********************************************/
 
-inline 
-task_t * 
-task_queue_get_atomic(task_queue_t * tq) 
+inline
+task_t *
+task_queue_get_atomic(task_queue_t * tq)
 {
     pthread_mutex_lock(&tq->lock);
     task_t * ret = 0;
@@ -136,9 +138,9 @@ task_queue_get_atomic(task_queue_t * tq)
     return ret;
 }
 
-inline 
-void 
-task_queue_add_atomic(task_queue_t * tq, task_t * t) 
+inline
+void
+task_queue_add_atomic(task_queue_t * tq, task_t * t)
 {
     pthread_mutex_lock(&tq->lock);
     t->next  = tq->head;
@@ -148,19 +150,19 @@ task_queue_add_atomic(task_queue_t * tq, task_t * t)
 
 }
 
-inline 
-void 
-task_queue_add(task_queue_t * tq, task_t * t) 
+inline
+void
+task_queue_add(task_queue_t * tq, task_t * t)
 {
     t->next  = tq->head;
     tq->head = t;
     tq->count ++;
 }
 
-/* sorted add 
-inline 
-void 
-task_queue_add_atomic(task_queue_t * tq, task_t * t) 
+/* sorted add
+inline
+void
+task_queue_add_atomic(task_queue_t * tq, task_t * t)
 {
     pthread_mutex_lock(&tq->lock);
     task_queue_add(tq, t);
@@ -168,12 +170,12 @@ task_queue_add_atomic(task_queue_t * tq, task_t * t)
 
 }
 
-inline 
-int32_t 
+inline
+int32_t
 maxtuples(task_t * t) __attribute__((always_inline));
 
-inline 
-int32_t 
+inline
+int32_t
 maxtuples(task_t * t)
 {
     int32_t max = t->relS.num_tuples;
@@ -183,20 +185,20 @@ maxtuples(task_t * t)
     return max;
 }
 
-inline 
-void 
-task_queue_add(task_queue_t * tq, task_t * t) 
+inline
+void
+task_queue_add(task_queue_t * tq, task_t * t)
 {
     int32_t maxnew;
 
     if(tq->head == NULL ||
        ((maxnew = maxtuples(t)) >= maxtuples(tq->head))) {
-        
+
         t->next  = tq->head;
         tq->head = t;
         tq->count ++;
         return;
-        
+
     }
 
     task_t * prev, * curr;
@@ -226,9 +228,9 @@ task_queue_add(task_queue_t * tq, task_t * t)
 }
 */
 
-inline 
-void 
-task_queue_copy_atomic(task_queue_t * tq, task_t * t) 
+inline
+void
+task_queue_copy_atomic(task_queue_t * tq, task_t * t)
 {
     pthread_mutex_lock(&tq->lock);
     task_t * slot = task_queue_get_slot(tq);
@@ -237,8 +239,8 @@ task_queue_copy_atomic(task_queue_t * tq, task_t * t)
     pthread_mutex_unlock(&tq->lock);
 }
 
-inline 
-task_t * 
+inline
+task_t *
 task_queue_get_slot(task_queue_t * tq)
 {
     task_list_t * l = tq->free_list;
@@ -260,8 +262,8 @@ task_queue_get_slot(task_queue_t * tq)
 }
 
 /* get a free slot of task_t */
-inline 
-task_t * 
+inline
+task_t *
 task_queue_get_slot_atomic(task_queue_t * tq)
 {
     pthread_mutex_lock(&tq->alloc_lock);
@@ -272,8 +274,8 @@ task_queue_get_slot_atomic(task_queue_t * tq)
 }
 
 /* initialize a task queue with given allocation block size */
-task_queue_t * 
-task_queue_init(int alloc_size) 
+task_queue_t *
+task_queue_init(int alloc_size)
 {
     task_queue_t * ret = (task_queue_t*) malloc(sizeof(task_queue_t));
     ret->free_list = (task_list_t*) malloc(sizeof(task_list_t));
@@ -289,8 +291,8 @@ task_queue_init(int alloc_size)
     return ret;
 }
 
-void 
-task_queue_free(task_queue_t * tq) 
+void
+task_queue_free(task_queue_t * tq)
 {
     task_list_t * tmp = tq->free_list;
     while(tmp) {
