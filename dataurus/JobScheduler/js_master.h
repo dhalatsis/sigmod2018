@@ -167,49 +167,12 @@ public:
         bool Create(pthread_attr_t * attr, int numa) {
             if (numa == 0) {
                 int r = pthread_create(&thread_id_, attr, CallThrFn_CPU1, this);
-                /* Check affinity */
-                int cpus = get_nprocs();
-                pthread_t thread = thread_id_;
-                cpu_set_t set;
-                pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
-                for (int j = 0; j < cpus; j++)
-                    if (CPU_ISSET(j, &set))
-                        fprintf(stderr,"[MasterTID] -->  CPU %d\n", j);
                 return !r;
             }
             else {
                 int r = pthread_create(&thread_id_, attr, CallThrFn_CPU2, this);
-                int cpus = get_nprocs();
-                pthread_t thread = thread_id_;
-                cpu_set_t set;
-                pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
-                for (int j = 0; j < cpus; j++)
-                    if (CPU_ISSET(j, &set))
-                        fprintf(stderr,"[MasterTID] -->  CPU %d\n",j);
                 return !r;
             }
-            // else if (numa == 2){
-            //     int r = pthread_create(&thread_id_, attr, CallThrFn_CPU3, this);
-            //     int cpus = get_nprocs();
-            //     pthread_t thread = thread_id_;
-            //     cpu_set_t set;
-            //     pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
-            //     for (int j = 0; j < cpus; j++)
-            //         if (CPU_ISSET(j, &set))
-            //             fprintf(stderr,"[MasterTID] -->  CPU %d\n",j);
-            //     return !r;
-            // }
-            // else {
-            //     int r = pthread_create(&thread_id_, attr, CallThrFn_CPU4, this);
-            //     int cpus = get_nprocs();
-            //     pthread_t thread = thread_id_;
-            //     cpu_set_t set;
-            //     pthread_getaffinity_np(thread_id_, sizeof(cpu_set_t), &set);
-            //     for (int j = 0; j < cpus; j++)
-            //         if (CPU_ISSET(j, &set))
-            //             fprintf(stderr,"[MasterTID] -->  CPU %d\n",j);
-            //     return !r;
-            // }
         }
 
         bool Stop() {

@@ -49,6 +49,8 @@ struct Cacheinf {
 void
 cache_partition_0(relation_t *r0, int nthreads, struct Cacheinf & cinf, JobScheduler & js1, JobScheduler & js2);
 
+void
+cache_partition_0_t64(relation64_t *relR, int nthreads, struct Cacheinf & cinf, JobScheduler & js1, JobScheduler & js2);
 /**
  * PRO: Parallel Radix Join Optimized.
  *

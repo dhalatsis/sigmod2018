@@ -732,10 +732,13 @@ int main(int argc, char* argv[]) {
     // Wait for jobs to end
     main_js.Barrier();
 
-    queryPlan.Pre_Caching(joiner, js1, js2, startS);
+    if (!switch_64t)
+        queryPlan.Pre_Caching(joiner, js1, js2, startS);
+    // else
+    //     queryPlan.Pre_Caching_t64(joiner, js1, js2, startS);
 
-    //std::cerr << "Uint 64 ? " << switch_64t << '\n';
-    //std::cerr << "We have cached " << idxcache.size()  << '\n';
+    std::cerr << "Uint 64 ? " << switch_64t << '\n';
+    std::cerr << "We have cached " << idxcache.size()  << '\n';
 
     // Desoty the Js's
     js1.Stop(false);   js1.Destroy();

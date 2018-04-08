@@ -906,7 +906,7 @@ prj_thread_partition_0(void * param)
     int64_t * outputR = (int64_t *) calloc((fanOut+1), sizeof(int64_t));
     //MALLOC_CHECK((outputR && outputS));
 
-    int numaid = get_numa_id(my_tid);
+    int numaid = 0;
 
     args->histR[my_tid] = (int32_t *) calloc(fanOut, sizeof(int32_t));
 
@@ -977,7 +977,6 @@ public:
         prj_thread_partition_0(arg_);
     }
 };
-
 
 void cache_partition_0(relation_t *relR, int nthreads, struct Cacheinf & cinf, JobScheduler & js1, JobScheduler & js2) {
 

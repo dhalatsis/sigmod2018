@@ -30,12 +30,12 @@ int JobMain::Run(Joiner & joiner) {
     // run the right execute
     bool stop = false;
     table_t* result;
-    // if (switch_64_)
-    //     result = joinTreePtr_->root->execute_t64(joinTreePtr_->root, joiner, *i_, result_, &stop);
-    // else
-    //     result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop);
+    if (switch_64_)
+        result = joinTreePtr_->root->execute_t64(joinTreePtr_->root, joiner, *i_, result_, &stop);
+    else
+        result = joinTreePtr_->root->execute(joinTreePtr_->root, joiner, *i_, result_, &stop);
 
-    result = joinTreePtr_->root->execute_combo(joinTreePtr_->root, joiner, *i_, result_, &stop);
+    //result = joinTreePtr_->root->execute_combo(joinTreePtr_->root, joiner, *i_, result_, &stop);
 
     // Count query time
     struct timeval end;

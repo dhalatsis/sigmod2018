@@ -129,6 +129,7 @@ struct QueryPlan {
 
     //Cache 01 cols for all the rels
     void Pre_Caching(Joiner& joiner, JobScheduler& j1, JobScheduler& j2, struct timeval& time);
+    void Pre_Caching_t64(Joiner& joiner,JobScheduler & j1, JobScheduler & j2, struct timeval & start);
 };
 
 // Arguments needed for every thread during
