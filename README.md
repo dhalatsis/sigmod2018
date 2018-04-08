@@ -21,10 +21,6 @@
 
 * The team members would like to thank professor Yannis Ioannidis (University of Athens, Madgik Lab, Athena RC) for motivating them.
 
-
-
-Nikolopoulos Evangelos <vgnikolop@di.uoa.gr>, University of Athens, Department of Informatics and Telecommunications
-
 ## About
 
 This **Join queries** project was developed at **Spring of 2018** for the **ACM SIGMOD Programming Contest 2018**. For more information on the contest, please visit [the contest's website](http://sigmod18contest.db.in.tum.de/index.shtml).
