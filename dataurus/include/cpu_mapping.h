@@ -14,9 +14,9 @@
 
 /*-------------------------------ALWAYS REMEBERRRRRRRRRRRRRRRRRR -------------*/
 //#define MY_PC
-//#define MY_PC2
+#define MY_PC2
 //#define SIGMOD_1CPU
-#define SIGMOD_2CPU   //<--------------- ALways sleep
+//#define SIGMOD_2CPU   //<--------------- ALways sleep
 
 
 /**

@@ -26,8 +26,8 @@
 //#define time
 //#define prints
 #define MASTER_THREADS  2
-#define THREAD_NUM_1CPU 10
-#define THREAD_NUM_2CPU 10
+#define THREAD_NUM_1CPU 2
+#define THREAD_NUM_2CPU 2
 #define NUMA_REG1 0
 #define NUMA_REG2 1
 
@@ -93,7 +93,7 @@ class Joiner {
 
     // The select functions
     void SelectAll(std::vector<FilterInfo*> & filterPtrs, table_t* table);
-    void Select(FilterInfo &sel_info, table_t *table, ColumnInfo* columnInfo);
+    void Select(FilterInfo &sel_info, table_t *table);
     void SelectEqual(table_t *table, int filter);
     void SelectGreater(table_t *table, int filter);
     void SelectLess(table_t *table, int filter);

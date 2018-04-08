@@ -243,7 +243,7 @@ table_t * Joiner::SelfJoin(table_t *table, PredicateInfo *predicate_ptr, columnI
 //     table->intermediate_res = true;
 // }
 
-void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo) {
+void Joiner::Select(FilterInfo &fil_info, table_t* table) {
     #ifdef time
     struct timeval start;
     gettimeofday(&start, NULL);
@@ -273,7 +273,7 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
         }
         //else {
             SelectLess(table, filter);
-            columnInfo->max = filter;
+            //columnInfo->max = filter;
         //}
     }
     else if (fil_info.comparison == FilterInfo::Comparison::Greater) {
@@ -284,7 +284,7 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
         }
         //else {
             SelectGreater(table, filter);
-            columnInfo->min = filter;
+            //columnInfo->min = filter;
         //}
     }
     else if (fil_info.comparison == FilterInfo::Comparison::Equal) {
@@ -303,8 +303,8 @@ void Joiner::Select(FilterInfo &fil_info, table_t* table, ColumnInfo* columnInfo
         // else {
             SelectEqual(table, filter);
         //}
-            columnInfo->min = filter;
-            columnInfo->max = filter;
+            // columnInfo->min = filter;
+            // columnInfo->max = filter;
 
             // if (table->ch_filter != NULL) {
             //     std::cerr << "Normal " << table->tups_num << '\n';

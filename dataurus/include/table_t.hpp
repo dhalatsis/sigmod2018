@@ -23,6 +23,7 @@ struct table_t {
     unsigned   tups_num;
     unsigned   rels_num;
     cached_t * ch_filter;
+    std::vector<FilterInfo *> filters;
 
     /* use the binfing to map the relations */
     std::unordered_map<unsigned, unsigned> relations_bindings;

@@ -236,6 +236,18 @@ table_t* Joiner::CreateTableTFromId(unsigned rel_id, unsigned rel_binding) {
 table_t* Joiner::join(table_t *table_r, table_t *table_s, PredicateInfo &pred_info, columnInfoMap & cmap, bool isRoot, std::vector<SelectInfo> & selections, int leafs, string & result_str) {
     relation_t * r1;
     relation_t * r2;
+
+    // Apply filters
+    for (auto filter : table_r->filters) {
+       AddColumnToTableT(filter->filterColumn, table_r);
+       Select(*filter, table_r); //&(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+    }
+    for (auto filter : table_s->filters) {
+       AddColumnToTableT(filter->filterColumn, table_s);
+       Select(*filter, table_s); //&(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+    }
+
+
     //HERE WE CHECK FOR CACHED PARTITIONS
     Cacheinf c;
     size_t threads = THREAD_NUM_1CPU; // + THREAD_NUM_2CPU;
@@ -348,6 +360,15 @@ table_t* Joiner::join_t64(table_t *table_r, table_t *table_s, PredicateInfo &pre
 
     relation64_t * r1;
     relation64_t * r2;
+
+    for (auto filter : table_r->filters) {
+        AddColumnToTableT(filter->filterColumn, table_r);
+        Select(*filter, table_r); //&(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+    }
+    for (auto filter : table_s->filters) {
+        AddColumnToTableT(filter->filterColumn, table_s);
+        Select(*filter, table_s); //&(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+    }
 
     #ifdef time
     struct timeval end;
@@ -760,7 +781,7 @@ int main(int argc, char* argv[]) {
     struct timeval start, end;
 
     while (getline(cin, line)) {
-        if (query_no == 0) sleep(4);
+
 
         // If bacth ended
         if (line == "F") {

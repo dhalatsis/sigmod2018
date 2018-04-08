@@ -9,6 +9,9 @@
 #include "create_job.h"
 
 using namespace std;
+extern std::map<Selection, cached_t*> idxcache;
+extern pthread_mutex_t cache_mtx;
+
 
 //#define prints
 
@@ -922,14 +925,7 @@ table_t* JoinTreeNode::execute(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, Qu
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
         // Apply the filters
-        for (auto filter : joinTreeNodePtr->filterPtrs) {
-            joiner.AddColumnToTableT(filter->filterColumn, res);
-            joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
-        }
-
-        //Apply all fiters
-        // if (!joinTreeNodePtr->filterPtrs.empty())
-        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
+        res->filters = joinTreeNodePtr->filterPtrs;
 
         return res;
     }
@@ -1041,15 +1037,8 @@ table_t* JoinTreeNode::execute_t64(JoinTreeNode* joinTreeNodePtr, Joiner& joiner
     if (left == NULL && right == NULL) {
         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
 
-        // Apply the filters
-        for (auto filter : joinTreeNodePtr->filterPtrs) {
-            joiner.AddColumnToTableT(filter->filterColumn, res);
-            joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
-        }
-
         //Apply all fiters
-        // if (!joinTreeNodePtr->filterPtrs.empty())
-        //     joiner.SelectAll(joinTreeNodePtr->filterPtrs, res);
+        res->filters = joinTreeNodePtr->filterPtrs;
 
         return res;
     }
@@ -1150,132 +1139,132 @@ table_t* JoinTreeNode::execute_t64(JoinTreeNode* joinTreeNodePtr, Joiner& joiner
 }
 
 
-table_t* JoinTreeNode::execute_combo(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop) {
-    JoinTreeNode *left  = joinTreeNodePtr->left;
-    JoinTreeNode *right = joinTreeNodePtr->right;
-    table_t *table_l;
-    table_t *table_r;
-    table_t *res;
-    int leafs = 0;
-
-    // Leaf node containing a single relation
-    if (left == NULL && right == NULL) {
-        res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
-
-        // Apply the filters
-        for (auto filter : joinTreeNodePtr->filterPtrs) {
-            joiner.AddColumnToTableT(filter->filterColumn, res);
-            joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
-        }
-
-        return res;
-    }
-
-    // Go left
-    table_l = joinTreeNodePtr->execute_combo(left, joiner, queryInfo, result_str, stop);
-
-    // Return without executing the rest of the tree
-    if (*stop == true) {
-        return NULL;
-    }
-
-    // This is an intermediate node (join)
-    if (right != NULL) {
-        table_r = joinTreeNodePtr->execute_combo(right, joiner, queryInfo, result_str, stop);
-
-        // If either column has no tuples stop the execution
-        if ((table_l->tups_num == 0) || (table_r->tups_num == 0)) {
-            *stop = true;
-
-            for (size_t i = 0; i < queryInfo.selections.size(); i++) {
-                result_str += "NULL";
-
-                // Create the write check sum
-                if (i != queryInfo.selections.size() - 1) {
-                    result_str +=  " ";
-                }
-            }
-
-            return NULL;
-        }
-
-        // Get the domains of the two columns to be joined
-        uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
-        uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
-        bool l64 = leftMax > numeric_limits<uint32_t>::max();
-        bool r64 = rightMax > numeric_limits<uint32_t>::max();
-
-        // Calculate leafs
-        if (left->nodeId != -1 && left->filterPtrs.size() == 0) {
-            leafs = 1;
-        }
-        if (right->nodeId != -1 && right->filterPtrs.size() == 0) {
-            leafs |= 2;
-        }
-
-        if (l64 && r64) {
-            if (joinTreeNodePtr->parent == NULL) {
-                res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, true,
-                                 queryInfo.selections, leafs, result_str);
-            }
-            else {
-                res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, false,
-                                 queryInfo.selections, leafs, result_str);
-            }
-        }
-        else if (l64) {
-            if (joinTreeNodePtr->parent == NULL) {
-                res = joiner.join_t64_t32(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, true,
-                                 queryInfo.selections, leafs, result_str);
-            }
-            else {
-                res = joiner.join_t64_t32(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, false,
-                                 queryInfo.selections, leafs, result_str);
-            }
-        }
-        else if (r64) {
-            if (joinTreeNodePtr->parent == NULL) {
-                res = joiner.join_t32_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, true,
-                                 queryInfo.selections, leafs, result_str);
-            }
-            else {
-                res = joiner.join_t32_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, false,
-                                 queryInfo.selections, leafs, result_str);
-            }
-        }
-        else {
-            if (joinTreeNodePtr->parent == NULL) {
-                res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, true,
-                                 queryInfo.selections, leafs, result_str);
-            }
-            else {
-                res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
-                                 joinTreeNodePtr->usedColumnInfos, false,
-                                 queryInfo.selections, leafs, result_str);
-            }
-        }
-
-        return res;
-    }
-    else {
-        if (joinTreeNodePtr->parent == NULL) {
-            res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
-                                                  ,queryInfo.selections, result_str);
-        }
-        else {
-            res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
-        }
-        return res;
-
-    }
-}
+// table_t* JoinTreeNode::execute_combo(JoinTreeNode* joinTreeNodePtr, Joiner& joiner, QueryInfo& queryInfo, string& result_str, bool* stop) {
+//     JoinTreeNode *left  = joinTreeNodePtr->left;
+//     JoinTreeNode *right = joinTreeNodePtr->right;
+//     table_t *table_l;
+//     table_t *table_r;
+//     table_t *res;
+//     int leafs = 0;
+//
+//     // Leaf node containing a single relation
+//     if (left == NULL && right == NULL) {
+//         res = joiner.CreateTableTFromId(queryInfo.relationIds[joinTreeNodePtr->nodeId], joinTreeNodePtr->nodeId);
+//
+//         // Apply the filters
+//         for (auto filter : joinTreeNodePtr->filterPtrs) {
+//             joiner.AddColumnToTableT(filter->filterColumn, res);
+//             joiner.Select(*filter, res, &(joinTreeNodePtr->usedColumnInfos[filter->filterColumn]));
+//         }
+//
+//         return res;
+//     }
+//
+//     // Go left
+//     table_l = joinTreeNodePtr->execute_combo(left, joiner, queryInfo, result_str, stop);
+//
+//     // Return without executing the rest of the tree
+//     if (*stop == true) {
+//         return NULL;
+//     }
+//
+//     // This is an intermediate node (join)
+//     if (right != NULL) {
+//         table_r = joinTreeNodePtr->execute_combo(right, joiner, queryInfo, result_str, stop);
+//
+//         // If either column has no tuples stop the execution
+//         if ((table_l->tups_num == 0) || (table_r->tups_num == 0)) {
+//             *stop = true;
+//
+//             for (size_t i = 0; i < queryInfo.selections.size(); i++) {
+//                 result_str += "NULL";
+//
+//                 // Create the write check sum
+//                 if (i != queryInfo.selections.size() - 1) {
+//                     result_str +=  " ";
+//                 }
+//             }
+//
+//             return NULL;
+//         }
+//
+//         // Get the domains of the two columns to be joined
+//         uint64_t leftMax  = joinTreeNodePtr->left->usedColumnInfos[joinTreeNodePtr->predicatePtr->left].max;
+//         uint64_t rightMax = joinTreeNodePtr->right->usedColumnInfos[joinTreeNodePtr->predicatePtr->right].max;
+//         bool l64 = leftMax > numeric_limits<uint32_t>::max();
+//         bool r64 = rightMax > numeric_limits<uint32_t>::max();
+//
+//         // Calculate leafs
+//         if (left->nodeId != -1 && left->filterPtrs.size() == 0) {
+//             leafs = 1;
+//         }
+//         if (right->nodeId != -1 && right->filterPtrs.size() == 0) {
+//             leafs |= 2;
+//         }
+//
+//         if (l64 && r64) {
+//             if (joinTreeNodePtr->parent == NULL) {
+//                 res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, true,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//             else {
+//                 res = joiner.join_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, false,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//         }
+//         else if (l64) {
+//             if (joinTreeNodePtr->parent == NULL) {
+//                 res = joiner.join_t64_t32(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, true,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//             else {
+//                 res = joiner.join_t64_t32(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, false,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//         }
+//         else if (r64) {
+//             if (joinTreeNodePtr->parent == NULL) {
+//                 res = joiner.join_t32_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, true,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//             else {
+//                 res = joiner.join_t32_t64(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, false,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//         }
+//         else {
+//             if (joinTreeNodePtr->parent == NULL) {
+//                 res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, true,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//             else {
+//                 res = joiner.join(table_l, table_r, *joinTreeNodePtr->predicatePtr,
+//                                  joinTreeNodePtr->usedColumnInfos, false,
+//                                  queryInfo.selections, leafs, result_str);
+//             }
+//         }
+//
+//         return res;
+//     }
+//     else {
+//         if (joinTreeNodePtr->parent == NULL) {
+//             res = joiner.SelfJoinCheckSumOnTheFly(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos
+//                                                   ,queryInfo.selections, result_str);
+//         }
+//         else {
+//             res = joiner.SelfJoin(table_l, joinTreeNodePtr->predicatePtr, joinTreeNodePtr->usedColumnInfos);
+//         }
+//         return res;
+//
+//     }
+// }
 
 
 // Estimate the cost of a JoinTreeNode
