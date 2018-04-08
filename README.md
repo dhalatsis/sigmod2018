@@ -25,7 +25,15 @@ This **Join queries** project was developed at **Spring of 2018** for the **ACM 
 
 ### A brief explanation of our solution
 
-...
+Each time a batch of queries is received, each query is parsed, cleaned from weak filters and an
+optimal join tree is created to guide the query execution in the most efficient way. In the end of the batch,
+the queries are sorted based on a cost estimation and are scheduled for execution accordingly.
+This way they are executed in parallel in an efficient way and the checksums of their results are collected.
+For the joins, the _Radix Join_ algorithm utilized. The checksums are then printed in the order that the queries came.
+
+Several cache optimizations and optimizations based on statistics collected during each query's preprocessing phase
+have been applied during the above process. Also, a Job Scheduler has been used to assist in the optimal parallelization
+of critical parts of our program, like checksum calculation and filter application.
 
 ## Third party code
 
